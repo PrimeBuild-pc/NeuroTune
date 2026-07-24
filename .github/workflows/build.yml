@@ -13,8 +13,8 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 8.0.x
       - run: dotnet restore
@@ -26,7 +26,7 @@ jobs:
           dotnet publish src/NeuroTune/NeuroTune.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o artifacts/NeuroTune
           Compress-Archive -Path artifacts/NeuroTune/* -DestinationPath artifacts/NeuroTune-win-x64.zip
           (Get-FileHash artifacts/NeuroTune-win-x64.zip -Algorithm SHA256).Hash | Set-Content artifacts/NeuroTune-win-x64.zip.sha256
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: NeuroTune-win-x64
           path: |
