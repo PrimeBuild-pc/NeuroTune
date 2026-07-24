@@ -23,11 +23,14 @@ public sealed class SystemProfiler
             GamingSettings = ReadGamingSettings(),
             NetworkAdapters = ReadNetworkAdapters(),
             NetworkSettings = ReadNetworkSettings(),
+            HardwareCapabilities = ReadHardwareCapabilities(),
+            PerformanceRegistry = ReadPerformanceRegistry(),
             TopProcesses = ReadTopProcesses(),
             StartupItems = ReadStartupItems(),
             AutomaticServices = Query("SELECT Name FROM Win32_Service WHERE StartMode='Auto' AND State='Running'",
                 row => row["Name"]?.ToString() ?? "").Where(x => x.Length > 0).Take(60).ToList()
         };
+        profile.PolicyConflicts = FindPolicyConflicts(profile);
         return profile;
     }
 
@@ -68,7 +71,9 @@ public sealed class SystemProfiler
 
     private static Dictionary<string, string> ReadWindowsSettings() => new()
     {
-        ["Telemetry policy"] = ReadRegistry(Registry.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\DataCollection", "AllowTelemetry")
+        ["Telemetry policy"] = ReadRegistry(Registry.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\DataCollection", "AllowTelemetry"),
+        ["Power throttling"] = ReadRegistry(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Power\PowerThrottling", "PowerThrottlingOff"),
+        ["Visual effects"] = ReadRegistry(Registry.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects", "VisualFXSetting")
     };
 
     private static Dictionary<string, string> ReadGamingSettings()
@@ -81,6 +86,94 @@ public sealed class SystemProfiler
             ["Game DVR"] = ReadRegistry(Registry.CurrentUser, @"System\GameConfigStore", "GameDVR_Enabled"),
             ["VRR"] = globalGpu.Contains("VRROptimizeEnable=1", StringComparison.OrdinalIgnoreCase) ? "Enabled" : "Not configured/Disabled"
         };
+    }
+
+    private static Dictionary<string, string> ReadPerformanceRegistry() => new()
+    {
+        [@"HKCU\Software\Microsoft\GameBar\AutoGameModeEnabled"] = ReadRegistry(Registry.CurrentUser, @"Software\Microsoft\GameBar", "AutoGameModeEnabled"),
+        [@"HKCU\Software\Microsoft\GameBar\AllowAutoGameMode"] = ReadRegistry(Registry.CurrentUser, @"Software\Microsoft\GameBar", "AllowAutoGameMode"),
+        [@"HKCU\System\GameConfigStore\GameDVR_Enabled"] = ReadRegistry(Registry.CurrentUser, @"System\GameConfigStore", "GameDVR_Enabled"),
+        [@"HKCU\Software\Microsoft\Windows\CurrentVersion\GameDVR\AppCaptureEnabled"] = ReadRegistry(Registry.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\GameDVR", "AppCaptureEnabled"),
+        [@"HKLM\SOFTWARE\Policies\Microsoft\Windows\GameDVR\AllowGameDVR"] = ReadRegistry(Registry.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\GameDVR", "AllowGameDVR"),
+        [@"HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers\HwSchMode"] = ReadRegistry(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\GraphicsDrivers", "HwSchMode"),
+        [@"HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects\VisualFXSetting"] = ReadRegistry(Registry.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects", "VisualFXSetting"),
+        [@"HKCU\Control Panel\Mouse\MouseSpeed"] = ReadRegistry(Registry.CurrentUser, @"Control Panel\Mouse", "MouseSpeed"),
+        [@"HKCU\Control Panel\Mouse\MouseThreshold1"] = ReadRegistry(Registry.CurrentUser, @"Control Panel\Mouse", "MouseThreshold1"),
+        [@"HKCU\Control Panel\Mouse\MouseThreshold2"] = ReadRegistry(Registry.CurrentUser, @"Control Panel\Mouse", "MouseThreshold2"),
+        [@"HKLM\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling\PowerThrottlingOff"] = ReadRegistry(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Power\PowerThrottling", "PowerThrottlingOff"),
+        [@"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\NetworkThrottlingIndex"] = ReadRegistry(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", "NetworkThrottlingIndex"),
+        [@"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\SystemResponsiveness"] = ReadRegistry(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", "SystemResponsiveness"),
+        [@"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\LargeSystemCache"] = ReadRegistry(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management", "LargeSystemCache"),
+        [@"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\DisablePagingExecutive"] = ReadRegistry(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management", "DisablePagingExecutive"),
+        [@"HKLM\SOFTWARE\Microsoft\Windows\Dwm\OverlayTestMode"] = ReadRegistry(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows\Dwm", "OverlayTestMode"),
+        [@"HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl\Win32PrioritySeparation"] = ReadRegistry(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\PriorityControl", "Win32PrioritySeparation"),
+        [@"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games\GPU Priority"] = ReadRegistry(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games", "GPU Priority"),
+        [@"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games\Priority"] = ReadRegistry(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games", "Priority"),
+        [@"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games\Scheduling Category"] = ReadRegistry(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games", "Scheduling Category"),
+        [@"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games\SFIO Priority"] = ReadRegistry(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games", "SFIO Priority"),
+        [@"HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\TcpTimedWaitDelay"] = ReadRegistry(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", "TcpTimedWaitDelay"),
+        [@"HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\MaxUserPort"] = ReadRegistry(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", "MaxUserPort"),
+        [@"HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\DefaultTTL"] = ReadRegistry(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", "DefaultTTL"),
+        [@"HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers\TdrDelay"] = ReadRegistry(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\GraphicsDrivers", "TdrDelay"),
+        [@"HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers\TdrDdiDelay"] = ReadRegistry(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\GraphicsDrivers", "TdrDdiDelay"),
+        [@"HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity\Enabled"] = ReadRegistry(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity", "Enabled"),
+        [@"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Power\HiberbootEnabled"] = ReadRegistry(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Session Manager\Power", "HiberbootEnabled"),
+        [@"HKLM\SYSTEM\CurrentControlSet\Control\FileSystem\NtfsDisableLastAccessUpdate"] = ReadRegistry(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\FileSystem", "NtfsDisableLastAccessUpdate"),
+        [@"HKCU\Software\Microsoft\DirectX\UserGpuPreferences\DirectXUserGlobalSettings"] = ReadRegistry(Registry.CurrentUser, @"Software\Microsoft\DirectX\UserGpuPreferences", "DirectXUserGlobalSettings")
+    };
+
+    private static Dictionary<string, string> ReadHardwareCapabilities()
+    {
+        var battery = Query("SELECT Name, BatteryStatus FROM Win32_Battery", row => $"{row["Name"]} (status {row["BatteryStatus"]})");
+        var displays = Query("SELECT VideoModeDescription, CurrentRefreshRate FROM Win32_VideoController",
+            row => $"{row["VideoModeDescription"]} @ {row["CurrentRefreshRate"]} Hz").Where(x => !x.StartsWith(" @", StringComparison.Ordinal)).ToList();
+        var pageFile = Query("SELECT AutomaticManagedPagefile, PCSystemType FROM Win32_ComputerSystem", row =>
+        {
+            var form = Convert.ToUInt16(row["PCSystemType"] ?? 0) switch { 1 => "desktop", 2 => "laptop", 3 => "workstation", _ => "unspecified" };
+            return $"Windows-managed={row["AutomaticManagedPagefile"]}; form-factor={form}";
+        }).FirstOrDefault() ?? "Unavailable";
+        var deviceGuard = Query(@"root\Microsoft\Windows\DeviceGuard", "SELECT VirtualizationBasedSecurityStatus FROM Win32_DeviceGuard", row =>
+            Convert.ToUInt32(row["VirtualizationBasedSecurityStatus"] ?? 0) switch
+            {
+                0 => "Disabled",
+                1 => "Enabled but not running",
+                2 => "Enabled and running",
+                _ => "Unknown"
+            }).FirstOrDefault() ?? "Unavailable";
+        return new()
+        {
+            ["Battery"] = battery.Count == 0 ? "Not detected" : string.Join("; ", battery),
+            ["Displays"] = displays.Count == 0 ? "Unavailable" : string.Join("; ", displays),
+            ["Page file and system type"] = pageFile,
+            ["Virtualization-based security status"] = deviceGuard
+        };
+    }
+
+    private static List<string> FindPolicyConflicts(SystemProfile profile)
+    {
+        var values = profile.PerformanceRegistry;
+        var findings = new List<string>();
+        string Get(string suffix) => values.First(x => x.Key.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)).Value;
+        if (Get(@"GameDVR\AllowGameDVR") == "0" && Get(@"GameDVR\AppCaptureEnabled") == "1")
+            findings.Add("Game capture is enabled for the user but disabled by machine policy; the policy takes precedence.");
+        if (Get(@"GameBar\AllowAutoGameMode") == "0" && Get(@"GameBar\AutoGameModeEnabled") == "1")
+            findings.Add("Automatic Game Mode is enabled by the user but blocked by its user policy value.");
+        if (Get(@"PowerThrottling\PowerThrottlingOff") == "1" && profile.HardwareCapabilities["Battery"] != "Not detected")
+            findings.Add("System-wide power throttling is disabled on a battery-powered device.");
+        if (Get(@"Memory Management\LargeSystemCache") == "1")
+            findings.Add("The server-oriented LargeSystemCache override is enabled on this Windows client.");
+        if (Get(@"Memory Management\DisablePagingExecutive") == "1")
+            findings.Add("A manual DisablePagingExecutive memory-management override is enabled.");
+        if (Get(@"Dwm\OverlayTestMode") != "Not configured")
+            findings.Add("A manual Desktop Window Manager overlay override is present.");
+        if (Get(@"GraphicsDrivers\TdrDelay") != "Not configured" || Get(@"GraphicsDrivers\TdrDdiDelay") != "Not configured")
+            findings.Add("Manual GPU timeout detection and recovery delays are configured.");
+        var tcpGlobals = new[] { @"Parameters\TcpTimedWaitDelay", @"Parameters\MaxUserPort", @"Parameters\DefaultTTL" }
+            .Count(suffix => Get(suffix) != "Not configured");
+        if (tcpGlobals > 0) findings.Add($"{tcpGlobals} manual global TCP Registry overrides are configured.");
+        if (!profile.NetworkSettings["Nagle overrides"].StartsWith("0 ", StringComparison.Ordinal))
+            findings.Add($"Manual TCP latency overrides were found on {profile.NetworkSettings["Nagle overrides"]}.");
+        return findings;
     }
 
     private static string ReadRegistry(RegistryKey hive, string path, string name)
@@ -191,11 +284,13 @@ public sealed class SystemProfiler
 
 public static class ProfileSanitizer
 {
-    public static string Serialize(SystemProfile profile)
+    public static string Serialize(SystemProfile profile) =>
+        Redact(JsonSerializer.Serialize(profile, new JsonSerializerOptions { WriteIndented = true }));
+
+    public static string Redact(string value)
     {
-        var json = JsonSerializer.Serialize(profile, new JsonSerializerOptions { WriteIndented = true });
-        foreach (var value in new[] { Environment.UserName, Environment.MachineName })
-            if (!string.IsNullOrWhiteSpace(value)) json = json.Replace(value, "[redacted]", StringComparison.OrdinalIgnoreCase);
-        return json;
+        foreach (var identity in new[] { Environment.UserName, Environment.MachineName })
+            if (!string.IsNullOrWhiteSpace(identity)) value = value.Replace(identity, "[redacted]", StringComparison.OrdinalIgnoreCase);
+        return value;
     }
 }

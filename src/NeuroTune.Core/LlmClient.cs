@@ -47,12 +47,14 @@ public sealed class LlmClient
         return models;
     }
 
-    public async Task<DiagnosisResult> DiagnoseAsync(SystemProfile profile, UserSettings settings, string? apiKey,
+    public async Task<DiagnosisResult> DiagnoseAsync(SystemProfile profile, TuningGoals goals, UserSettings settings, string? apiKey,
         CancellationToken cancellationToken = default)
     {
         ValidateSettings(settings, apiKey);
+        goals.Validate();
         if (string.IsNullOrWhiteSpace(settings.Model)) throw new InvalidOperationException("Select a model.");
 
+        var evidenceFacts = BuildEvidenceFacts(profile);
         var catalogJson = JsonSerializer.Serialize(_catalog.All.Select(x => (Action: x, Availability: x.Inspect()))
             .Where(x => x.Availability.CanApply)
             .Select(x => new
@@ -65,10 +67,20 @@ public sealed class LlmClient
                 x.Action.RequiresRestart
             }));
         var prompt = $$"""
-            Analyze this Windows profile. Return valid JSON only, without Markdown, using this exact shape:
-            {"summary":"clear English summary","findings":["finding"],"recommendations":[{"actionId":"ID from the catalog","reason":"specific English reason"}]}
-            Recommend only actionId values present in the catalog. Never produce commands, scripts, file paths, Registry paths, or Registry values.
-            Prefer no recommendation over an unsupported or speculative optimization. Do not promise performance gains that the profile cannot support.
+            Analyze this Windows profile against the user's explicit goals. Return valid JSON only, without Markdown, using this exact shape:
+            {"summary":"clear English summary","findings":[{"title":"short finding","evidenceId":"exact ID from EVIDENCE FACTS","currentValue":"exact associated value","assessment":"confirmed conflict, trade-off, or unavailable evidence"}],"recommendations":[{"actionId":"ID from the catalog","evidenceId":"evidence ID supporting this action","reason":"specific English reason tied to that evidence and the user goal"}],"consentQuestion":"neutral question asking whether NeuroTune may apply the proposed allowlisted fixes after a restore point"}
+
+            Every finding must use an exact evidenceId and currentValue pair from EVIDENCE FACTS. Clearly distinguish a confirmed conflict, a trade-off, and unavailable evidence.
+            Treat conflict:* evidence facts as locally detected facts, but explain their relevance to the user's goal. Do not infer game-engine behavior from a game name.
+            Recommend only actionId values present in the catalog. Never produce commands, scripts, file paths, Registry paths, Registry values, or instructions to change the system manually.
+            Prefer no recommendation over an unsupported or speculative optimization. Do not describe a missing Registry value as wrong when Windows safely manages its default.
+            Do not promise FPS, latency, or network gains that this one profile cannot prove.
+
+            USER GOALS:
+            {{JsonSerializer.Serialize(goals)}}
+
+            EVIDENCE FACTS:
+            {{JsonSerializer.Serialize(evidenceFacts)}}
 
             ALLOWLISTED AND COMPATIBLE ACTIONS:
             {{catalogJson}}
@@ -85,7 +97,7 @@ public sealed class LlmClient
             throw new InvalidOperationException($"The provider returned HTTP {(int)response.StatusCode} ({response.ReasonPhrase}).");
 
         var body = await ReadLimitedAsync(response, cancellationToken);
-        return ParseDiagnosis(ExtractContent(settings.Protocol, body), _catalog);
+        return ParseDiagnosis(ExtractContent(settings.Protocol, body), _catalog, evidenceFacts);
     }
 
     public static IReadOnlyList<string> ParseModels(string body)
@@ -105,7 +117,8 @@ public sealed class LlmClient
         }
     }
 
-    public static DiagnosisResult ParseDiagnosis(string content, OptimizationCatalog catalog)
+    public static DiagnosisResult ParseDiagnosis(string content, OptimizationCatalog catalog,
+        IReadOnlyDictionary<string, string>? evidenceFacts = null)
     {
         content = content.Trim();
         if (content.Length > MaxResponseCharacters) throw new InvalidOperationException("The model response was too large.");
@@ -132,18 +145,76 @@ public sealed class LlmClient
         result.Findings ??= [];
         result.Recommendations ??= [];
         result.Summary = result.Summary.Trim();
+        result.ConsentQuestion = result.ConsentQuestion?.Trim() ?? "";
         if (result.Summary.Length is 0 or > 4_000)
             throw new InvalidOperationException("The diagnosis summary was empty or too long.");
-        if (result.Recommendations.Any(x => !catalog.Contains(x.ActionId)))
+        if (result.ConsentQuestion.Length is 0 or > 500)
+            throw new InvalidOperationException("The diagnosis consent question was empty or too long.");
+        if (result.Recommendations.Any(x => x is null || !catalog.Contains(x.ActionId)))
             throw new InvalidOperationException("The model proposed an action outside the allowlist.");
         if (result.Recommendations.Any(x => string.IsNullOrWhiteSpace(x.Reason)))
             throw new InvalidOperationException("A recommendation did not include a reason.");
-        result.Findings = result.Findings.Where(x => !string.IsNullOrWhiteSpace(x)).Take(20)
-            .Select(x => x.Trim()).ToList();
+        if (evidenceFacts is not null && result.Recommendations.Any(x =>
+            string.IsNullOrWhiteSpace(x.EvidenceId) || !evidenceFacts.ContainsKey(x.EvidenceId)))
+            throw new InvalidOperationException("A recommendation did not reference verified diagnosis evidence.");
+        foreach (var recommendation in result.Recommendations)
+        {
+            recommendation.ActionId = recommendation.ActionId.Trim();
+            recommendation.EvidenceId = recommendation.EvidenceId?.Trim() ?? "";
+            recommendation.Reason = recommendation.Reason.Trim();
+            if (recommendation.EvidenceId.Length > 500 || recommendation.Reason.Length > 2_000)
+                throw new InvalidOperationException("A recommendation was too long.");
+        }
+        if (result.Findings.Any(x => x is null || string.IsNullOrWhiteSpace(x.Title) ||
+            string.IsNullOrWhiteSpace(x.EvidenceId) || string.IsNullOrWhiteSpace(x.CurrentValue) ||
+            string.IsNullOrWhiteSpace(x.Assessment)))
+            throw new InvalidOperationException("A diagnosis finding did not include valid evidence.");
+        foreach (var finding in result.Findings)
+        {
+            finding.Title = finding.Title.Trim();
+            finding.EvidenceId = finding.EvidenceId.Trim();
+            finding.CurrentValue = finding.CurrentValue.Trim();
+            finding.Assessment = finding.Assessment.Trim();
+            if (finding.Title.Length > 300 || finding.EvidenceId.Length > 500 ||
+                finding.CurrentValue.Length > 2_000 || finding.Assessment.Length > 2_000)
+                throw new InvalidOperationException("A diagnosis finding was too long.");
+            if (evidenceFacts is not null && (!evidenceFacts.TryGetValue(finding.EvidenceId, out var observed) ||
+                !observed.Equals(finding.CurrentValue, StringComparison.Ordinal)))
+                throw new InvalidOperationException("The model cited evidence that was not present in the local scan.");
+        }
+        result.Findings = result.Findings.DistinctBy(x => x.EvidenceId, StringComparer.Ordinal).Take(30).ToList();
         result.Recommendations = result.Recommendations
             .Where(x => !string.IsNullOrWhiteSpace(x.ActionId))
             .DistinctBy(x => x.ActionId, StringComparer.OrdinalIgnoreCase).Take(20).ToList();
         return result;
+    }
+
+    public static IReadOnlyDictionary<string, string> BuildEvidenceFacts(SystemProfile profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        var facts = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["system:operating-system"] = profile.OperatingSystem ?? "Unavailable",
+            ["system:cpu"] = profile.Cpu ?? "Unavailable",
+            ["system:memory"] = profile.Memory ?? "Unavailable",
+            ["system:active-power-plan"] = profile.ActivePowerPlan ?? "Unavailable"
+        };
+        var gpus = profile.Gpus ?? [];
+        for (var index = 0; index < gpus.Count; index++) facts[$"hardware:gpu:{index}"] = gpus[index] ?? "Unavailable";
+        Add("hardware", profile.HardwareCapabilities);
+        Add("windows", profile.WindowsSettings);
+        Add("gaming", profile.GamingSettings);
+        Add("network", profile.NetworkSettings);
+        Add("registry", profile.PerformanceRegistry);
+        var conflicts = profile.PolicyConflicts ?? [];
+        for (var index = 0; index < conflicts.Count; index++) facts[$"conflict:{index}"] = conflicts[index] ?? "Unavailable";
+        foreach (var key in facts.Keys.ToList()) facts[key] = ProfileSanitizer.Redact(facts[key]);
+        return facts;
+
+        void Add(string prefix, Dictionary<string, string>? values)
+        {
+            foreach (var (key, value) in values ?? []) facts[$"{prefix}:{key}"] = value ?? "Unavailable";
+        }
     }
 
     public static Uri ValidateBaseUrl(UserSettings settings)
@@ -198,7 +269,7 @@ public sealed class LlmClient
         request.Content = JsonContent(new
         {
             model = settings.Model,
-            max_tokens = 1800,
+            max_tokens = 3200,
             temperature = 0.1,
             messages = new[] { new { role = "user", content = prompt } }
         });

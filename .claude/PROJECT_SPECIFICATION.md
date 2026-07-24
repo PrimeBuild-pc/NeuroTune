@@ -39,8 +39,8 @@ NeuroTune addresses:
 
 Collect without manual data entry:
 
-- **Hardware:** CPU, GPU and driver, memory capacity and speed, and physical storage type.
-- **Windows:** version/build, active power plan, relevant policy, and gaming settings.
+- **Hardware:** CPU, GPU and driver, memory capacity and speed, physical storage type, display mode, form factor, page-file policy, and virtualization-based security.
+- **Windows:** version/build, active power plan, relevant policies, gaming settings, and a curated snapshot of performance-related Registry values.
 - **Network:** adapters, DNS configuration count, global TCP settings, latency sample, and Nagle overrides.
 - **Gaming:** Game Mode, HAGS, Game DVR, and VRR state where detectable.
 - **Runtime:** high-memory processes, startup entries, and automatic services.
@@ -49,15 +49,16 @@ The user must see the sanitized profile before it is sent to a provider.
 
 ### 3. LLM Diagnosis
 
-- Produce a clear diagnosis of the current system.
-- Return structured recommendations by action identifier, category, and reason.
+- Ask for the user's games or workloads and priority: balanced, frame rate, system latency, network latency, or efficiency.
+- Produce a clear diagnosis whose findings cite exact observed fields and values.
+- Return structured recommendations by action identifier and evidence-backed reason.
 - Reject unknown actions, scripts, commands, and malformed responses.
 
-### 4. Optimization Presets
+### 4. Dynamic Plan
 
-- **Safe / Balanced:** only recommended low-risk actions.
-- **Extreme Gaming:** compatible gaming actions plus recommended low-risk actions.
-- **Custom:** explicit per-action selection by the user.
+- Hide catalog actions that the current diagnosis did not recommend.
+- Offer **Select all**, **Select safe only**, explicit approval, and a printable report.
+- Keep execution behind an explicit consent question and local confirmation.
 
 ### 5. Compatibility and Transparency
 
@@ -83,8 +84,8 @@ The user must see the sanitized profile before it is sent to a provider.
 
 1. Start NeuroTune and configure a BYOK provider.
 2. Run a local scan and review the sanitized profile.
-3. Request an AI diagnosis.
-4. Review compatible actions and select a preset or customize the selection.
+3. Enter relevant games or workloads, choose a priority, and request an AI diagnosis.
+4. Review the dynamic evidence-backed plan, print it, or select all/safe/manual fixes.
 5. Confirm the exact changes.
 6. Let NeuroTune verify backups, apply changes, and record results.
 7. Review observational telemetry and restart when required.
@@ -92,7 +93,7 @@ The user must see the sanitized profile before it is sent to a provider.
 
 ## Product Principles
 
-- **Safety over action count:** five tested actions are better than fifty undocumented tweaks.
+- **Safety over action count:** a few tested actions are better than fifty undocumented tweaks.
 - **Local enforcement:** the application, not the model, decides what can execute.
 - **No hidden behavior:** profiles, recommendations, changes, and recovery state remain visible.
 - **Evidence over marketing:** performance claims require reproducible measurements.

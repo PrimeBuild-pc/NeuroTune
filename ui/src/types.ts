@@ -23,6 +23,9 @@ export interface SystemProfile {
   gamingSettings: Record<string, string>;
   networkAdapters: string[];
   networkSettings: Record<string, string>;
+  hardwareCapabilities: Record<string, string>;
+  performanceRegistry: Record<string, string>;
+  policyConflicts: string[];
   topProcesses: string[];
   startupItems: string[];
   automaticServices: string[];
@@ -56,13 +59,30 @@ export interface OptimizationAction {
 
 export interface Recommendation {
   actionId: string;
+  evidenceId: string;
   reason: string;
+}
+
+export type OptimizationPriority = 'balanced' | 'fps' | 'systemLatency' | 'networkLatency' | 'efficiency';
+
+export interface TuningGoals {
+  priority: OptimizationPriority;
+  games: string[];
+  notes: string;
+}
+
+export interface DiagnosisFinding {
+  title: string;
+  evidenceId: string;
+  currentValue: string;
+  assessment: string;
 }
 
 export interface Diagnosis {
   summary: string;
-  findings: string[];
+  findings: DiagnosisFinding[];
   recommendations: Recommendation[];
+  consentQuestion: string;
 }
 
 export interface ScanResult {

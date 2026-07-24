@@ -23,18 +23,19 @@ Use a disposable Windows virtual machine. Do not use a primary PC for the first 
 ## 2. Local Scan and Privacy
 
 1. Select **Scan this PC** without requesting an AI diagnosis.
-2. Confirm that CPU, GPU, memory, and Windows cards are populated.
-3. Review the sanitized JSON profile.
+2. Confirm that CPU, GPU, memory, Windows, hardware capabilities, and the curated Registry snapshot are populated.
+3. Review the sanitized JSON profile and any locally detected policy conflicts or manual overrides.
 4. Confirm that the Windows username and device name do not appear.
 5. Confirm that no provider request occurs until **Run AI diagnosis** is selected.
 
 ## 3. Diagnosis and Review
 
-1. Run the AI diagnosis.
-2. Confirm that every recommendation maps to a visible action in the Review tab.
-3. Confirm that unavailable and already-configured actions cannot be selected.
-4. Compare Safe, Gaming, and manual selection behavior.
+1. Enter at least one game or workload, test each optimization priority, and run the AI diagnosis.
+2. Confirm that each finding cites an observed profile value and every recommendation maps to a visible action.
+3. Confirm that unrelated catalog actions are hidden and unavailable or already-configured actions cannot be selected.
+4. Compare Select all, Select safe only, Clear, and manual selection behavior.
 5. Confirm that every action shows its current state, risk, reason, and restart requirement.
+6. Print the report and verify that navigation and execution controls are omitted.
 
 ## 4. Apply and Roll Back
 

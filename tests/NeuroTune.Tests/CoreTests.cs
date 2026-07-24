@@ -28,6 +28,23 @@ public sealed class CoreTests
     }
 
     [TestMethod]
+    public void Diagnosis_rejects_fabricated_evidence()
+    {
+        var facts = new Dictionary<string, string> { ["gaming:Game Mode"] = "1" };
+        var valid = """
+            {"summary":"Checked","findings":[{"title":"Game Mode","evidenceId":"gaming:Game Mode","currentValue":"1","assessment":"Enabled"}],"recommendations":[{"actionId":"gaming.game-mode","evidenceId":"gaming:Game Mode","reason":"Matches the goal"}]}
+            """;
+        var fabricated = valid.Replace("\"currentValue\":\"1\"", "\"currentValue\":\"0\"");
+        var unsupportedRecommendation = valid.Replace("\"evidenceId\":\"gaming:Game Mode\",\"reason\"", "\"evidenceId\":\"missing\",\"reason\"");
+
+        Assert.AreEqual("Game Mode", LlmClient.ParseDiagnosis(valid, new OptimizationCatalog(), facts).Findings.Single().Title);
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            LlmClient.ParseDiagnosis(fabricated, new OptimizationCatalog(), facts));
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            LlmClient.ParseDiagnosis(unsupportedRecommendation, new OptimizationCatalog(), facts));
+    }
+
+    [TestMethod]
     public void Sanitizer_removes_windows_identity()
     {
         var profile = new SystemProfile
@@ -39,18 +56,9 @@ public sealed class CoreTests
 
         Assert.DoesNotContain(Environment.UserName, json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(Environment.MachineName, json, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [TestMethod]
-    public void Balanced_preset_selects_only_recommended_low_risk_actions()
-    {
-        var catalog = new OptimizationCatalog();
-        var low = catalog.Get("gaming.game-mode");
-        var medium = catalog.Get("gaming.hags");
-
-        Assert.IsTrue(OptimizationCatalog.SelectForPreset(low, true, OptimizationPreset.Balanced));
-        Assert.IsFalse(OptimizationCatalog.SelectForPreset(medium, true, OptimizationPreset.Balanced));
-        Assert.IsFalse(OptimizationCatalog.SelectForPreset(low, false, OptimizationPreset.Balanced));
+        var facts = LlmClient.BuildEvidenceFacts(profile);
+        Assert.DoesNotContain(Environment.UserName, facts["system:cpu"], StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(Environment.MachineName, facts["system:cpu"], StringComparison.OrdinalIgnoreCase);
     }
 
     [TestMethod]
@@ -86,6 +94,29 @@ public sealed class CoreTests
     }
 
     [TestMethod]
+    public void Tuning_goals_are_trimmed_deduplicated_and_bounded()
+    {
+        var goals = new TuningGoals { Games = [" Valorant ", "valorant", ""] };
+
+        goals.Validate();
+
+        CollectionAssert.AreEqual(new[] { "Valorant" }, goals.Games);
+        goals.Notes = new string('x', 1_001);
+        Assert.ThrowsExactly<InvalidOperationException>(goals.Validate);
+    }
+
+    [TestMethod]
+    public void Empty_consent_question_is_rejected()
+    {
+        var json = """
+            {"summary":"Evidence checked","findings":[],"recommendations":[],"consentQuestion":""}
+            """;
+
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            LlmClient.ParseDiagnosis(json, new OptimizationCatalog()));
+    }
+
+    [TestMethod]
     public void Incomplete_operation_is_flagged_for_recovery()
     {
         var manifest = new OperationManifest
@@ -108,5 +139,8 @@ public sealed class CoreTests
         Assert.IsFalse(string.IsNullOrWhiteSpace(profile.OperatingSystem));
         Assert.IsNotNull(profile.GamingSettings);
         Assert.IsNotNull(profile.NetworkSettings);
+        Assert.IsGreaterThan(10, profile.PerformanceRegistry.Count);
+        Assert.IsNotNull(profile.HardwareCapabilities);
+        Assert.IsNotNull(profile.PolicyConflicts);
     }
 }

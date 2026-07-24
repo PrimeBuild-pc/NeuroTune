@@ -5,7 +5,7 @@ namespace NeuroTune;
 public enum LlmProvider { OpenRouter, OpenAI, Anthropic, DeepSeek, Custom, Local }
 public enum ApiProtocol { OpenAiCompatible, Anthropic }
 public enum RiskLevel { Low, Medium, High }
-public enum OptimizationPreset { Balanced, Gaming, Custom }
+public enum OptimizationPriority { Balanced, Fps, SystemLatency, NetworkLatency, Efficiency }
 
 public sealed class UserSettings
 {
@@ -38,21 +38,52 @@ public sealed class SystemProfile
     public Dictionary<string, string> GamingSettings { get; set; } = [];
     public List<string> NetworkAdapters { get; set; } = [];
     public Dictionary<string, string> NetworkSettings { get; set; } = [];
+    public Dictionary<string, string> HardwareCapabilities { get; set; } = [];
+    public Dictionary<string, string> PerformanceRegistry { get; set; } = [];
+    public List<string> PolicyConflicts { get; set; } = [];
     public List<string> TopProcesses { get; set; } = [];
     public List<string> StartupItems { get; set; } = [];
     public List<string> AutomaticServices { get; set; } = [];
 }
 
+public sealed class TuningGoals
+{
+    public OptimizationPriority Priority { get; set; } = OptimizationPriority.Balanced;
+    public List<string> Games { get; set; } = [];
+    public string Notes { get; set; } = "";
+
+    public void Validate()
+    {
+        Games ??= [];
+        Notes ??= "";
+        if (Games.Count > 100) throw new InvalidOperationException("Too many tuning goals.");
+        Games = Games.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Take(12).ToList();
+        if (Games.Any(x => x.Length > 100) || Notes.Length > 1_000)
+            throw new InvalidOperationException("Tuning goals are too long.");
+        Notes = Notes.Trim();
+    }
+}
+
 public sealed class DiagnosisResult
 {
     public string Summary { get; set; } = "";
-    public List<string> Findings { get; set; } = [];
+    public List<DiagnosisFinding> Findings { get; set; } = [];
     public List<OptimizationRecommendation> Recommendations { get; set; } = [];
+    public string ConsentQuestion { get; set; } = "May NeuroTune apply the selected allowlisted fixes after creating a restore point?";
+}
+
+public sealed class DiagnosisFinding
+{
+    public string Title { get; set; } = "";
+    public string EvidenceId { get; set; } = "";
+    public string CurrentValue { get; set; } = "";
+    public string Assessment { get; set; } = "";
 }
 
 public sealed class OptimizationRecommendation
 {
     public string ActionId { get; set; } = "";
+    public string EvidenceId { get; set; } = "";
     public string Reason { get; set; } = "";
 }
 

@@ -29,10 +29,14 @@ NeuroTune is developed safety-first: a feature is not considered complete merely
 
 ## v0.4 — Evidence and Compatibility
 
+- [x] Collect curated performance Registry state, hardware capabilities, and local policy conflicts
+- [x] Add user goals for games/workloads and frame-rate, system-latency, network, balanced, or efficiency priorities
+- [x] Show only diagnosis-backed actions with Select all, Select safe only, explicit approval, and printable reports
+- [x] Require model findings to cite observed profile values and keep execution on the compiled allowlist
 - [ ] Publish a support matrix by Windows build, GPU family, and driver capability
 - [ ] Add repeatable pre/post workload measurements instead of synthetic “health scores”
 - [ ] Require an evidence note and rollback test for every new optimization
-- [ ] Add exportable diagnostic and operation reports with privacy review
+- [ ] Add exportable operation reports with privacy review
 - [ ] Improve offline behavior and provider-specific error guidance
 - [ ] Add restore-point and rollback integration tests in disposable VMs
 

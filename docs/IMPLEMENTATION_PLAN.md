@@ -13,13 +13,13 @@
 ## Implemented Flow
 
 1. Initialize the solution, repository, CI, and documentation.
-2. Define system profiles, diagnoses, actions, presets, telemetry, and operation manifests.
+2. Define system profiles, tuning goals, diagnoses, actions, telemetry, and operation manifests.
 3. Protect API keys, support OpenRouter browser authorization, and dynamically discover provider models.
-4. Collect hardware, Windows, gaming, network, process, startup, and service data locally.
+4. Collect hardware capabilities, curated performance Registry values, local policy conflicts, gaming, network, process, startup, and service data.
 5. Sanitize and preview the exact profile sent to the selected provider.
-6. Accept only structured recommendations that reference the compiled action allowlist.
+6. Accept only findings whose evidence ID/value pair matches the local scan and recommendations that reference the compiled action allowlist.
 7. Check compatibility and current state before an action can be selected.
-8. Filter AI recommendations by preset and risk.
+8. Show only diagnosis-backed actions, with Select all, Select safe only, explicit approval, and print-report controls.
 9. Require and verify a new System Restore point plus affected Registry exports.
 10. Journal every attempt before execution, verify results, and roll back automatically on failure.
 11. Detect interrupted operations and expose manual recovery at startup.
