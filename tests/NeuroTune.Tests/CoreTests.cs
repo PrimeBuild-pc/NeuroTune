@@ -54,6 +54,42 @@ public sealed class CoreTests
     }
 
     [TestMethod]
+    public void Provider_model_list_is_parsed_and_sorted()
+    {
+        var models = LlmClient.ParseModels("""
+            {"data":[{"id":"z-model"},{"id":"a-model"},{"id":"a-model"}]}
+            """);
+
+        CollectionAssert.AreEqual(new[] { "a-model", "z-model" }, models.ToArray());
+    }
+
+    [TestMethod]
+    public void Incomplete_operation_is_flagged_for_recovery()
+    {
+        var manifest = new OperationManifest
+        {
+            Status = "Applying",
+            Actions = [new ActionRecord { Attempted = true }]
+        };
+
+        Assert.IsTrue(manifest.HasPendingRollback);
+        manifest.Status = "Completed";
+        Assert.IsFalse(manifest.HasPendingRollback);
+    }
+
+    [TestMethod]
+    public void Snapshot_comparison_does_not_claim_a_benchmark()
+    {
+        var before = new PerformanceSnapshot { CpuLoadPercent = 20, ProcessCount = 100 };
+        var after = new PerformanceSnapshot { CpuLoadPercent = 10, ProcessCount = 90 };
+
+        var comparison = MainWindow.FormatComparison(before, after);
+
+        StringAssert.Contains(comparison, "20% → 10%");
+        StringAssert.Contains(comparison, "not proof");
+    }
+
+    [TestMethod]
     [TestCategory("WindowsIntegration")]
     public void Profiler_collects_a_windows_profile()
     {

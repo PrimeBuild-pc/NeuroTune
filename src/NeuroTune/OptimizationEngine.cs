@@ -4,51 +4,63 @@ public sealed class OptimizationEngine
 {
     private readonly OptimizationCatalog _catalog;
     private readonly BackupService _backup;
+    private readonly PerformanceSnapshotService _performance;
 
-    public OptimizationEngine(OptimizationCatalog catalog, BackupService backup)
+    public OptimizationEngine(OptimizationCatalog catalog, BackupService backup, PerformanceSnapshotService? performance = null)
     {
         _catalog = catalog;
         _backup = backup;
+        _performance = performance ?? new PerformanceSnapshotService();
     }
 
     public Task<OperationManifest> ApplyAsync(IEnumerable<string> actionIds) => Task.Run(() =>
     {
         var actions = actionIds.Distinct(StringComparer.OrdinalIgnoreCase).Select(_catalog.Get).ToList();
-        if (actions.Count == 0) throw new InvalidOperationException("Nessuna ottimizzazione selezionata.");
+        if (actions.Count == 0) throw new InvalidOperationException("Select at least one optimization.");
+
+        var blocked = actions.Select(x => (Action: x, Availability: x.Inspect()))
+            .Where(x => !x.Availability.CanApply).ToList();
+        if (blocked.Count > 0)
+            throw new InvalidOperationException(string.Join(Environment.NewLine,
+                blocked.Select(x => $"{x.Action.Name}: {x.Availability.Status}")));
 
         using var mutex = new Mutex(false, @"Global\NeuroTuneOptimization");
-        if (!mutex.WaitOne(TimeSpan.Zero)) throw new InvalidOperationException("È già in corso un'altra ottimizzazione.");
+        var acquired = Acquire(mutex);
+        if (!acquired) throw new InvalidOperationException("Another NeuroTune operation is already running.");
         try
         {
+            var before = _performance.Collect();
             var manifest = _backup.Prepare(actions);
+            manifest.Before = before;
             try
             {
-                manifest.Status = "Applicazione";
+                manifest.Status = "Applying";
                 _backup.Save(manifest);
                 foreach (var action in actions)
                 {
-                    var record = new ActionRecord { ActionId = action.Id, OriginalState = action.Capture() };
+                    var record = new ActionRecord { ActionId = action.Id, OriginalState = action.Capture(), Attempted = true };
                     manifest.Actions.Add(record);
-                    record.Applied = true; // Un tentativo parziale deve comunque entrare nel rollback.
                     _backup.Save(manifest);
                     action.Apply();
-                    if (!action.Verify()) throw new InvalidOperationException($"Verifica fallita per {action.Name}.");
+                    if (!action.Verify()) throw new InvalidOperationException($"Verification failed for {action.Name}.");
+                    record.Applied = true;
                     _backup.Save(manifest);
                 }
-                manifest.Status = "Completata";
+                manifest.After = _performance.Collect();
+                manifest.Status = "Completed";
                 _backup.Save(manifest);
                 return manifest;
             }
             catch (Exception exception)
             {
-                manifest.Status = "Errore: rollback automatico";
+                manifest.Status = "Error — automatic rollback";
                 manifest.Error = exception.Message;
                 RollbackApplied(manifest);
-                manifest.Status = manifest.Actions.Where(x => x.Applied).All(x => x.RolledBack)
-                    ? "Errore — rollback completato"
-                    : "Errore — rollback incompleto";
+                manifest.Status = Pending(manifest).Any()
+                    ? "Error — rollback incomplete"
+                    : "Error — rollback completed";
                 _backup.Save(manifest);
-                throw new InvalidOperationException($"Ottimizzazione interrotta: {exception.Message}", exception);
+                throw new InvalidOperationException($"Optimization stopped: {exception.Message}", exception);
             }
         }
         finally { mutex.ReleaseMutex(); }
@@ -57,35 +69,46 @@ public sealed class OptimizationEngine
     public Task RollbackAsync(OperationManifest manifest) => Task.Run(() =>
     {
         using var mutex = new Mutex(false, @"Global\NeuroTuneOptimization");
-        if (!mutex.WaitOne(TimeSpan.Zero)) throw new InvalidOperationException("È già in corso un'altra operazione.");
+        var acquired = Acquire(mutex);
+        if (!acquired) throw new InvalidOperationException("Another NeuroTune operation is already running.");
         try
         {
-            _backup.CreateRestorePoint($"NeuroTune prima del rollback {manifest.Id:N}");
-            manifest.Status = "Rollback in corso";
+            _backup.CreateRestorePoint($"NeuroTune before rollback {manifest.Id:N}");
+            manifest.Status = "Rolling back";
             _backup.Save(manifest);
             RollbackApplied(manifest);
-            manifest.Status = manifest.Actions.Where(x => x.Applied).All(x => x.RolledBack)
-                ? "Rollback completato"
-                : "Rollback incompleto";
+            manifest.Status = Pending(manifest).Any() ? "Rollback incomplete" : "Rollback completed";
             _backup.Save(manifest);
-            if (manifest.Status == "Rollback incompleto")
-                throw new InvalidOperationException("Alcune azioni non sono state ripristinate. Controlla la cronologia.");
+            if (manifest.Status == "Rollback incomplete")
+                throw new InvalidOperationException("Some actions could not be restored. Review the operation details.");
         }
         finally { mutex.ReleaseMutex(); }
     });
 
     private void RollbackApplied(OperationManifest manifest)
     {
-        foreach (var record in manifest.Actions.Where(x => x.Applied && !x.RolledBack).Reverse())
+        foreach (var record in Pending(manifest).Reverse())
         {
             try
             {
-                _catalog.Get(record.ActionId).Restore(record.OriginalState);
+                var action = _catalog.Get(record.ActionId);
+                action.Restore(record.OriginalState);
+                if (!string.Equals(action.Capture(), record.OriginalState, StringComparison.Ordinal))
+                    throw new InvalidOperationException("The restored state did not match the saved snapshot.");
                 record.RolledBack = true;
                 record.Error = null;
             }
             catch (Exception exception) { record.Error = exception.Message; }
             _backup.Save(manifest);
         }
+    }
+
+    private static IEnumerable<ActionRecord> Pending(OperationManifest manifest) =>
+        manifest.Actions.Where(x => (x.Attempted || x.Applied) && !x.RolledBack);
+
+    private static bool Acquire(Mutex mutex)
+    {
+        try { return mutex.WaitOne(TimeSpan.Zero); }
+        catch (AbandonedMutexException) { return true; }
     }
 }

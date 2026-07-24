@@ -9,7 +9,13 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>NeuroTune</AssemblyName>
     <RootNamespace>NeuroTune</RootNamespace>
+    <Version>0.2.0-alpha.1</Version>
+    <ApplicationIcon>Assets\NeuroTune.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\NeuroTune.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="System.Management" Version="8.0.0" />

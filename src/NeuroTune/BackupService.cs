@@ -15,14 +15,15 @@ public sealed class BackupService
         var manifest = new OperationManifest();
         manifest.DirectoryPath = Path.Combine(OperationsDirectory, $"{manifest.CreatedAt:yyyyMMdd-HHmmss}-{manifest.Id:N}");
         Directory.CreateDirectory(manifest.DirectoryPath);
-        manifest.RestorePoint = CreateRestorePoint($"NeuroTune {manifest.Id:N}");
+        Save(manifest);
 
+        manifest.RestorePoint = CreateRestorePoint($"NeuroTune {manifest.Id:N}");
         var backupDirectory = Path.Combine(manifest.DirectoryPath, "registry");
         Directory.CreateDirectory(backupDirectory);
         foreach (var path in actions.Select(x => x.RegistryExportPath).Where(x => x is not null).Distinct())
             ExportRegistry(path!, backupDirectory);
 
-        manifest.Status = "Backup completato";
+        manifest.Status = "Backup completed";
         Save(manifest);
         return manifest;
     }
@@ -38,13 +39,19 @@ public sealed class BackupService
             parameters["EventType"] = 100;
             using var result = restore.InvokeMethod("CreateRestorePoint", parameters, null);
             var returnValue = Convert.ToUInt32(result?["ReturnValue"] ?? uint.MaxValue);
-            if (returnValue != 0) throw new InvalidOperationException($"codice Windows {returnValue}");
-            return description;
+            if (returnValue != 0) throw new InvalidOperationException($"Windows error code {returnValue}");
+
+            for (var attempt = 0; attempt < 20; attempt++)
+            {
+                if (RestorePointExists(description)) return description;
+                Thread.Sleep(500);
+            }
+            throw new InvalidOperationException("Windows accepted the request but the restore point was not found");
         }
         catch (Exception exception)
         {
             throw new InvalidOperationException(
-                $"Punto di ripristino non creato ({exception.Message}). Abilita Protezione sistema e riprova.", exception);
+                $"A verified restore point could not be created ({exception.Message}). Enable System Protection and try again.", exception);
         }
     }
 
@@ -72,6 +79,15 @@ public sealed class BackupService
             .OrderByDescending(x => x.CreatedAt).ToList();
     }
 
+    private static bool RestorePointExists(string description)
+    {
+        using var searcher = new ManagementObjectSearcher(
+            new ManagementScope(@"\\localhost\root\default"),
+            new ObjectQuery("SELECT Description FROM SystemRestore"));
+        return searcher.Get().Cast<ManagementBaseObject>()
+            .Any(x => string.Equals(x["Description"]?.ToString(), description, StringComparison.Ordinal));
+    }
+
     private static void ExportRegistry(string registryPath, string outputDirectory)
     {
         if (!RegistryPathExists(registryPath))
@@ -81,12 +97,17 @@ public sealed class BackupService
         }
 
         var output = Path.Combine(outputDirectory, SafeName(registryPath) + ".reg");
-        var start = new ProcessStartInfo("reg.exe") { UseShellExecute = false, RedirectStandardError = true, CreateNoWindow = true };
+        var start = new ProcessStartInfo("reg.exe")
+        {
+            UseShellExecute = false,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
         foreach (var argument in new[] { "export", registryPath, output, "/y" }) start.ArgumentList.Add(argument);
-        using var process = Process.Start(start) ?? throw new InvalidOperationException("Impossibile avviare reg.exe.");
+        using var process = Process.Start(start) ?? throw new InvalidOperationException("Cannot start reg.exe.");
         var error = process.StandardError.ReadToEnd();
         process.WaitForExit();
-        if (process.ExitCode != 0) throw new InvalidOperationException($"Backup registro fallito: {error.Trim()}");
+        if (process.ExitCode != 0) throw new InvalidOperationException($"Registry backup failed: {error.Trim()}");
     }
 
     private static bool RegistryPathExists(string registryPath)

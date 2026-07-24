@@ -34,7 +34,7 @@ public sealed class SettingsService
         {
             var protectedBytes = ProtectedData.Protect(
                 Encoding.UTF8.GetBytes(apiKey.Trim()), null, DataProtectionScope.CurrentUser);
-            File.WriteAllBytes(KeyPath(settings.Provider), protectedBytes);
+            AtomicWriteBytes(KeyPath(settings.Provider), protectedBytes);
         }
     }
 
@@ -61,6 +61,13 @@ public sealed class SettingsService
     {
         var temporary = path + ".tmp";
         File.WriteAllText(temporary, content);
+        File.Move(temporary, path, true);
+    }
+
+    private static void AtomicWriteBytes(string path, byte[] content)
+    {
+        var temporary = path + ".tmp";
+        File.WriteAllBytes(temporary, content);
         File.Move(temporary, path, true);
     }
 }

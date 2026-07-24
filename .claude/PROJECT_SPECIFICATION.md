@@ -1,71 +1,89 @@
-# 🚀 Specifica di Progetto: AI-Powered System Optimizer
+# Project Specification: AI-Powered System Optimizer
 
-## 📄 Descrizione Generale
+## Overview
 
-**AI-Powered System Optimizer** è un'applicazione desktop intelligente progettata per analizzare, diagnosticare e ottimizzare automaticamente le prestazioni del sistema operativo, con focus primario su Windows, in base all'hardware specifico, al software installato e alle esigenze reali dell'utente, come gaming ad alte prestazioni, produttività e riduzione della latenza di rete.
+NeuroTune is an intelligent Windows desktop application that analyzes, diagnoses, and safely tunes operating-system performance according to the actual hardware, installed software, and user goal, such as gaming performance, productivity, or network responsiveness.
 
-A differenza dei tradizionali software di pulizia o ottimizzazione basati su regole rigide e generiche, l'applicazione sfrutta modelli di linguaggio avanzati via API (per esempio OpenRouter, OpenAI, Qwen e Moonshot) per effettuare un'analisi contestualizzata. L'applicazione raccoglie in autonomia la configurazione di sistema e formula strategie di ottimizzazione personalizzate, eliminando la necessità di inserimento manuale dei dati.
+Unlike generic cleanup tools based on fixed recipes, NeuroTune uses a user-selected language model through a BYOK provider. It collects the system profile automatically and asks the model for contextual recommendations. The model may only select actions from a local, compiled allowlist; it cannot generate executable changes.
 
----
+## Project Goal
 
-## 🎯 Scopo del Progetto
+The goal is to make advanced Windows administration understandable to non-technical users while preserving transparency, validation, and recovery.
 
-Lo scopo è **democratizzare l'amministrazione avanzata e l'ottimizzazione del sistema operativo**, rendendola accessibile agli utenti non tecnici e garantendo sicurezza e trasparenza.
+NeuroTune addresses:
 
-Il progetto mira a risolvere:
+- **Technical complexity:** users should not need to edit the Registry or run scripts manually.
+- **Generic advice:** recommendations should consider the real CPU, GPU, memory, storage, Windows build, and configuration.
+- **Safety:** every change must be inspectable, compatible, verified, and reversible.
+- **Time:** profiling, diagnosis, review, execution, and recovery should form one guided workflow.
 
-- **Complessità tecnica:** evitare modifiche manuali al Registro o l'esecuzione manuale di script.
-- **Soluzioni generiche:** personalizzare le modifiche in base a CPU, GPU, RAM, disco e versione del sistema operativo.
-- **Perdita di tempo:** automatizzare diagnostica, decisione ed esecuzione in un'esperienza lineare.
+## Core Capabilities
 
----
+### 1. BYOK Provider Configuration
 
-## 🔑 Funzionalità Principali
+- Secure local storage for OpenRouter, OpenAI, and Anthropic API keys.
+- Provider connection testing and model selection.
+- No proprietary subscription or NeuroTune-hosted backend.
 
-### 1. Autenticazione e BYOK (Bring Your Own Key)
+### 2. Automatic System Inspection
 
-- Salvataggio sicuro di API key per provider multipli, tra cui OpenRouter, OpenAI e Anthropic.
-- Selezione del modello da utilizzare per la diagnostica.
+Collect without manual data entry:
 
-### 2. Ispezione Automatica del Sistema
+- **Hardware:** CPU, GPU and driver, memory capacity and speed, and physical storage type.
+- **Windows:** version/build, active power plan, relevant policy, and gaming settings.
+- **Network:** adapters, DNS configuration count, global TCP settings, latency sample, and Nagle overrides.
+- **Gaming:** Game Mode, HAGS, Game DVR, and VRR state where detectable.
+- **Runtime:** high-memory processes, startup entries, and automatic services.
 
-Rilevamento automatico senza inserimento manuale di:
+The user must see the sanitized profile before it is sent to a provider.
 
-- **Hardware:** CPU, GPU e driver, quantità e velocità RAM, NVMe/SSD/HDD.
-- **Sistema operativo:** build Windows, piano energetico, sicurezza e telemetria.
-- **Rete:** TCP/IP, latenza, DNS e algoritmo di Nagle.
-- **Gaming:** Game Mode, Hardware-Accelerated GPU Scheduling (HAGS) e Variable Refresh Rate.
-- **Processi e servizi:** software di avvio e carico di sistema.
+### 3. LLM Diagnosis
 
-### 3. Motore di Diagnosi e Strategia LLM
+- Produce a clear diagnosis of the current system.
+- Return structured recommendations by action identifier, category, and reason.
+- Reject unknown actions, scripts, commands, and malformed responses.
 
-- Diagnosi del profilo per individuare colli di bottiglia, impostazioni non ottimali e servizi superflui.
-- Interventi classificati per categoria (Gaming, Rete, Sistema, Privacy) e rischio.
+### 4. Optimization Presets
 
-### 4. Preset di Ottimizzazione
+- **Safe / Balanced:** only recommended low-risk actions.
+- **Extreme Gaming:** compatible gaming actions plus recommended low-risk actions.
+- **Custom:** explicit per-action selection by the user.
 
-- 🟢 **Sicuro / Bilanciato:** esclusivamente ottimizzazioni a basso rischio.
-- 🎮 **Extreme Gaming:** riduzione della latenza e delle attività in background non essenziali.
-- 🛠️ **Personalizzato:** selezione manuale delle singole azioni proposte.
+### 5. Compatibility and Transparency
 
-### 5. Sicurezza e Ripristino
+- Inspect current state before an action can be selected.
+- Disable unsupported or already-configured actions.
+- Show description, current value, compatibility, reason, risk, and restart requirement.
 
-- Creazione obbligatoria di un punto di ripristino e backup delle chiavi di registro coinvolte prima di ogni modifica.
-- Rollback dedicato per riportare il sistema allo stato precedente.
+### 6. Backup and Recovery
 
----
+- Require and verify a new System Restore point before any system modification.
+- Export affected Registry keys and persist original values.
+- Journal each action before attempting it.
+- Verify each applied or restored value.
+- Roll back automatically on failure and expose manual recovery from operation history.
+- Warn at startup when an interrupted operation needs attention.
 
-## 👥 User Journey
+### 7. Measurement
 
-1. **Configurazione iniziale:** avvio con privilegi amministrativi e inserimento della API key.
-2. **Scansione e analisi:** raccolta automatica del profilo e interrogazione del modello AI.
-3. **Selezione e applicazione:** scelta del preset o delle singole azioni.
-4. **Esecuzione sicura:** punto di ripristino, applicazione delle modifiche e conferma finale.
+- Capture factual before/after observations such as CPU load, memory use, process count, latency, and active power plan.
+- Never present an immediate observation or synthetic score as proof of a performance improvement.
 
----
+## User Journey
 
-## 💡 Valore Aggiunto
+1. Start NeuroTune and configure a BYOK provider.
+2. Run a local scan and review the sanitized profile.
+3. Request an AI diagnosis.
+4. Review compatible actions and select a preset or customize the selection.
+5. Confirm the exact changes.
+6. Let NeuroTune verify backups, apply changes, and record results.
+7. Review observational telemetry and restart when required.
+8. Restore the operation from history if necessary.
 
-- **Adattabilità:** raccomandazioni legate alla configurazione reale, incluse architetture CPU ibride e GPU recenti.
-- **Indipendenza dai costi di abbonamento:** modello BYOK con pagamento diretto del consumo al provider scelto.
-- **Trasparenza:** spiegazione chiara di cosa viene cambiato e del motivo della raccomandazione.
+## Product Principles
+
+- **Safety over action count:** five tested actions are better than fifty undocumented tweaks.
+- **Local enforcement:** the application, not the model, decides what can execute.
+- **No hidden behavior:** profiles, recommendations, changes, and recovery state remain visible.
+- **Evidence over marketing:** performance claims require reproducible measurements.
+- **No destructive shortcuts:** no generated scripts, remote tweak catalogs, security-control disabling, or irreversible cleanup.
