@@ -16,7 +16,18 @@ NeuroTune is developed safety-first: a feature is not considered complete merely
 - [ ] End-to-end validation on clean Windows 10 and Windows 11 virtual machines ([#2](../../issues/2))
 - [ ] Accessibility pass with keyboard-only and screen-reader testing ([#1](../../issues/1))
 
-## v0.3 — Evidence and Compatibility
+## v0.3 — Native Web UI and Open Providers
+
+- [x] Replace the WPF shell with Tauri 2 and React
+- [x] Add semantic light and dark themes with Windows synchronization and manual override
+- [x] Add automated WCAG AA contrast checks for shipped design tokens
+- [x] Add native DeepSeek, custom OpenAI-compatible, custom Anthropic-compatible, and local model connections
+- [x] Add Ollama, LM Studio, and vLLM local endpoint presets
+- [x] Add official OpenRouter browser authorization with PKCE
+- [x] Keep the Windows safety engine isolated in a local .NET agent
+- [ ] Validate appearance at 100%, 150%, and 200% Windows scaling ([#1](../../issues/1))
+
+## v0.4 — Evidence and Compatibility
 
 - [ ] Publish a support matrix by Windows build, GPU family, and driver capability
 - [ ] Add repeatable pre/post workload measurements instead of synthetic “health scores”
@@ -25,7 +36,7 @@ NeuroTune is developed safety-first: a feature is not considered complete merely
 - [ ] Improve offline behavior and provider-specific error guidance
 - [ ] Add restore-point and rollback integration tests in disposable VMs
 
-## v0.4 — Distribution Beta
+## v0.5 — Distribution Beta
 
 - [ ] Signed MSIX or installer with clean uninstall behavior
 - [ ] Code-signed binaries and documented checksum verification

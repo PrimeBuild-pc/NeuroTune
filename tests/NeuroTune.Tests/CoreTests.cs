@@ -64,6 +64,28 @@ public sealed class CoreTests
     }
 
     [TestMethod]
+    public void Custom_provider_requires_https_unless_it_is_local()
+    {
+        var remote = LlmClient.Defaults(LlmProvider.Custom);
+        remote.BaseUrl = "http://example.com/v1";
+        Assert.ThrowsExactly<InvalidOperationException>(() => LlmClient.ValidateBaseUrl(remote));
+
+        var local = LlmClient.Defaults(LlmProvider.Local);
+        local.BaseUrl = "http://127.0.0.1:11434/v1";
+        Assert.AreEqual("127.0.0.1", LlmClient.ValidateBaseUrl(local).Host);
+    }
+
+    [TestMethod]
+    public void DeepSeek_has_a_native_provider_preset()
+    {
+        var settings = LlmClient.Defaults(LlmProvider.DeepSeek);
+
+        Assert.AreEqual("https://api.deepseek.com/v1", settings.BaseUrl);
+        Assert.AreEqual("deepseek-chat", settings.Model);
+        Assert.AreEqual(ApiProtocol.OpenAiCompatible, settings.Protocol);
+    }
+
+    [TestMethod]
     public void Incomplete_operation_is_flagged_for_recovery()
     {
         var manifest = new OperationManifest
@@ -75,18 +97,6 @@ public sealed class CoreTests
         Assert.IsTrue(manifest.HasPendingRollback);
         manifest.Status = "Completed";
         Assert.IsFalse(manifest.HasPendingRollback);
-    }
-
-    [TestMethod]
-    public void Snapshot_comparison_does_not_claim_a_benchmark()
-    {
-        var before = new PerformanceSnapshot { CpuLoadPercent = 20, ProcessCount = 100 };
-        var after = new PerformanceSnapshot { CpuLoadPercent = 10, ProcessCount = 90 };
-
-        var comparison = MainWindow.FormatComparison(before, after);
-
-        StringAssert.Contains(comparison, "20% → 10%");
-        StringAssert.Contains(comparison, "not proof");
     }
 
     [TestMethod]

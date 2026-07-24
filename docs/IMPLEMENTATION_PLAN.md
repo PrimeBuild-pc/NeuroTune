@@ -2,10 +2,11 @@
 
 ## Alpha Architecture
 
-- Windows 10/11 x64, .NET 8, and WPF.
-- One administrative desktop application with no backend or database.
-- BYOK providers: OpenRouter, OpenAI, and Anthropic.
-- Windows/.NET profiling, local JSON settings, and DPAPI-protected secrets.
+- Windows 10/11 x64 desktop shell built with Tauri 2, React, TypeScript, and semantic CSS tokens.
+- A local .NET 8 agent owns Windows profiling, credentials, backup, execution, and rollback; there is no remote NeuroTune backend or database.
+- Built-in OpenRouter, OpenAI, Anthropic, and DeepSeek profiles plus custom and local compatible endpoints.
+- OpenRouter browser authorization with PKCE; other providers use their supported API credential flow.
+- Windows appearance synchronization with tested high-contrast light and dark themes.
 - Closed local catalog: the LLM diagnoses and recommends but never generates executable changes.
 - Verified restore point, Registry exports, per-action journal, and reverse-order rollback.
 
@@ -13,7 +14,7 @@
 
 1. Initialize the solution, repository, CI, and documentation.
 2. Define system profiles, diagnoses, actions, presets, telemetry, and operation manifests.
-3. Protect API keys and dynamically discover provider models.
+3. Protect API keys, support OpenRouter browser authorization, and dynamically discover provider models.
 4. Collect hardware, Windows, gaming, network, process, startup, and service data locally.
 5. Sanitize and preview the exact profile sent to the selected provider.
 6. Accept only structured recommendations that reference the compiled action allowlist.
@@ -23,7 +24,7 @@
 10. Journal every attempt before execution, verify results, and roll back automatically on failure.
 11. Detect interrupted operations and expose manual recovery at startup.
 12. Show immediate before/after telemetry without presenting it as a benchmark.
-13. Build, test, publish, checksum, and retain a portable Windows artifact through GitHub Actions.
+13. Build and test the .NET agent, React UI, Rust shell, and contrast tokens; publish an NSIS installer and checksum through GitHub Actions.
 
 ## Alpha Completion Criteria
 
@@ -34,8 +35,8 @@
 - No system change is attempted when the required backup fails.
 - Interrupted operations retain enough state for recovery.
 - Rollback verifies that the restored value matches the saved snapshot.
-- The pipeline produces a self-contained `win-x64` artifact and SHA-256 checksum.
+- The pipeline produces a self-contained Windows NSIS installer and SHA-256 checksum.
 
 ## External Requirements
 
-Code signing requires an organization-owned certificate. Installer and updater work must wait for a signed distribution channel. End-to-end restore testing requires disposable Windows 10 and Windows 11 virtual machines and is tracked in the [roadmap](../ROADMAP.md).
+Code signing and automatic updates require an organization-owned certificate and trusted update channel. End-to-end restore testing requires disposable Windows 10 and Windows 11 virtual machines and is tracked in the [roadmap](../ROADMAP.md).

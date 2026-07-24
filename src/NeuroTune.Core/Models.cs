@@ -2,14 +2,27 @@ using System.Text.Json.Serialization;
 
 namespace NeuroTune;
 
-public enum LlmProvider { OpenRouter, OpenAI, Anthropic }
+public enum LlmProvider { OpenRouter, OpenAI, Anthropic, DeepSeek, Custom, Local }
+public enum ApiProtocol { OpenAiCompatible, Anthropic }
 public enum RiskLevel { Low, Medium, High }
 public enum OptimizationPreset { Balanced, Gaming, Custom }
 
 public sealed class UserSettings
 {
     public LlmProvider Provider { get; set; } = LlmProvider.OpenRouter;
+    public string ProviderName { get; set; } = "OpenRouter";
+    public string BaseUrl { get; set; } = "https://openrouter.ai/api/v1";
+    public ApiProtocol Protocol { get; set; } = ApiProtocol.OpenAiCompatible;
     public string Model { get; set; } = "openai/gpt-4o-mini";
+    public bool RequiresApiKey { get; set; } = true;
+
+    [JsonIgnore]
+    public string CredentialId => Provider switch
+    {
+        LlmProvider.Custom => "custom",
+        LlmProvider.Local => "local",
+        _ => Provider.ToString().ToLowerInvariant()
+    };
 }
 
 public sealed class SystemProfile

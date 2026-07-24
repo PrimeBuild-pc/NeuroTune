@@ -16,9 +16,10 @@ public sealed class SettingsService
     {
         try
         {
-            return File.Exists(_settingsPath)
+            var settings = File.Exists(_settingsPath)
                 ? JsonSerializer.Deserialize<UserSettings>(File.ReadAllText(_settingsPath)) ?? new()
                 : new();
+            return Normalize(settings);
         }
         catch
         {
@@ -28,21 +29,26 @@ public sealed class SettingsService
 
     public void Save(UserSettings settings, string? apiKey = null)
     {
+        settings = Normalize(settings);
         Directory.CreateDirectory(DataDirectory);
         AtomicWrite(_settingsPath, JsonSerializer.Serialize(settings, JsonOptions));
         if (!string.IsNullOrWhiteSpace(apiKey))
         {
             var protectedBytes = ProtectedData.Protect(
                 Encoding.UTF8.GetBytes(apiKey.Trim()), null, DataProtectionScope.CurrentUser);
-            AtomicWriteBytes(KeyPath(settings.Provider), protectedBytes);
+            AtomicWriteBytes(KeyPath(settings.CredentialId), protectedBytes);
         }
     }
 
-    public string? LoadApiKey(LlmProvider provider)
+    public string? LoadApiKey(LlmProvider provider) => LoadApiKey(provider.ToString().ToLowerInvariant());
+
+    public string? LoadApiKey(UserSettings settings) => LoadApiKey(settings.CredentialId);
+
+    private static string? LoadApiKey(string credentialId)
     {
         try
         {
-            var path = KeyPath(provider);
+            var path = KeyPath(credentialId);
             return File.Exists(path)
                 ? Encoding.UTF8.GetString(ProtectedData.Unprotect(
                     File.ReadAllBytes(path), null, DataProtectionScope.CurrentUser))
@@ -54,8 +60,19 @@ public sealed class SettingsService
         }
     }
 
-    private static string KeyPath(LlmProvider provider) =>
-        Path.Combine(DataDirectory, $"{provider.ToString().ToLowerInvariant()}.key");
+    private static string KeyPath(string credentialId) =>
+        Path.Combine(DataDirectory, $"{credentialId}.key");
+
+    private static UserSettings Normalize(UserSettings settings)
+    {
+        if (settings.Provider is LlmProvider.Custom or LlmProvider.Local) return settings;
+        var defaults = LlmClient.Defaults(settings.Provider);
+        settings.ProviderName = defaults.ProviderName;
+        settings.BaseUrl = defaults.BaseUrl;
+        settings.Protocol = defaults.Protocol;
+        settings.RequiresApiKey = defaults.RequiresApiKey;
+        return settings;
+    }
 
     private static void AtomicWrite(string path, string content)
     {
