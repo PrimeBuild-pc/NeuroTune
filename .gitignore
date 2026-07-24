@@ -1,0 +1,23 @@
+# .NET
+bin/
+obj/
+artifacts/
+TestResults/
+*.user
+*.suo
+*.nupkg
+
+# IDE
+.vs/
+.vscode/
+.idea/
+
+# Local secrets and runtime state
+*.key
+*.log
+settings.json
+operations/
+
+# OS
+Thumbs.db
+.DS_Store

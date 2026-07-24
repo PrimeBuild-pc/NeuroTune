@@ -1,0 +1,96 @@
+<Window x:Class="NeuroTune.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="NeuroTune" Height="760" Width="1100" MinHeight="620" MinWidth="900"
+        Background="#0B1020" Foreground="#EDF2F7" WindowStartupLocation="CenterScreen">
+    <Window.Resources>
+        <SolidColorBrush x:Key="Panel" Color="#151D31"/>
+        <SolidColorBrush x:Key="Accent" Color="#7C5CFC"/>
+        <Style TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource Accent}"/><Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/><Setter Property="Padding" Value="16,9"/><Setter Property="Margin" Value="0,6,8,6"/>
+            <Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style TargetType="TextBox"><Setter Property="Padding" Value="8"/><Setter Property="Margin" Value="0,4,0,10"/></Style>
+        <Style TargetType="PasswordBox"><Setter Property="Padding" Value="8"/><Setter Property="Margin" Value="0,4,0,10"/></Style>
+        <Style TargetType="ComboBox"><Setter Property="Padding" Value="7"/><Setter Property="Margin" Value="0,4,0,10"/></Style>
+        <Style TargetType="TabItem"><Setter Property="Padding" Value="18,10"/><Setter Property="FontWeight" Value="SemiBold"/></Style>
+        <Style TargetType="GroupBox"><Setter Property="Margin" Value="0,0,0,14"/><Setter Property="Padding" Value="14"/><Setter Property="Foreground" Value="#EDF2F7"/></Style>
+    </Window.Resources>
+
+    <Grid Margin="24">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <StackPanel Margin="0,0,0,18">
+            <TextBlock Text="NeuroTune" FontSize="30" FontWeight="Bold"/>
+            <TextBlock Text="Diagnosi AI e ottimizzazioni Windows reversibili" Foreground="#A7B0C0" FontSize="14"/>
+        </StackPanel>
+
+        <TabControl x:Name="MainTabs" Grid.Row="1" Background="{StaticResource Panel}" BorderThickness="0">
+            <TabItem Header="1. Configurazione">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="22" MaxWidth="700" HorizontalAlignment="Left">
+                    <TextBlock Text="Provider LLM" FontWeight="SemiBold"/>
+                    <ComboBox x:Name="ProviderCombo" SelectionChanged="ProviderCombo_SelectionChanged"/>
+                    <TextBlock Text="Modello" FontWeight="SemiBold"/>
+                    <TextBox x:Name="ModelTextBox" ToolTip="Identificativo del modello scelto"/>
+                    <TextBlock Text="API key" FontWeight="SemiBold"/>
+                    <PasswordBox x:Name="ApiKeyBox" ToolTip="Cifrata localmente con Windows DPAPI"/>
+                    <TextBlock Text="La chiave viene cifrata per questo utente Windows e non entra nei log o nel profilo." TextWrapping="Wrap" Foreground="#A7B0C0"/>
+                    <StackPanel Orientation="Horizontal"><Button Content="Salva configurazione" Click="SaveSettings_Click"/></StackPanel>
+                </StackPanel></ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="2. Analisi">
+                <Grid Margin="22"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                    <StackPanel Orientation="Horizontal">
+                        <Button x:Name="AnalyzeButton" Content="Analizza sistema" Click="Analyze_Click"/>
+                        <ProgressBar x:Name="AnalysisProgress" Width="180" Height="8" IsIndeterminate="True" Visibility="Collapsed"/>
+                    </StackPanel>
+                    <Grid Grid.Row="1" Margin="0,12,0,0"><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+                        <GroupBox Header="Profilo inviato al provider" Margin="0,0,8,0">
+                            <TextBox x:Name="ProfileTextBox" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Background="#0E1526" Foreground="#D8DEEA" BorderThickness="0" FontFamily="Consolas"/>
+                        </GroupBox>
+                        <GroupBox Grid.Column="1" Header="Diagnosi" Margin="8,0,0,0">
+                            <TextBox x:Name="DiagnosisTextBox" IsReadOnly="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Background="#0E1526" Foreground="#D8DEEA" BorderThickness="0"/>
+                        </GroupBox>
+                    </Grid>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="3. Ottimizzazioni">
+                <Grid Margin="22"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Preset:" VerticalAlignment="Center" Margin="0,0,10,0" FontWeight="SemiBold"/>
+                        <ComboBox x:Name="PresetCombo" Width="220" SelectionChanged="PresetCombo_SelectionChanged"/>
+                    </StackPanel>
+                    <ListView x:Name="ActionsList" Grid.Row="1" Background="#0E1526" BorderThickness="0" Margin="0,8">
+                        <ListView.View><GridView>
+                            <GridViewColumn Header="Applica" Width="65"><GridViewColumn.CellTemplate><DataTemplate><CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}" HorizontalAlignment="Center"/></DataTemplate></GridViewColumn.CellTemplate></GridViewColumn>
+                            <GridViewColumn Header="Ottimizzazione" Width="210" DisplayMemberBinding="{Binding Name}"/>
+                            <GridViewColumn Header="Categoria" Width="90" DisplayMemberBinding="{Binding Category}"/>
+                            <GridViewColumn Header="Rischio" Width="75" DisplayMemberBinding="{Binding RiskLabel}"/>
+                            <GridViewColumn Header="Motivazione" Width="500" DisplayMemberBinding="{Binding Reason}"/>
+                        </GridView></ListView.View>
+                    </ListView>
+                    <StackPanel Grid.Row="2" Orientation="Horizontal">
+                        <Button x:Name="ApplyButton" Content="Applica selezionate" Click="Apply_Click"/>
+                        <TextBlock Text="Il punto di ripristino e i backup sono obbligatori." Foreground="#A7B0C0" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="4. Cronologia">
+                <Grid Margin="22"><Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                    <ListView x:Name="HistoryList" Background="#0E1526" BorderThickness="0" DisplayMemberPath="Display"/>
+                    <StackPanel Grid.Row="1" Orientation="Horizontal">
+                        <Button Content="Aggiorna" Click="RefreshHistory_Click"/>
+                        <Button Content="Ripristina operazione selezionata" Click="Rollback_Click" Background="#C04A63"/>
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+        </TabControl>
+
+        <Border Grid.Row="2" Background="#11192A" Padding="12" Margin="0,12,0,0">
+            <TextBlock x:Name="StatusText" Text="Pronto" Foreground="#BFC8D8" TextWrapping="Wrap"/>
+        </Border>
+    </Grid>
+</Window>
