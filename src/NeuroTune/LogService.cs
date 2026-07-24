@@ -13,7 +13,7 @@ public static class LogService
         {
             Directory.CreateDirectory(SettingsService.DataDirectory);
             foreach (var identity in new[] { Environment.UserName, Environment.MachineName })
-                if (!string.IsNullOrWhiteSpace(identity)) message = message.Replace(identity, "[redatto]", StringComparison.OrdinalIgnoreCase);
+                if (!string.IsNullOrWhiteSpace(identity)) message = message.Replace(identity, "[redacted]", StringComparison.OrdinalIgnoreCase);
             lock (Gate) File.AppendAllText(LogPath, $"{DateTimeOffset.Now:O}\t{message}{Environment.NewLine}");
         }
         catch { }

@@ -1,39 +1,41 @@
-# Piano implementativo
+# Implementation Plan
 
-## Decisioni MVP
+## Alpha Architecture
 
-- Windows 10/11 x64, .NET 8 e WPF.
-- Singola applicazione amministrativa, nessun backend e nessun database.
-- Provider BYOK: OpenRouter, OpenAI e Anthropic.
-- Profilo tramite API Windows/.NET; configurazione JSON e segreti DPAPI.
-- Catalogo locale chiuso: l'LLM diagnostica e raccomanda, ma non genera modifiche eseguibili.
-- Punto di ripristino, backup del registro, journal per azione e rollback inverso.
+- Windows 10/11 x64, .NET 8, and WPF.
+- One administrative desktop application with no backend or database.
+- BYOK providers: OpenRouter, OpenAI, and Anthropic.
+- Windows/.NET profiling, local JSON settings, and DPAPI-protected secrets.
+- Closed local catalog: the LLM diagnoses and recommends but never generates executable changes.
+- Verified restore point, Registry exports, per-action journal, and reverse-order rollback.
 
-## Fasi
+## Implemented Flow
 
-1. Inizializzare soluzione, repository e documentazione.
-2. Definire profilo, diagnosi, azioni, preset e manifest.
-3. Implementare configurazione e API key cifrate.
-4. Raccogliere hardware, Windows, rete, processi, avvio e servizi.
-5. Implementare il catalogo di azioni reversibili.
-6. Integrare i tre provider e validare rigorosamente il JSON.
-7. Filtrare le raccomandazioni per preset e rischio.
-8. Rendere obbligatori punto di ripristino e backup del registro.
-9. Applicare le azioni in sequenza con verifica e rollback automatico.
-10. Esporre configurazione, analisi, applicazione e cronologia nella UI WPF.
-11. Redigere identità Windows, loggare localmente e gestire timeout/errori.
-12. Testare i confini critici e compilare su GitHub Actions.
-13. Pubblicare un artefatto self-contained `win-x64` con checksum.
+1. Initialize the solution, repository, CI, and documentation.
+2. Define system profiles, diagnoses, actions, presets, telemetry, and operation manifests.
+3. Protect API keys and dynamically discover provider models.
+4. Collect hardware, Windows, gaming, network, process, startup, and service data locally.
+5. Sanitize and preview the exact profile sent to the selected provider.
+6. Accept only structured recommendations that reference the compiled action allowlist.
+7. Check compatibility and current state before an action can be selected.
+8. Filter AI recommendations by preset and risk.
+9. Require and verify a new System Restore point plus affected Registry exports.
+10. Journal every attempt before execution, verify results, and roll back automatically on failure.
+11. Detect interrupted operations and expose manual recovery at startup.
+12. Show immediate before/after telemetry without presenting it as a benchmark.
+13. Build, test, publish, checksum, and retain a portable Windows artifact through GitHub Actions.
 
-## Criteri di completamento MVP
+## Alpha Completion Criteria
 
-- Build e test passano su Windows.
-- Nessuna chiave compare nei file versionati o nei log.
-- Una risposta LLM con `ActionId` sconosciuto viene rifiutata.
-- Nessuna modifica viene applicata quando il backup obbligatorio fallisce.
-- Ogni azione applicata conserva lo stato necessario al rollback.
-- La pipeline produce un eseguibile self-contained e relativo SHA-256.
+- Build and tests pass on Windows.
+- No API key appears in versioned files, profiles, or logs.
+- Unknown LLM `ActionId` values are rejected.
+- Unsupported and already-configured actions cannot be selected.
+- No system change is attempted when the required backup fails.
+- Interrupted operations retain enough state for recovery.
+- Rollback verifies that the restored value matches the saved snapshot.
+- The pipeline produces a self-contained `win-x64` artifact and SHA-256 checksum.
 
-## Rinviato intenzionalmente
+## External Requirements
 
-Installer, firma digitale, aggiornamenti automatici, plugin e cataloghi remoti. Andranno aggiunti solo quando esistono certificato, canale di distribuzione e requisiti verificabili.
+Code signing requires an organization-owned certificate. Installer and updater work must wait for a signed distribution channel. End-to-end restore testing requires disposable Windows 10 and Windows 11 virtual machines and is tracked in the [roadmap](../ROADMAP.md).

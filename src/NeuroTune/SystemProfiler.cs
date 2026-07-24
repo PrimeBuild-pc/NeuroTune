@@ -33,13 +33,13 @@ public sealed class SystemProfiler
 
     private static string ReadOperatingSystem() => Query(
         "SELECT Caption, Version, BuildNumber FROM Win32_OperatingSystem",
-        row => $"{row["Caption"]}, versione {row["Version"]}, build {row["BuildNumber"]}").FirstOrDefault()
+        row => $"{row["Caption"]}, version {row["Version"]}, build {row["BuildNumber"]}").FirstOrDefault()
         ?? Environment.OSVersion.VersionString;
 
     private static string ReadCpu() => Query(
         "SELECT Name, NumberOfCores, NumberOfLogicalProcessors FROM Win32_Processor",
-        row => $"{row["Name"]} — {row["NumberOfCores"]} core / {row["NumberOfLogicalProcessors"]} thread")
-        .FirstOrDefault() ?? "Non disponibile";
+        row => $"{row["Name"]} — {row["NumberOfCores"]} cores / {row["NumberOfLogicalProcessors"]} threads")
+        .FirstOrDefault() ?? "Unavailable";
 
     private static string ReadMemory()
     {
@@ -47,7 +47,7 @@ public sealed class SystemProfiler
             row => (Capacity: Convert.ToUInt64(row["Capacity"] ?? 0), Speed: row["Speed"]?.ToString()));
         var totalGb = modules.Aggregate(0UL, (total, module) => total + module.Capacity) / 1024d / 1024d / 1024d;
         var speeds = string.Join(", ", modules.Select(x => x.Speed).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct());
-        return totalGb > 0 ? $"{totalGb:0.#} GB{(speeds.Length > 0 ? $" @ {speeds} MHz" : "")}" : "Non disponibile";
+        return totalGb > 0 ? $"{totalGb:0.#} GB{(speeds.Length > 0 ? $" @ {speeds} MHz" : "")}" : "Unavailable";
     }
 
     private static List<string> ReadDisks()
@@ -55,8 +55,8 @@ public sealed class SystemProfiler
         var disks = Query(@"root\Microsoft\Windows\Storage", "SELECT FriendlyName, MediaType, BusType, Size FROM MSFT_PhysicalDisk", row =>
         {
             var size = Convert.ToUInt64(row["Size"] ?? 0) / 1024d / 1024d / 1024d;
-            var media = Convert.ToUInt16(row["MediaType"] ?? 0) switch { 3 => "HDD", 4 => "SSD", 5 => "SCM", _ => "Non specificato" };
-            var bus = Convert.ToUInt16(row["BusType"] ?? 0) switch { 17 => "NVMe", 11 => "SATA", 7 => "USB", _ => "Altro" };
+            var media = Convert.ToUInt16(row["MediaType"] ?? 0) switch { 3 => "HDD", 4 => "SSD", 5 => "SCM", _ => "Unspecified" };
+            var bus = Convert.ToUInt16(row["BusType"] ?? 0) switch { 17 => "NVMe", 11 => "SATA", 7 => "USB", _ => "Other" };
             return $"{row["FriendlyName"]} — {media}/{bus} — {size:0} GB";
         });
         return disks.Count > 0 ? disks : Query("SELECT Model, MediaType, Size FROM Win32_DiskDrive", row =>
@@ -68,7 +68,7 @@ public sealed class SystemProfiler
 
     private static Dictionary<string, string> ReadWindowsSettings() => new()
     {
-        ["Telemetria policy"] = ReadRegistry(Registry.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\DataCollection", "AllowTelemetry")
+        ["Telemetry policy"] = ReadRegistry(Registry.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\DataCollection", "AllowTelemetry")
     };
 
     private static Dictionary<string, string> ReadGamingSettings()
@@ -79,14 +79,14 @@ public sealed class SystemProfiler
             ["Game Mode"] = ReadRegistry(Registry.CurrentUser, @"Software\Microsoft\GameBar", "AutoGameModeEnabled"),
             ["HAGS"] = ReadRegistry(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\GraphicsDrivers", "HwSchMode"),
             ["Game DVR"] = ReadRegistry(Registry.CurrentUser, @"System\GameConfigStore", "GameDVR_Enabled"),
-            ["VRR"] = globalGpu.Contains("VRROptimizeEnable=1", StringComparison.OrdinalIgnoreCase) ? "Attivo" : "Non configurato/Disattivo"
+            ["VRR"] = globalGpu.Contains("VRROptimizeEnable=1", StringComparison.OrdinalIgnoreCase) ? "Enabled" : "Not configured/Disabled"
         };
     }
 
     private static string ReadRegistry(RegistryKey hive, string path, string name)
     {
-        try { return hive.OpenSubKey(path)?.GetValue(name)?.ToString() ?? "Non configurato"; }
-        catch { return "Non disponibile"; }
+        try { return hive.OpenSubKey(path)?.GetValue(name)?.ToString() ?? "Not configured"; }
+        catch { return "Unavailable"; }
     }
 
     private static List<string> ReadNetworkAdapters()
@@ -111,7 +111,7 @@ public sealed class SystemProfiler
             var reply = ping.Send("1.1.1.1", 1200);
             latency = reply.Status == IPStatus.Success ? $"{reply.RoundtripTime} ms" : reply.Status.ToString();
         }
-        catch { latency = "Non disponibile"; }
+        catch { latency = "Unavailable"; }
 
         var nagleOverrides = 0;
         try
@@ -127,9 +127,9 @@ public sealed class SystemProfiler
 
         return new()
         {
-            ["Latenza verso 1.1.1.1"] = latency,
-            ["Override Nagle"] = $"{nagleOverrides} interfacce",
-            ["TCP globale"] = Run("netsh.exe", "interface", "tcp", "show", "global")
+            ["Latency to 1.1.1.1"] = latency,
+            ["Nagle overrides"] = $"{nagleOverrides} interfaces",
+            ["Global TCP settings"] = Run("netsh.exe", "interface", "tcp", "show", "global")
         };
     }
 
@@ -178,14 +178,14 @@ public sealed class SystemProfiler
     {
         try
         {
-            var start = new ProcessStartInfo(fileName) { UseShellExecute = false, RedirectStandardOutput = true, CreateNoWindow = true };
+            var start = new ProcessStartInfo(fileName) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
             foreach (var argument in arguments) start.ArgumentList.Add(argument);
-            using var process = Process.Start(start) ?? throw new InvalidOperationException($"Impossibile avviare {fileName}.");
+            using var process = Process.Start(start) ?? throw new InvalidOperationException($"Cannot start {fileName}.");
             var output = process.StandardOutput.ReadToEnd().Trim();
             process.WaitForExit();
-            return process.ExitCode == 0 ? output : "Non disponibile";
+            return process.ExitCode == 0 ? output : "Unavailable";
         }
-        catch { return "Non disponibile"; }
+        catch { return "Unavailable"; }
     }
 }
 
@@ -195,7 +195,7 @@ public static class ProfileSanitizer
     {
         var json = JsonSerializer.Serialize(profile, new JsonSerializerOptions { WriteIndented = true });
         foreach (var value in new[] { Environment.UserName, Environment.MachineName })
-            if (!string.IsNullOrWhiteSpace(value)) json = json.Replace(value, "[redatto]", StringComparison.OrdinalIgnoreCase);
+            if (!string.IsNullOrWhiteSpace(value)) json = json.Replace(value, "[redacted]", StringComparison.OrdinalIgnoreCase);
         return json;
     }
 }

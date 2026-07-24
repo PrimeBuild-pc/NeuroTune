@@ -1,19 +1,25 @@
-# Sicurezza
+# Security
 
-## Segnalare una vulnerabilità
+## Reporting a Vulnerability
 
-Non aprire issue pubbliche contenenti API key, dati personali o dettagli immediatamente sfruttabili. Invia una segnalazione privata tramite la funzione **Security advisories** della repository GitHub.
+Do not open a public issue containing API keys, personal data, or immediately exploitable details. Use the repository's private **Security advisories** feature instead.
 
-Indica versione, passaggi di riproduzione, impatto previsto e un contatto. Non includere dump completi del profilo Windows.
+Include the affected version, reproduction steps, expected impact, and a contact method. Do not attach a complete Windows profile dump.
 
-## Modello di sicurezza
+## Security Model
 
-- La risposta LLM è trattata come input non attendibile.
-- Sono accettati soltanto identificativi presenti nel catalogo compilato nell'app.
-- Parametri, percorsi e comandi arbitrari provenienti dal modello non vengono eseguiti.
-- Il motore interrompe l'operazione se non riesce a creare il punto di ripristino o i backup richiesti.
-- Le API key sono protette con DPAPI `CurrentUser` e redatte dai log.
+- Every LLM response is treated as untrusted input.
+- Only action identifiers compiled into the local allowlist are accepted.
+- Model-generated commands, scripts, paths, Registry locations, and Registry values are never executed.
+- Compatibility and current state are checked locally before execution.
+- The engine stops before making changes if it cannot verify a new restore point or export required Registry keys.
+- Every action attempt is journaled before execution and verified after application.
+- Automatic and manual rollback restore actions in reverse order and verify the saved state.
+- API keys are protected with DPAPI `CurrentUser` and redacted from local logs.
+- The exact sanitized profile sent to the provider is visible in the application.
 
-## Limiti noti
+## Known Limitations
 
-NeuroTune richiede privilegi amministrativi perché modifica impostazioni di sistema. Un account Windows già compromesso o un eseguibile manomesso può aggirare le protezioni applicative. Le build non firmate devono essere verificate con il checksum pubblicato dalla pipeline.
+NeuroTune currently runs with administrator privileges because it changes system settings. A compromised Windows account or tampered executable can bypass application-level controls. Alpha builds are unsigned and must be checked against the SHA-256 value produced by the build pipeline.
+
+End-to-end restore behavior still requires validation across the supported Windows virtual-machine matrix. Use alpha builds only on disposable systems or PCs with an independent backup.

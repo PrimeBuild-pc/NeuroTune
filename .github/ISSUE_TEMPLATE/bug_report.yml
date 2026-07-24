@@ -1,0 +1,59 @@
+name: Alpha bug report
+description: Report a reproducible NeuroTune problem without sharing secrets.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Never include API keys or an unredacted system profile. Use a private Security Advisory for vulnerabilities.
+  - type: input
+    id: version
+    attributes:
+      label: NeuroTune version
+      placeholder: 0.2.0-alpha.1
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows edition and build
+      placeholder: Windows 11 Pro, build 26100
+    validations:
+      required: true
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider
+      options: [Not applicable, OpenRouter, OpenAI, Anthropic]
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Include the operation status and action IDs where relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      placeholder: "1. Scan this PC\n2. ..."
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Redacted logs
+      description: Remove usernames, device names, paths, profile data, and all credentials.
+      render: text
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: I removed API keys and personal data from this report.
+          required: true
+        - label: I tested this on a disposable system or have an independent backup.
+          required: true

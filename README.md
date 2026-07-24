@@ -9,7 +9,7 @@
     <a href="https://github.com/PrimeBuild-pc/NeuroTune/actions/workflows/build.yml"><img alt="Build" src="https://github.com/PrimeBuild-pc/NeuroTune/actions/workflows/build.yml/badge.svg"></a>
     <img alt=".NET 8" src="https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet&logoColor=white">
     <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?logo=windows&logoColor=white">
-    <img alt="Status: MVP" src="https://img.shields.io/badge/status-MVP-orange">
+    <img alt="Status: Alpha" src="https://img.shields.io/badge/status-Alpha-orange">
   </p>
 </div>
 
@@ -66,7 +66,8 @@
 
 <ul>
   <li><strong>Zero-input system profiling:</strong> CPU, GPU, drivers, memory, storage, Windows build, power plan, gaming settings, network configuration, startup items, processes, and services.</li>
-  <li><strong>BYOK providers:</strong> OpenRouter, OpenAI, and Anthropic.</li>
+  <li><strong>BYOK providers:</strong> OpenRouter, OpenAI, and Anthropic, with connection testing and dynamic model discovery.</li>
+  <li><strong>Guided workflow:</strong> Setup, local scan, AI diagnosis, compatibility review, apply, measure, and restore.</li>
   <li><strong>Optimization presets:</strong> Safe / Balanced, Extreme Gaming, and Custom.</li>
   <li><strong>Current allowlisted actions:</strong> High Performance power plan, Game Mode, HAGS, Game DVR, and Windows visual effects.</li>
   <li><strong>Local operation history:</strong> Per-action state snapshots and rollback from the desktop interface.</li>
@@ -116,15 +117,17 @@ dotnet run --project src/NeuroTune</code></pre>
 <h2>Project Status</h2>
 
 <p>
-  NeuroTune is currently an <strong>MVP</strong>. Destructive cleanup, arbitrary Registry tweaks,
-  generic network “optimizations,” LLM-generated scripts, automatic updates, an installer,
-  and code signing are intentionally excluded until they can be implemented and validated safely.
+  NeuroTune is currently an <strong>alpha</strong> intended for controlled testing. Destructive cleanup,
+  arbitrary Registry tweaks, generic network “optimizations,” LLM-generated scripts, automatic updates,
+  an installer, and code signing remain excluded until they can be implemented and validated safely.
 </p>
 
 <h2>Documentation</h2>
 
 <ul>
+  <li><a href="ROADMAP.md">Product roadmap and release criteria</a></li>
   <li><a href="docs/IMPLEMENTATION_PLAN.md">Implementation plan</a></li>
+  <li><a href="docs/TESTING.md">Alpha test guide</a></li>
   <li><a href=".claude/PROJECT_SPECIFICATION.md">Project specification</a></li>
   <li><a href="SECURITY.md">Security policy</a></li>
 </ul>
