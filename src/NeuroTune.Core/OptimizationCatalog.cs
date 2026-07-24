@@ -45,7 +45,18 @@ public sealed class OptimizationCatalog
             RegistryDword("system.visual-effects", "Prefer performance visual effects",
                 "Reduces Windows animations and visual effects.", "System", RiskLevel.Low, false,
                 RegistryHive.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects", "VisualFXSetting", 2,
-                stateLabel: value => value switch { 1 => "Best appearance", 2 => "Best performance", 3 => "Custom", _ => "Automatic" })
+                stateLabel: value => value switch { 1 => "Best appearance", 2 => "Best performance", 3 => "Custom", _ => "Automatic" }),
+            RegistryDword("system.large-cache-default", "Restore the Windows client cache policy",
+                "Disables the server-oriented LargeSystemCache override.", "System", RiskLevel.Medium, true,
+                RegistryHive.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management", "LargeSystemCache", 0,
+                stateLabel: OnOffState),
+            RegistryDword("system.paging-executive-default", "Restore default kernel paging",
+                "Lets Windows page kernel components instead of forcing a manual memory override.", "System", RiskLevel.Medium, true,
+                RegistryHive.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management", "DisablePagingExecutive", 0,
+                stateLabel: value => value == 1 ? "Forced in memory" : "Windows default"),
+            RegistryDeleteDword("graphics.mpo-default", "Remove the manual MPO override",
+                "Returns Desktop Window Manager overlay selection to the graphics stack.", "Graphics", RiskLevel.Medium, true,
+                RegistryHive.LocalMachine, @"SOFTWARE\Microsoft\Windows\Dwm", "OverlayTestMode")
         };
         _actions = actions.ToDictionary(x => x.Id, StringComparer.OrdinalIgnoreCase);
     }
@@ -57,14 +68,6 @@ public sealed class OptimizationCatalog
         : throw new InvalidOperationException($"Action is not allowlisted: {id}");
 
     public bool Contains(string id) => _actions.ContainsKey(id);
-
-    public static bool SelectForPreset(OptimizationAction action, bool recommended, OptimizationPreset preset) =>
-        recommended && preset switch
-        {
-            OptimizationPreset.Balanced => action.Risk == RiskLevel.Low,
-            OptimizationPreset.Gaming => action.Category == "Gaming" || action.Risk == RiskLevel.Low,
-            _ => false
-        };
 
     private static OptimizationAction PowerPlan()
     {
@@ -154,6 +157,57 @@ public sealed class OptimizationCatalog
         bool Verify() => ReadCurrent() == desiredValue;
 
         return new(id, name, description, category, risk, restart, exportPath, Inspect, Capture, Apply, Restore, Verify);
+    }
+
+    private static OptimizationAction RegistryDeleteDword(string id, string name, string description, string category,
+        RiskLevel risk, bool restart, RegistryHive hive, string path, string valueName)
+    {
+        var exportPath = $"{(hive == RegistryHive.CurrentUser ? "HKCU" : "HKLM")}\\{path}";
+
+        int? ReadCurrent()
+        {
+            using var key = RegistryKey.OpenBaseKey(hive, RegistryView.Registry64).OpenSubKey(path);
+            var current = key?.GetValue(valueName);
+            return current is null ? null : Convert.ToInt32(current);
+        }
+
+        ActionAvailability Inspect()
+        {
+            try
+            {
+                var current = ReadCurrent();
+                return current is null
+                    ? ActionAvailability.Applied("Not configured (Windows default)")
+                    : ActionAvailability.Ready(current.Value.ToString());
+            }
+            catch (Exception exception) { return ActionAvailability.Unavailable(exception.Message); }
+        }
+
+        string Capture()
+        {
+            var current = ReadCurrent();
+            return JsonSerializer.Serialize(new RegistrySnapshot(current is not null, current));
+        }
+
+        void Apply()
+        {
+            using var key = RegistryKey.OpenBaseKey(hive, RegistryView.Registry64).OpenSubKey(path, true)
+                ?? throw new InvalidOperationException($"Cannot open {exportPath}.");
+            key.DeleteValue(valueName, false);
+        }
+
+        void Restore(string state)
+        {
+            var snapshot = JsonSerializer.Deserialize<RegistrySnapshot>(state)
+                ?? throw new InvalidOperationException("The Registry snapshot is invalid.");
+            if (!snapshot.Exists) return;
+            using var key = RegistryKey.OpenBaseKey(hive, RegistryView.Registry64).CreateSubKey(path, true)
+                ?? throw new InvalidOperationException($"Cannot open {exportPath}.");
+            key.SetValue(valueName, snapshot.Value ?? 0, RegistryValueKind.DWord);
+        }
+
+        return new(id, name, description, category, risk, restart, exportPath,
+            Inspect, Capture, Apply, Restore, () => ReadCurrent() is null);
     }
 
     private static string OnOffState(int? value) => value switch

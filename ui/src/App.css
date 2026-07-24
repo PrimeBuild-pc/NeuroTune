@@ -1,9 +1,9 @@
 @import './index.css';
 
 * { box-sizing: border-box; }
-button, input, select { font: inherit; }
+button, input, select, textarea { font: inherit; }
 button { color: inherit; }
-button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 button:disabled { cursor: not-allowed; opacity: .55; }
 
 .app-shell { min-height: 100vh; display: grid; grid-template-columns: 248px minmax(0, 1fr); background: var(--bg); color: var(--text); }
@@ -140,6 +140,11 @@ button.ghost { border: 1px solid transparent; background: transparent; color: va
 .diagnosis > p { color: var(--text); font-size: 14px; }
 .diagnosis h4 { margin: 20px 0 8px; color: var(--text); }
 .diagnosis ul { margin: 0; padding-left: 20px; }
+.finding-list { display: grid; gap: 8px; }
+.finding-list article { padding: 11px 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-raised); }
+.finding-list strong, .finding-list code { display: block; }
+.finding-list code { margin-top: 5px; overflow-wrap: anywhere; color: var(--accent-text); font: 10px/1.45 ui-monospace, Consolas, monospace; }
+.finding-list p { margin: 6px 0 0; color: var(--muted-strong); font-size: 11px; }
 
 .action-list, .history-list { display: grid; gap: 9px; }
 .action-card { width: 100%; display: grid; grid-template-columns: 34px minmax(0, 1fr) 190px; align-items: center; gap: 12px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); cursor: pointer; text-align: left; }
@@ -184,10 +189,44 @@ button.ghost { border: 1px solid transparent; background: transparent; color: va
 .settings-lines strong, .settings-lines small { display: block; }
 .settings-lines small { margin-top: 4px; color: var(--muted); }
 
+.goals-card { display: grid; gap: 18px; }
+.priority-options { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.priority-option { min-height: 76px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); cursor: pointer; text-align: left; }
+.priority-option:hover { background: var(--hover); }
+.priority-option.active { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent); }
+.priority-option strong, .priority-option small { display: block; }
+.priority-option small { margin-top: 5px; color: var(--muted); font-size: 10px; line-height: 1.35; }
+.goal-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.goal-fields label > span { display: block; margin-bottom: 7px; color: var(--muted-strong); font-size: 12px; font-weight: 700; }
+.goal-fields input, .goal-fields textarea { width: 100%; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--input); color: var(--text); }
+.goal-fields input { height: 42px; padding: 0 11px; }
+.goal-fields textarea { min-height: 78px; padding: 10px 11px; resize: vertical; }
+.goal-fields label small { display: block; margin-top: 6px; color: var(--muted); font-size: 10px; }
+.local-observations { padding: 13px 15px; border: 1px solid var(--warning-border); border-radius: 10px; background: var(--warning-soft); color: var(--warning-text); font-size: 12px; }
+.local-observations ul { margin: 8px 0 0; padding-left: 18px; line-height: 1.55; }
+.no-fixes, .consent-card { display: flex; align-items: flex-start; gap: 12px; }
+.no-fixes svg, .consent-card svg { flex: 0 0 auto; color: var(--accent-text); }
+.no-fixes p { margin: 4px 0 0; color: var(--muted-strong); font-size: 12px; }
+.consent-card { padding: 17px; border: 1px solid var(--accent-border); border-radius: 12px; background: var(--accent-soft); }
+.consent-card strong, .consent-card small { display: block; }
+.consent-card strong { margin: 5px 0; font-size: 14px; }
+.consent-card small { color: var(--muted-strong); font-size: 11px; }
+
+@media print {
+  .sidebar, .topbar, .notice, .busy-bar, .recovery-banner, .page-actions, .sticky-apply, .consent-card { display: none !important; }
+  .app-shell { display: block; background: #fff; color: #111; }
+  .page-content { max-width: none; padding: 0; }
+  .report-root > :not(.report-summary):not(.action-list):not(.no-fixes) { display: none !important; }
+  .section-card, .action-card { break-inside: avoid; border-color: #bbb; box-shadow: none; background: #fff; color: #111; }
+  .diagnosis, .diagnosis > p, .action-main p, .action-main small { color: #222; }
+}
+
 @media (max-width: 1180px) {
   .app-shell { grid-template-columns: 210px minmax(0, 1fr); }
   .page-content, .topbar { padding-left: 24px; padding-right: 24px; }
   .provider-layout { grid-template-columns: 290px minmax(0, 1fr); }
   .hero-panel { grid-template-columns: 1fr 300px; }
   .metric-grid.four { grid-template-columns: repeat(2, 1fr); }
+  .priority-options { grid-template-columns: repeat(3, 1fr); }
+  .goal-fields { grid-template-columns: 1fr; }
 }

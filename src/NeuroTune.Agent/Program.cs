@@ -92,9 +92,11 @@ async Task<object> Scan(OptimizationCatalog actionCatalog)
 
 async Task<object> Diagnose(DiagnoseRequest request, SettingsService service, OptimizationCatalog actionCatalog)
 {
+    if (request.Profile is null || request.Goals is null)
+        throw new InvalidOperationException("Diagnosis requires a system profile and tuning goals.");
     var settings = service.Load();
     var key = service.LoadApiKey(settings);
-    return await new LlmClient(actionCatalog).DiagnoseAsync(request.Profile, settings, key);
+    return await new LlmClient(actionCatalog).DiagnoseAsync(request.Profile, request.Goals, settings, key);
 }
 
 object Actions(OptimizationCatalog actionCatalog) => actionCatalog.All.Select(action => new
@@ -118,6 +120,6 @@ async Task<object?> Rollback(RollbackRequest request, OptimizationCatalog action
 
 sealed record AgentResponse(bool Ok, object? Data, string? Error);
 sealed record SaveProviderRequest(UserSettings Settings, string? ApiKey);
-sealed record DiagnoseRequest(SystemProfile Profile);
+sealed record DiagnoseRequest(SystemProfile? Profile, TuningGoals? Goals);
 sealed record ApplyRequest(List<string> ActionIds);
 sealed record RollbackRequest(Guid OperationId);

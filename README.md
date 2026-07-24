@@ -43,6 +43,10 @@
       <td>The LLM can select known <code>ActionId</code> values; it cannot execute generated commands or scripts.</td>
     </tr>
     <tr>
+      <td>Verified diagnosis evidence</td>
+      <td>Each model finding must return an exact evidence ID and value from the local scan or the response is rejected.</td>
+    </tr>
+    <tr>
       <td>Fail-closed backups</td>
       <td>No optimization runs if the required restore point or Registry backup fails.</td>
     </tr>
@@ -68,13 +72,14 @@
 <h2>Features</h2>
 
 <ul>
-  <li><strong>Zero-input system profiling:</strong> CPU, GPU, drivers, memory, storage, Windows build, power plan, gaming settings, network configuration, startup items, processes, and services.</li>
+  <li><strong>Evidence-oriented system profiling:</strong> hardware capabilities, selected performance Registry values, policy conflicts, power, gaming, network, runtime, and startup state.</li>
   <li><strong>Flexible model connections:</strong> OpenRouter, OpenAI, Anthropic, DeepSeek, any OpenAI-compatible or Anthropic-compatible API, Ollama, LM Studio, and vLLM.</li>
   <li><strong>Official browser authorization:</strong> OpenRouter OAuth with PKCE; providers without a supported third-party authorization flow continue to use API credentials.</li>
   <li><strong>Native web UI:</strong> Tauri 2 and React with high-contrast light/dark themes, Windows appearance synchronization, and manual override.</li>
   <li><strong>Guided workflow:</strong> Setup, local scan, AI diagnosis, compatibility review, apply, measure, and restore.</li>
-  <li><strong>Optimization presets:</strong> Safe / Balanced, Extreme Gaming, and Custom.</li>
-  <li><strong>Current allowlisted actions:</strong> High Performance power plan, Game Mode, HAGS, Game DVR, and Windows visual effects.</li>
+  <li><strong>Goal-aware diagnosis:</strong> tell the model which games or workloads matter and prioritize frame rate, system latency, network latency, balance, or efficiency.</li>
+  <li><strong>Dynamic plans:</strong> only diagnosis-backed actions appear, with Select all, Select safe only, explicit approval, and a printable report.</li>
+  <li><strong>Current allowlisted actions:</strong> power plan, Game Mode, HAGS, Game DVR, visual effects, and restoration of selected unsafe manual overrides.</li>
   <li><strong>Local operation history:</strong> Per-action state snapshots and rollback from the desktop interface.</li>
   <li><strong>No proprietary telemetry:</strong> Runtime data remains local except for the profile explicitly sent to the selected LLM provider.</li>
 </ul>

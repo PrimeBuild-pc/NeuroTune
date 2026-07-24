@@ -2,14 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Activity, Bot, Check, ChevronRight, CircleGauge, Cloud, Cpu, Database,
   HardDrive, KeyRound, Laptop, ListChecks, LoaderCircle, LockKeyhole, LogIn,
-  Monitor, MonitorCog, Moon, Palette, RefreshCw, RotateCcw, ScanLine, Settings,
-  ShieldCheck, SlidersHorizontal, Sun, TerminalSquare, Wifi,
+  Monitor, MonitorCog, Moon, Palette, Printer, RefreshCw, RotateCcw, ScanLine, Settings,
+  ShieldCheck, SlidersHorizontal, Sun, Target, TerminalSquare, Wifi,
 } from 'lucide-react';
 import { agent } from './agent';
 import { applyTheme, loadThemePreference } from './theme';
 import type {
   Diagnosis, OperationManifest, OptimizationAction, ProviderKind, ProviderSettings,
-  ScanResult, ThemePreference,
+  ScanResult, ThemePreference, TuningGoals,
 } from './types';
 import './App.css';
 
@@ -51,6 +51,7 @@ function App() {
   const [models, setModels] = useState<string[]>([]);
   const [scan, setScan] = useState<ScanResult>();
   const [diagnosis, setDiagnosis] = useState<Diagnosis>();
+  const [goals, setGoals] = useState<TuningGoals>({ priority: 'balanced', games: [], notes: '' });
   const [actions, setActions] = useState<OptimizationAction[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [history, setHistory] = useState<OperationManifest[]>([]);
@@ -151,22 +152,19 @@ function App() {
   async function diagnose() {
     if (!scan) return scanSystem();
     const result = await run('Requesting a structured diagnosis…', () =>
-      agent<Diagnosis>('diagnose', { profile: scan.profile }));
+      agent<Diagnosis>('diagnose', { profile: scan.profile, goals }));
     if (result) {
       setDiagnosis(result);
-      const recommended = new Set(result.recommendations
-        .map(item => item.actionId)
-        .filter(id => actions.find(action => action.id === id)?.availability.canApply));
-      setSelected(recommended);
+      setSelected(new Set());
       setPage('review');
     }
   }
 
-  function applyPreset(mode: 'safe' | 'gaming' | 'none') {
+  function applyPreset(mode: 'all' | 'safe' | 'none') {
     const ids = actions.filter(action => {
       if (!action.availability.canApply || !recommendations.has(action.id)) return false;
+      if (mode === 'all') return true;
       if (mode === 'safe') return action.risk === 'low';
-      if (mode === 'gaming') return action.category === 'Gaming' || action.risk === 'low';
       return false;
     }).map(action => action.id);
     setSelected(new Set(ids));
@@ -205,7 +203,7 @@ function App() {
         </nav>
         <div className="sidebar-foot">
           <div className="security-chip"><ShieldCheck size={16}/><span>Allowlisted actions</span></div>
-          <small>v0.3.0-alpha.1</small>
+          <small>v0.4.0-alpha.1</small>
         </div>
       </aside>
 
@@ -225,8 +223,8 @@ function App() {
         <section className="page-content">
           {page === 'overview' && <Overview hasProvider={hasCredential || !provider.requiresApiKey} scan={scan} history={history} onProvider={() => setPage('provider')} onScan={scanSystem}/>}
           {page === 'provider' && <ProviderPage provider={provider} apiKey={apiKey} hasCredential={hasCredential} models={models} onChoose={chooseProvider} onChange={setProvider} onKey={setApiKey} onSave={saveProvider} onLoadModels={loadModels} onBrowserSignIn={browserSignIn}/>}
-          {page === 'scan' && <ScanPage scan={scan} diagnosis={diagnosis} onScan={scanSystem} onDiagnose={diagnose}/>}
-          {page === 'review' && <ReviewPage actions={actions} recommendations={recommendations} selected={selected} onToggle={id => setSelected(current => toggle(current, id))} onPreset={applyPreset} onApply={applyChanges}/>}
+          {page === 'scan' && <ScanPage scan={scan} diagnosis={diagnosis} goals={goals} onGoals={setGoals} onScan={scanSystem} onDiagnose={diagnose}/>}
+          {page === 'review' && <ReviewPage diagnosis={diagnosis} actions={actions} recommendations={recommendations} selected={selected} onToggle={id => setSelected(current => toggle(current, id))} onPreset={applyPreset} onApply={applyChanges}/>}
           {page === 'activity' && <ActivityPage history={history} onRefresh={async () => setHistory(await agent<OperationManifest[]>('history'))} onRollback={rollback}/>}
           {page === 'settings' && <SettingsPage theme={theme} onTheme={setTheme}/>}
         </section>
@@ -263,13 +261,22 @@ function ProviderPage({ provider, apiKey, hasCredential, models, onChoose, onCha
   </div>;
 }
 
-function ScanPage({ scan, diagnosis, onScan, onDiagnose }: { scan?: ScanResult; diagnosis?: Diagnosis; onScan: () => void; onDiagnose: () => void }) {
+function ScanPage({ scan, diagnosis, goals, onGoals, onScan, onDiagnose }: { scan?: ScanResult; diagnosis?: Diagnosis; goals: TuningGoals; onGoals: (value: TuningGoals) => void; onScan: () => void; onDiagnose: () => void }) {
   if (!scan) return <EmptyState icon={ScanLine} title="No local profile yet" text="Scan Windows locally first. NeuroTune will not contact your AI provider during this step." action="Scan this PC" onAction={onScan}/>;
-  return <div className="stack-lg"><div className="page-actions"><div><span className="eyebrow">Local profile</span><h2>Ready for your review</h2></div><div className="button-row"><button className="secondary" onClick={onScan}><RefreshCw size={16}/>Scan again</button><button className="primary" onClick={onDiagnose}><Bot size={16}/>Run AI diagnosis</button></div></div><div className="metric-grid four"><Metric icon={Monitor} label="Windows" value={scan.profile.operatingSystem}/><Metric icon={Cpu} label="Processor" value={scan.profile.cpu}/><Metric icon={Database} label="Memory" value={scan.profile.memory}/><Metric icon={HardDrive} label="Storage" value={scan.profile.disks[0] ?? 'Unavailable'}/></div><div className="split-panels"><section className="section-card"><div className="section-heading"><div><span className="eyebrow">Provider payload</span><h3>Sanitized profile</h3></div><span className="status-pill good">Reviewable</span></div><pre className="profile-json">{scan.sanitizedProfile}</pre></section><section className="section-card"><div className="section-heading"><div><span className="eyebrow">Model output</span><h3>Diagnosis</h3></div></div>{diagnosis ? <DiagnosisView diagnosis={diagnosis}/> : <div className="panel-placeholder"><Bot size={30}/><p>No data has been sent yet.</p><span>Run the AI diagnosis when the profile looks correct.</span></div>}</section></div></div>;
+  const priorities: Array<{ id: TuningGoals['priority']; label: string; detail: string }> = [
+    { id: 'balanced', label: 'Balanced', detail: 'No single metric at any cost' },
+    { id: 'fps', label: 'Frame rate', detail: 'Prioritize consistent gaming throughput' },
+    { id: 'systemLatency', label: 'System latency', detail: 'Favor responsiveness and input latency' },
+    { id: 'networkLatency', label: 'Network', detail: 'Focus on measured connection conditions' },
+    { id: 'efficiency', label: 'Efficiency', detail: 'Protect battery life and thermals' },
+  ];
+  return <div className="stack-lg"><div className="page-actions"><div><span className="eyebrow">Local profile</span><h2>Set the target before diagnosis</h2></div><div className="button-row"><button className="secondary" onClick={onScan}><RefreshCw size={16}/>Scan again</button><button className="primary" onClick={onDiagnose}><Bot size={16}/>Run AI diagnosis</button></div></div><div className="metric-grid four"><Metric icon={Monitor} label="Windows" value={scan.profile.operatingSystem}/><Metric icon={Cpu} label="Processor" value={scan.profile.cpu}/><Metric icon={Database} label="Memory" value={scan.profile.memory}/><Metric icon={HardDrive} label="Registry checks" value={`${Object.keys(scan.profile.performanceRegistry).length} inspected`}/></div><section className="section-card goals-card"><div className="section-heading"><div><span className="eyebrow">Optimization intent</span><h3>What matters on this PC?</h3></div><Target size={22}/></div><div className="priority-options">{priorities.map(item => <button key={item.id} aria-pressed={goals.priority === item.id} className={goals.priority === item.id ? 'priority-option active' : 'priority-option'} onClick={() => onGoals({ ...goals, priority: item.id })}><strong>{item.label}</strong><small>{item.detail}</small></button>)}</div><div className="goal-fields"><label><span>Games or workloads</span><input maxLength={1200} defaultValue={goals.games.join(', ')} placeholder="Example: Valorant, Cyberpunk 2077" onChange={event => onGoals({ ...goals, games: event.target.value.split(',').map(x => x.trim()).filter(Boolean) })}/><small>Names provide context only; NeuroTune will not assume engine-specific behavior.</small></label><label><span>Anything else to preserve or improve?</span><textarea maxLength={1000} value={goals.notes} placeholder="Example: keep power use reasonable; Wi-Fi only" onChange={event => onGoals({ ...goals, notes: event.target.value })}/></label></div>{scan.profile.policyConflicts.length > 0 && <div className="local-observations"><strong>Local conflicts and manual overrides</strong><ul>{scan.profile.policyConflicts.map(item => <li key={item}>{item}</li>)}</ul></div>}</section><div className="split-panels"><section className="section-card"><div className="section-heading"><div><span className="eyebrow">Provider payload</span><h3>Sanitized profile</h3></div><span className="status-pill good">Reviewable</span></div><pre className="profile-json">{scan.sanitizedProfile}</pre></section><section className="section-card"><div className="section-heading"><div><span className="eyebrow">Model output</span><h3>Diagnosis</h3></div></div>{diagnosis ? <DiagnosisView diagnosis={diagnosis}/> : <div className="panel-placeholder"><Bot size={30}/><p>No data has been sent yet.</p><span>Your goals and this reviewed profile are sent only when you run diagnosis.</span></div>}</section></div></div>;
 }
 
-function ReviewPage({ actions, recommendations, selected, onToggle, onPreset, onApply }: { actions: OptimizationAction[]; recommendations: Map<string, string>; selected: Set<string>; onToggle: (id: string) => void; onPreset: (mode: 'safe' | 'gaming' | 'none') => void; onApply: () => void }) {
-  return <div className="stack-lg"><div className="page-actions"><div><span className="eyebrow">Execution boundary</span><h2>Nothing changes until you approve it</h2></div><div className="button-row"><button className="ghost" onClick={() => onPreset('safe')}>Safe</button><button className="ghost" onClick={() => onPreset('gaming')}>Gaming</button><button className="ghost" onClick={() => onPreset('none')}>Clear</button></div></div><div className="action-list">{actions.map(action => { const reason = recommendations.get(action.id); return <button key={action.id} className={`action-card ${selected.has(action.id) ? 'selected' : ''} ${!action.availability.canApply ? 'disabled' : ''}`} disabled={!action.availability.canApply} onClick={() => onToggle(action.id)}><span className="check-box">{selected.has(action.id) && <Check size={15}/>}</span><div className="action-main"><div><strong>{action.name}</strong>{action.requiresRestart && <span className="tag">Restart</span>}</div><p>{action.description}</p><small>{reason ?? 'Not recommended by the current diagnosis.'}</small></div><div className="action-meta"><span className={`risk ${action.risk}`}>{action.risk} risk</span><strong>{action.availability.status}</strong><small>Current: {action.availability.currentValue}</small></div></button>; })}</div><div className="sticky-apply"><div><strong>{selected.size} changes selected</strong><span>A verified restore point and Registry exports are mandatory.</span></div><button className="primary" disabled={!selected.size} onClick={onApply}><ShieldCheck size={17}/>Back up & apply</button></div></div>;
+function ReviewPage({ diagnosis, actions, recommendations, selected, onToggle, onPreset, onApply }: { diagnosis?: Diagnosis; actions: OptimizationAction[]; recommendations: Map<string, string>; selected: Set<string>; onToggle: (id: string) => void; onPreset: (mode: 'all' | 'safe' | 'none') => void; onApply: () => void }) {
+  if (!diagnosis) return <EmptyState icon={Bot} title="No diagnosis yet" text="Scan the PC, choose your priorities, and ask the configured model for an evidence-backed diagnosis."/>;
+  const proposed = actions.filter(action => recommendations.has(action.id));
+  return <div className="stack-lg report-root"><div className="page-actions"><div><span className="eyebrow">Dynamic plan</span><h2>Only fixes proposed for this diagnosis</h2></div><div className="button-row"><button className="secondary" onClick={() => window.print()}><Printer size={16}/>Print report</button><button className="ghost" onClick={() => onPreset('safe')}>Select safe only</button><button className="ghost" onClick={() => onPreset('all')}>Select all</button><button className="ghost" onClick={() => onPreset('none')}>Clear</button></div></div><section className="section-card report-summary"><div className="section-heading"><div><span className="eyebrow">Evidence-backed report</span><h3>AI diagnosis</h3></div><span className="status-pill good">No changes made</span></div><DiagnosisView diagnosis={diagnosis}/></section>{proposed.length > 0 ? <div className="action-list">{proposed.map(action => { const reason = recommendations.get(action.id); return <button key={action.id} aria-pressed={selected.has(action.id)} className={`action-card ${selected.has(action.id) ? 'selected' : ''} ${!action.availability.canApply ? 'disabled' : ''}`} disabled={!action.availability.canApply} onClick={() => onToggle(action.id)}><span className="check-box">{selected.has(action.id) && <Check size={15}/>}</span><div className="action-main"><div><strong>{action.name}</strong>{action.requiresRestart && <span className="tag">Restart</span>}</div><p>{action.description}</p><small>{reason}</small></div><div className="action-meta"><span className={`risk ${action.risk}`}>{action.risk} risk</span><strong>{action.availability.status}</strong><small>Current: {action.availability.currentValue}</small></div></button>; })}</div> : <section className="section-card no-fixes"><ShieldCheck size={22}/><div><strong>No allowlisted fix is justified by this diagnosis.</strong><p>The report remains useful; NeuroTune will not show unrelated catalog entries.</p></div></section>}<section className="consent-card"><Bot size={20}/><div><span className="eyebrow">Model request</span><strong>{diagnosis.consentQuestion}</strong><small>The model cannot execute commands. Your selection is mapped to compiled, reversible actions only.</small></div></section><div className="sticky-apply"><div><strong>{selected.size} changes selected</strong><span>A verified restore point and Registry exports are mandatory.</span></div><button className="primary" disabled={!selected.size} onClick={onApply}><ShieldCheck size={17}/>Back up & apply selected</button></div></div>;
 }
 
 function ActivityPage({ history, onRefresh, onRollback }: { history: OperationManifest[]; onRefresh: () => void; onRollback: (id: string) => void }) {
@@ -283,7 +290,7 @@ function SettingsPage({ theme, onTheme }: { theme: ThemePreference; onTheme: (va
 function Metric({ icon: Icon, label, value, tone }: { icon: typeof Bot; label: string; value: string; tone?: string }) { return <article className="metric-card"><div className={`metric-icon ${tone ?? ''}`}><Icon size={19}/></div><div><span>{label}</span><strong>{value}</strong></div></article>; }
 function Step({ number, title, text }: { number: string; title: string; text: string }) { return <article><span>{number}</span><strong>{title}</strong><p>{text}</p></article>; }
 function EmptyState({ icon: Icon, title, text, action, onAction }: { icon: typeof Activity; title: string; text: string; action?: string; onAction?: () => void }) { return <div className="empty-state"><div><Icon size={30}/></div><h2>{title}</h2><p>{text}</p>{action && <button className="primary" onClick={onAction}>{action}<ChevronRight size={17}/></button>}</div>; }
-function DiagnosisView({ diagnosis }: { diagnosis: Diagnosis }) { return <div className="diagnosis"><p>{diagnosis.summary}</p>{diagnosis.findings.length > 0 && <><h4>Findings</h4><ul>{diagnosis.findings.map(item => <li key={item}>{item}</li>)}</ul></>}{diagnosis.recommendations.length > 0 && <><h4>Allowlisted recommendations</h4><ul>{diagnosis.recommendations.map(item => <li key={item.actionId}>{item.reason}</li>)}</ul></>}</div>; }
+function DiagnosisView({ diagnosis }: { diagnosis: Diagnosis }) { return <div className="diagnosis"><p>{diagnosis.summary}</p>{diagnosis.findings.length > 0 && <><h4>Verified findings</h4><div className="finding-list">{diagnosis.findings.map(item => <article key={item.evidenceId}><strong>{item.title}</strong><code>{item.evidenceId}: {item.currentValue}</code><p>{item.assessment}</p></article>)}</div></>}{diagnosis.recommendations.length > 0 && <><h4>Allowlisted recommendations</h4><ul>{diagnosis.recommendations.map(item => <li key={item.actionId}>{item.reason}</li>)}</ul></>}</div>; }
 function ThemeOption({ active, icon: Icon, title, text, onClick }: { active: boolean; icon: typeof Sun; title: string; text: string; onClick: () => void }) { return <button className={active ? 'theme-option active' : 'theme-option'} onClick={onClick}><Icon size={21}/><span><strong>{title}</strong><small>{text}</small></span>{active && <Check size={17}/>}</button>; }
 function toggle(current: Set<string>, id: string) { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; }
 function pageTitle(page: Page) { return ({ overview: 'System control center', provider: 'Model connection', scan: 'Local system profile', review: 'Safe optimization plan', activity: 'Recovery and history', settings: 'Application preferences' } satisfies Record<Page, string>)[page]; }

@@ -10,6 +10,7 @@ Include the affected version, reproduction steps, expected impact, and a contact
 
 - Every LLM response is treated as untrusted input.
 - Only action identifiers compiled into the local allowlist are accepted.
+- Diagnosis findings are rejected unless their evidence identifier and value exactly match the local scan.
 - Model-generated commands, scripts, paths, Registry locations, and Registry values are never executed.
 - Compatibility and current state are checked locally before execution.
 - The engine stops before making changes if it cannot verify a new restore point or export required Registry keys.
