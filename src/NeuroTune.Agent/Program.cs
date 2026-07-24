@@ -24,6 +24,7 @@ try
         "oauth-openrouter" => await OAuth(settingsService),
         "models" => await Models(settingsService, catalog),
         "scan" => await Scan(catalog),
+        "analyze-local" => AnalyzeLocal(Read<DiagnoseRequest>(input)),
         "diagnose" => await Diagnose(Read<DiagnoseRequest>(input), settingsService, catalog),
         "actions" => Actions(catalog),
         "apply" => await new OptimizationEngine(catalog, backup).ApplyAsync(Read<ApplyRequest>(input).ActionIds),
@@ -78,16 +79,24 @@ async Task<object> Models(SettingsService service, OptimizationCatalog actionCat
 
 async Task<object> Scan(OptimizationCatalog actionCatalog)
 {
-    var profileTask = Task.Run(() => new SystemProfiler().Collect());
+    var profileTask = Task.Run(() => new SystemProfiler().Collect(phase => Console.Error.WriteLine(phase)));
     var snapshotTask = Task.Run(() => new PerformanceSnapshotService().Collect());
     await Task.WhenAll(profileTask, snapshotTask);
     return new
     {
         profile = await profileTask,
-        sanitizedProfile = ProfileSanitizer.Serialize(await profileTask),
+        sanitizedProfile = JsonSerializer.Serialize(LlmClient.BuildEvidenceFacts(await profileTask), new JsonSerializerOptions { WriteIndented = true }),
         snapshot = await snapshotTask,
         actions = Actions(actionCatalog)
     };
+}
+
+object AnalyzeLocal(DiagnoseRequest request)
+{
+    if (request.Profile is null || request.Goals is null)
+        throw new InvalidOperationException("Local analysis requires a system profile and tuning goals.");
+    request.Goals.Validate();
+    return ConflictAnalyzer.Analyze(request.Profile, request.Goals);
 }
 
 async Task<object> Diagnose(DiagnoseRequest request, SettingsService service, OptimizationCatalog actionCatalog)

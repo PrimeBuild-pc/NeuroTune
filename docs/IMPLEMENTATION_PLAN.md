@@ -15,11 +15,11 @@
 1. Initialize the solution, repository, CI, and documentation.
 2. Define system profiles, tuning goals, diagnoses, actions, telemetry, and operation manifests.
 3. Protect API keys, support OpenRouter browser authorization, and dynamically discover provider models.
-4. Collect hardware capabilities, curated performance Registry values, local policy conflicts, gaming, network, process, startup, and service data.
-5. Sanitize and preview the exact profile sent to the selected provider.
+4. Stream a phased inventory of hardware/firmware, Registry, boot, device, driver, software, network, runtime, and service evidence.
+5. Sanitize and preview the exact evidence facts sent to the selected provider.
 6. Accept only findings whose evidence ID/value pair matches the local scan and recommendations that reference the compiled action allowlist.
 7. Check compatibility and current state before an action can be selected.
-8. Show only diagnosis-backed actions, with Select all, Select safe only, explicit approval, and print-report controls.
+8. Build local objective-aware conflict patterns and expose AI-recommended, conflict-related, and all supported actions with risk-aware approval.
 9. Require and verify a new System Restore point plus affected Registry exports.
 10. Journal every attempt before execution, verify results, and roll back automatically on failure.
 11. Detect interrupted operations and expose manual recovery at startup.

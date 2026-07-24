@@ -23,19 +23,21 @@ Use a disposable Windows virtual machine. Do not use a primary PC for the first 
 ## 2. Local Scan and Privacy
 
 1. Select **Scan this PC** without requesting an AI diagnosis.
-2. Confirm that CPU, GPU, memory, Windows, hardware capabilities, and the curated Registry snapshot are populated.
-3. Review the sanitized JSON profile and any locally detected policy conflicts or manual overrides.
-4. Confirm that the Windows username and device name do not appear.
-5. Confirm that no provider request occurs until **Run AI diagnosis** is selected.
+2. Confirm that live phase progress appears for hardware/firmware, Windows/Registry, network/devices, software, and services.
+3. Confirm that CPU, GPU, motherboard, BIOS, DIMMs, BCD, drivers, applications, device issues, and 80+ Registry facts are populated.
+4. Review the sanitized JSON profile and any locally detected policy conflicts or manual overrides.
+5. Confirm that the Windows username and device name do not appear.
+6. Confirm that no provider request occurs until **Run AI diagnosis** is selected.
 
 ## 3. Diagnosis and Review
 
 1. Enter at least one game or workload, test each optimization priority, and run the AI diagnosis.
 2. Confirm that each finding cites an observed profile value and every recommendation maps to a visible action.
-3. Confirm that unrelated catalog actions are hidden and unavailable or already-configured actions cannot be selected.
-4. Compare Select all, Select safe only, Clear, and manual selection behavior.
-5. Confirm that every action shows its current state, risk, reason, and restart requirement.
-6. Print the report and verify that navigation and execution controls are omitted.
+3. Inspect each conflict: both setting IDs and values, relationship, confidence, objective, and counterproductive effect must be explicit.
+4. Switch among AI recommended, Conflict fixes, and All supported; unavailable or already-configured actions must remain visible but disabled.
+5. Compare Select all supported, Select safe only, Clear, and manual selection behavior.
+6. Confirm that every action shows its current state, risk, reason, and restart requirement; high risk must warn without disappearing.
+7. Print the report and verify that navigation and execution controls are omitted.
 
 ## 4. Apply and Roll Back
 

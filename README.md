@@ -60,7 +60,7 @@
     </tr>
     <tr>
       <td>Profile transparency</td>
-      <td>The application shows the exact profile sent to the provider and redacts the Windows username and device name.</td>
+      <td>The application shows the exact evidence facts sent to the provider and redacts the Windows username and device name.</td>
     </tr>
   </tbody>
 </table>
@@ -72,14 +72,15 @@
 <h2>Features</h2>
 
 <ul>
-  <li><strong>Evidence-oriented system profiling:</strong> hardware capabilities, selected performance Registry values, policy conflicts, power, gaming, network, runtime, and startup state.</li>
+  <li><strong>Deep evidence inventory:</strong> 80+ performance Registry values plus BCD, drivers, devices, filters, software, firmware, DIMMs, power, gaming, networking, runtime, and startup state.</li>
   <li><strong>Flexible model connections:</strong> OpenRouter, OpenAI, Anthropic, DeepSeek, any OpenAI-compatible or Anthropic-compatible API, Ollama, LM Studio, and vLLM.</li>
   <li><strong>Official browser authorization:</strong> OpenRouter OAuth with PKCE; providers without a supported third-party authorization flow continue to use API credentials.</li>
   <li><strong>Native web UI:</strong> Tauri 2 and React with high-contrast light/dark themes, Windows appearance synchronization, and manual override.</li>
   <li><strong>Guided workflow:</strong> Setup, local scan, AI diagnosis, compatibility review, apply, measure, and restore.</li>
   <li><strong>Goal-aware diagnosis:</strong> tell the model which games or workloads matter and prioritize frame rate, system latency, network latency, balance, or efficiency.</li>
-  <li><strong>Dynamic plans:</strong> only diagnosis-backed actions appear, with Select all, Select safe only, explicit approval, and a printable report.</li>
-  <li><strong>Current allowlisted actions:</strong> power plan, Game Mode, HAGS, Game DVR, visual effects, and restoration of selected unsafe manual overrides.</li>
+  <li><strong>Explicit conflict graph:</strong> names the exact settings and values involved, their relationship, confidence, and why they may oppose the selected objective.</li>
+  <li><strong>User-controlled plans:</strong> switch between AI recommendations, conflict fixes, and every supported reversible action; risk changes warnings, not visibility.</li>
+  <li><strong>Current allowlisted actions:</strong> power, gaming, graphics, visual, memory, GPU-timeout, and legacy TCP repairs with local capture, verification, and rollback.</li>
   <li><strong>Local operation history:</strong> Per-action state snapshots and rollback from the desktop interface.</li>
   <li><strong>No proprietary telemetry:</strong> Runtime data remains local except for the profile explicitly sent to the selected LLM provider.</li>
 </ul>

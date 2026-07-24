@@ -6,6 +6,7 @@ public enum LlmProvider { OpenRouter, OpenAI, Anthropic, DeepSeek, Custom, Local
 public enum ApiProtocol { OpenAiCompatible, Anthropic }
 public enum RiskLevel { Low, Medium, High }
 public enum OptimizationPriority { Balanced, Fps, SystemLatency, NetworkLatency, Efficiency }
+public enum ConflictKind { Confirmed, Conditional, SuspiciousOverride, MissingEvidence }
 
 public sealed class UserSettings
 {
@@ -27,6 +28,7 @@ public sealed class UserSettings
 
 public sealed class SystemProfile
 {
+    public int SchemaVersion { get; set; } = 3;
     public DateTimeOffset CollectedAt { get; set; } = DateTimeOffset.Now;
     public string OperatingSystem { get; set; } = "Unavailable";
     public string Cpu { get; set; } = "Unavailable";
@@ -39,11 +41,34 @@ public sealed class SystemProfile
     public List<string> NetworkAdapters { get; set; } = [];
     public Dictionary<string, string> NetworkSettings { get; set; } = [];
     public Dictionary<string, string> HardwareCapabilities { get; set; } = [];
+    public Dictionary<string, string> FirmwareAndMemory { get; set; } = [];
+    public Dictionary<string, string> BootConfiguration { get; set; } = [];
     public Dictionary<string, string> PerformanceRegistry { get; set; } = [];
     public List<string> PolicyConflicts { get; set; } = [];
+    public List<string> InstalledSoftware { get; set; } = [];
+    public List<string> RelevantDrivers { get; set; } = [];
+    public List<string> DeviceIssues { get; set; } = [];
+    public List<string> SoftwareSignals { get; set; } = [];
+    public List<ScanPhase> ScanPhases { get; set; } = [];
     public List<string> TopProcesses { get; set; } = [];
     public List<string> StartupItems { get; set; } = [];
     public List<string> AutomaticServices { get; set; } = [];
+}
+
+public sealed record ScanPhase(string Name, long DurationMilliseconds, int FactsCollected);
+
+public sealed class ConflictPattern
+{
+    public string Id { get; set; } = "";
+    public string Title { get; set; } = "";
+    public ConflictKind Kind { get; set; }
+    public List<string> EvidenceIds { get; set; } = [];
+    public Dictionary<string, string> Evidence { get; set; } = [];
+    public List<OptimizationPriority> Objectives { get; set; } = [];
+    public string Explanation { get; set; } = "";
+    public string WhyCounterproductive { get; set; } = "";
+    public string Confidence { get; set; } = "Medium";
+    public List<string> SuggestedActionIds { get; set; } = [];
 }
 
 public sealed class TuningGoals
@@ -69,6 +94,7 @@ public sealed class DiagnosisResult
     public string Summary { get; set; } = "";
     public List<DiagnosisFinding> Findings { get; set; } = [];
     public List<OptimizationRecommendation> Recommendations { get; set; } = [];
+    public List<ConflictPattern> Conflicts { get; set; } = [];
     public string ConsentQuestion { get; set; } = "May NeuroTune apply the selected allowlisted fixes after creating a restore point?";
 }
 

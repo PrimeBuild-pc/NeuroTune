@@ -11,7 +11,7 @@ public sealed class LlmClient
     private const int MaxResponseCharacters = 256_000;
     private static readonly HttpClient Http = new(new HttpClientHandler { AllowAutoRedirect = false })
     {
-        Timeout = TimeSpan.FromSeconds(90)
+        Timeout = TimeSpan.FromMinutes(8)
     };
     private readonly OptimizationCatalog _catalog;
 
@@ -55,6 +55,7 @@ public sealed class LlmClient
         if (string.IsNullOrWhiteSpace(settings.Model)) throw new InvalidOperationException("Select a model.");
 
         var evidenceFacts = BuildEvidenceFacts(profile);
+        var localConflicts = ConflictAnalyzer.Analyze(profile, goals);
         var catalogJson = JsonSerializer.Serialize(_catalog.All.Select(x => (Action: x, Availability: x.Inspect()))
             .Where(x => x.Availability.CanApply)
             .Select(x => new
@@ -82,11 +83,11 @@ public sealed class LlmClient
             EVIDENCE FACTS:
             {{JsonSerializer.Serialize(evidenceFacts)}}
 
+            LOCALLY DETECTED CONFLICT PATTERNS:
+            {{JsonSerializer.Serialize(localConflicts)}}
+
             ALLOWLISTED AND COMPATIBLE ACTIONS:
             {{catalogJson}}
-
-            SANITIZED PROFILE:
-            {{ProfileSanitizer.Serialize(profile)}}
             """;
 
         using var request = settings.Protocol == ApiProtocol.Anthropic
@@ -97,7 +98,9 @@ public sealed class LlmClient
             throw new InvalidOperationException($"The provider returned HTTP {(int)response.StatusCode} ({response.ReasonPhrase}).");
 
         var body = await ReadLimitedAsync(response, cancellationToken);
-        return ParseDiagnosis(ExtractContent(settings.Protocol, body), _catalog, evidenceFacts);
+        var diagnosis = ParseDiagnosis(ExtractContent(settings.Protocol, body), _catalog, evidenceFacts);
+        diagnosis.Conflicts = localConflicts;
+        return diagnosis;
     }
 
     public static IReadOnlyList<string> ParseModels(string body)
@@ -176,7 +179,7 @@ public sealed class LlmClient
             finding.CurrentValue = finding.CurrentValue.Trim();
             finding.Assessment = finding.Assessment.Trim();
             if (finding.Title.Length > 300 || finding.EvidenceId.Length > 500 ||
-                finding.CurrentValue.Length > 2_000 || finding.Assessment.Length > 2_000)
+                finding.CurrentValue.Length > 20_000 || finding.Assessment.Length > 2_000)
                 throw new InvalidOperationException("A diagnosis finding was too long.");
             if (evidenceFacts is not null && (!evidenceFacts.TryGetValue(finding.EvidenceId, out var observed) ||
                 !observed.Equals(finding.CurrentValue, StringComparison.Ordinal)))
@@ -202,18 +205,34 @@ public sealed class LlmClient
         var gpus = profile.Gpus ?? [];
         for (var index = 0; index < gpus.Count; index++) facts[$"hardware:gpu:{index}"] = gpus[index] ?? "Unavailable";
         Add("hardware", profile.HardwareCapabilities);
+        Add("firmware", profile.FirmwareAndMemory);
+        Add("boot", profile.BootConfiguration);
         Add("windows", profile.WindowsSettings);
         Add("gaming", profile.GamingSettings);
         Add("network", profile.NetworkSettings);
         Add("registry", profile.PerformanceRegistry);
-        var conflicts = profile.PolicyConflicts ?? [];
-        for (var index = 0; index < conflicts.Count; index++) facts[$"conflict:{index}"] = conflicts[index] ?? "Unavailable";
+        AddList("storage", profile.Disks);
+        AddList("network-adapter", profile.NetworkAdapters);
+        AddList("software", profile.InstalledSoftware);
+        AddList("driver", profile.RelevantDrivers);
+        AddList("device-issue", profile.DeviceIssues);
+        AddList("software-signal", profile.SoftwareSignals);
+        AddList("runtime-process", profile.TopProcesses);
+        AddList("startup", profile.StartupItems);
+        AddList("service", profile.AutomaticServices);
+        AddList("conflict-observation", profile.PolicyConflicts);
         foreach (var key in facts.Keys.ToList()) facts[key] = ProfileSanitizer.Redact(facts[key]);
         return facts;
 
         void Add(string prefix, Dictionary<string, string>? values)
         {
             foreach (var (key, value) in values ?? []) facts[$"{prefix}:{key}"] = value ?? "Unavailable";
+        }
+
+        void AddList(string prefix, List<string>? values)
+        {
+            var items = values ?? [];
+            for (var index = 0; index < items.Count; index++) facts[$"{prefix}:{index}"] = items[index] ?? "Unavailable";
         }
     }
 
@@ -269,7 +288,7 @@ public sealed class LlmClient
         request.Content = JsonContent(new
         {
             model = settings.Model,
-            max_tokens = 3200,
+            max_tokens = 6000,
             temperature = 0.1,
             messages = new[] { new { role = "user", content = prompt } }
         });

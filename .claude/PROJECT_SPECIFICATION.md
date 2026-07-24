@@ -39,25 +39,27 @@ NeuroTune addresses:
 
 Collect without manual data entry:
 
-- **Hardware:** CPU, GPU and driver, memory capacity and speed, physical storage type, display mode, form factor, page-file policy, and virtualization-based security.
-- **Windows:** version/build, active power plan, relevant policies, gaming settings, and a curated snapshot of performance-related Registry values.
-- **Network:** adapters, DNS configuration count, global TCP settings, latency sample, and Nagle overrides.
-- **Gaming:** Game Mode, HAGS, Game DVR, and VRR state where detectable.
-- **Runtime:** high-memory processes, startup entries, and automatic services.
+- **Hardware and firmware:** CPU/CPUID, GPU and driver, motherboard, BIOS, SMBIOS DIMMs, configured memory speed/voltage where exposed, storage reliability, displays, thermal zones, form factor, and security virtualization.
+- **Windows:** version/build, power, boot configuration, device errors, relevant policies, gaming state, and a vetted inventory of 80+ performance-related Registry values.
+- **Network:** adapters, advanced properties, components/filter drivers, proxy, global TCP state, latency sample, and per-interface overrides.
+- **Software:** installed applications, relevant signed drivers, tuning/overlay/VPN/virtualization signals, startup entries, processes, and services.
+- **Conflict graph:** deterministic rules identify exact evidence pairs, relationship type, objective impact, confidence, and why a combination may be counterproductive.
 
-The user must see the sanitized profile before it is sent to a provider.
+The user must see the sanitized evidence bundle before it is sent to a provider.
 
 ### 3. LLM Diagnosis
 
 - Ask for the user's games or workloads and priority: balanced, frame rate, system latency, network latency, or efficiency.
 - Produce a clear diagnosis whose findings cite exact observed fields and values.
+- Synthesize the deterministic local conflict graph instead of inventing unsupported relationships.
 - Return structured recommendations by action identifier and evidence-backed reason.
 - Reject unknown actions, scripts, commands, and malformed responses.
 
 ### 4. Dynamic Plan
 
-- Hide catalog actions that the current diagnosis did not recommend.
-- Offer **Select all**, **Select safe only**, explicit approval, and a printable report.
+- Let the user switch between AI-recommended, conflict-related, and all supported reversible actions.
+- Offer **Select all supported**, **Select safe only**, explicit per-action selection, and a printable report.
+- Risk changes warnings and confirmation strength, not whether a supported action is visible.
 - Keep execution behind an explicit consent question and local confirmation.
 
 ### 5. Compatibility and Transparency

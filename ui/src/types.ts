@@ -12,6 +12,7 @@ export interface ProviderSettings {
 }
 
 export interface SystemProfile {
+  schemaVersion: number;
   collectedAt: string;
   operatingSystem: string;
   cpu: string;
@@ -24,8 +25,15 @@ export interface SystemProfile {
   networkAdapters: string[];
   networkSettings: Record<string, string>;
   hardwareCapabilities: Record<string, string>;
+  firmwareAndMemory: Record<string, string>;
+  bootConfiguration: Record<string, string>;
   performanceRegistry: Record<string, string>;
   policyConflicts: string[];
+  installedSoftware: string[];
+  relevantDrivers: string[];
+  deviceIssues: string[];
+  softwareSignals: string[];
+  scanPhases: ScanPhase[];
   topProcesses: string[];
   startupItems: string[];
   automaticServices: string[];
@@ -71,6 +79,25 @@ export interface TuningGoals {
   notes: string;
 }
 
+export interface ScanPhase {
+  name: string;
+  durationMilliseconds: number;
+  factsCollected: number;
+}
+
+export interface ConflictPattern {
+  id: string;
+  title: string;
+  kind: 'confirmed' | 'conditional' | 'suspiciousOverride' | 'missingEvidence';
+  evidenceIds: string[];
+  evidence: Record<string, string>;
+  objectives: OptimizationPriority[];
+  explanation: string;
+  whyCounterproductive: string;
+  confidence: string;
+  suggestedActionIds: string[];
+}
+
 export interface DiagnosisFinding {
   title: string;
   evidenceId: string;
@@ -82,6 +109,7 @@ export interface Diagnosis {
   summary: string;
   findings: DiagnosisFinding[];
   recommendations: Recommendation[];
+  conflicts: ConflictPattern[];
   consentQuestion: string;
 }
 
