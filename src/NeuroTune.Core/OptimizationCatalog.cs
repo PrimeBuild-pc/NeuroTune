@@ -56,7 +56,24 @@ public sealed class OptimizationCatalog
                 stateLabel: value => value == 1 ? "Forced in memory" : "Windows default"),
             RegistryDeleteDword("graphics.mpo-default", "Remove the manual MPO override",
                 "Returns Desktop Window Manager overlay selection to the graphics stack.", "Graphics", RiskLevel.Medium, true,
-                RegistryHive.LocalMachine, @"SOFTWARE\Microsoft\Windows\Dwm", "OverlayTestMode")
+                RegistryHive.LocalMachine, @"SOFTWARE\Microsoft\Windows\Dwm", "OverlayTestMode"),
+            RegistryDword("gaming.app-capture-off", "Disable Windows app capture",
+                "Disables the second Windows game-capture preference used by Game Bar.", "Gaming", RiskLevel.Medium, false,
+                RegistryHive.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\GameDVR", "AppCaptureEnabled", 0,
+                stateLabel: OnOffState),
+            RegistryDeleteDwords("graphics.tdr-default", "Restore default GPU timeout recovery",
+                "Removes manual TDR delay and debug overrides so Windows can recover a stalled graphics driver normally.",
+                "Graphics", RiskLevel.High, true, RegistryHive.LocalMachine,
+                @"SYSTEM\CurrentControlSet\Control\GraphicsDrivers", ["TdrDelay", "TdrDdiDelay", "TdrLevel", "TdrDebugMode"]),
+            RegistryDeleteDwords("network.tcp-default", "Restore Windows TCP auto-tuning defaults",
+                "Removes legacy global TCP window, timeout, TTL, and offload overrides; adapter-specific settings remain unchanged.",
+                "Network", RiskLevel.High, true, RegistryHive.LocalMachine,
+                @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters",
+                ["TcpTimedWaitDelay", "MaxUserPort", "DefaultTTL", "Tcp1323Opts", "EnablePMTUDiscovery", "DisableTaskOffload", "EnableTCPChimney", "EnableRSS", "EnableDCA", "SackOpts", "GlobalMaxTcpWindowSize", "TcpWindowSize", "KeepAliveTime"]),
+            RegistryDeleteDwords("system.power-throttling-default", "Restore Windows power throttling policy",
+                "Removes the system-wide PowerThrottlingOff override and returns scheduling decisions to Windows.",
+                "Power", RiskLevel.Medium, true, RegistryHive.LocalMachine,
+                @"SYSTEM\CurrentControlSet\Control\Power\PowerThrottling", ["PowerThrottlingOff"])
         };
         _actions = actions.ToDictionary(x => x.Id, StringComparer.OrdinalIgnoreCase);
     }
@@ -157,6 +174,57 @@ public sealed class OptimizationCatalog
         bool Verify() => ReadCurrent() == desiredValue;
 
         return new(id, name, description, category, risk, restart, exportPath, Inspect, Capture, Apply, Restore, Verify);
+    }
+
+    private static OptimizationAction RegistryDeleteDwords(string id, string name, string description, string category,
+        RiskLevel risk, bool restart, RegistryHive hive, string path, string[] valueNames)
+    {
+        var exportPath = $"{(hive == RegistryHive.CurrentUser ? "HKCU" : "HKLM")}\\{path}";
+
+        Dictionary<string, int?> ReadCurrent()
+        {
+            using var key = RegistryKey.OpenBaseKey(hive, RegistryView.Registry64).OpenSubKey(path);
+            return valueNames.ToDictionary(valueName => valueName, valueName =>
+            {
+                var value = key?.GetValue(valueName);
+                return value is null ? (int?)null : Convert.ToInt32(value);
+            }, StringComparer.OrdinalIgnoreCase);
+        }
+
+        ActionAvailability Inspect()
+        {
+            try
+            {
+                var configured = ReadCurrent().Where(item => item.Value is not null).ToList();
+                return configured.Count == 0
+                    ? ActionAvailability.Applied("No manual overrides")
+                    : ActionAvailability.Ready(string.Join(", ", configured.Select(item => $"{item.Key}={item.Value}")));
+            }
+            catch (Exception exception) { return ActionAvailability.Unavailable(exception.Message); }
+        }
+
+        string Capture() => JsonSerializer.Serialize(ReadCurrent());
+
+        void Apply()
+        {
+            using var key = RegistryKey.OpenBaseKey(hive, RegistryView.Registry64).OpenSubKey(path, true)
+                ?? throw new InvalidOperationException($"Cannot open {exportPath}.");
+            foreach (var valueName in valueNames) key.DeleteValue(valueName, false);
+        }
+
+        void Restore(string state)
+        {
+            var snapshot = JsonSerializer.Deserialize<Dictionary<string, int?>>(state)
+                ?? throw new InvalidOperationException("The Registry snapshot is invalid.");
+            using var key = RegistryKey.OpenBaseKey(hive, RegistryView.Registry64).CreateSubKey(path, true)
+                ?? throw new InvalidOperationException($"Cannot open {exportPath}.");
+            foreach (var (valueName, value) in snapshot)
+                if (value is not null) key.SetValue(valueName, value.Value, RegistryValueKind.DWord);
+                else key.DeleteValue(valueName, false);
+        }
+
+        return new(id, name, description, category, risk, restart, exportPath,
+            Inspect, Capture, Apply, Restore, () => ReadCurrent().Values.All(value => value is null));
     }
 
     private static OptimizationAction RegistryDeleteDword(string id, string name, string description, string category,

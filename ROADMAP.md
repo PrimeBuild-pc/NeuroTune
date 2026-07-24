@@ -40,7 +40,19 @@ NeuroTune is developed safety-first: a feature is not considered complete merely
 - [ ] Improve offline behavior and provider-specific error guidance
 - [ ] Add restore-point and rollback integration tests in disposable VMs
 
-## v0.5 — Distribution Beta
+## v0.5 — Deep Inventory and Conflict Graph
+
+- [x] Expand the versioned evidence bundle across Registry, BCD, drivers, devices, software, filters, firmware, memory, and runtime state
+- [x] Stream real scan-phase progress from the local agent to the Tauri interface
+- [x] Add a deterministic conflict graph with exact setting/value pairs, confidence, objective impact, and rationale
+- [x] Add native SMBIOS/WMI/CPUID firmware and DIMM inspection with explicitly labelled XMP/DOCP/EXPO heuristics
+- [x] Let users review AI-recommended, conflict-related, or all supported reversible actions regardless of risk
+- [x] Add reversible high-risk repair actions for TDR and legacy global TCP overrides
+- [ ] Add cancellation for an in-progress probe phase
+- [ ] Add a reviewed optional PawnIO/LibreHardwareMonitor telemetry adapter without silent driver installation ([#3](../../issues/3))
+- [ ] Add trustworthy offline component baselines before claiming factory-vs-current clock, timing, or voltage differences
+
+## v0.6 — Distribution Beta
 
 - [ ] Signed MSIX or installer with clean uninstall behavior
 - [ ] Code-signed binaries and documented checksum verification

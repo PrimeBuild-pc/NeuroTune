@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { listen } from '@tauri-apps/api/event';
 import {
   Activity, Bot, Check, ChevronRight, CircleGauge, Cloud, Cpu, Database,
   HardDrive, KeyRound, Laptop, ListChecks, LoaderCircle, LockKeyhole, LogIn,
@@ -8,7 +9,7 @@ import {
 import { agent } from './agent';
 import { applyTheme, loadThemePreference } from './theme';
 import type {
-  Diagnosis, OperationManifest, OptimizationAction, ProviderKind, ProviderSettings,
+  ConflictPattern, Diagnosis, OperationManifest, OptimizationAction, ProviderKind, ProviderSettings,
   ScanResult, ThemePreference, TuningGoals,
 } from './types';
 import './App.css';
@@ -59,6 +60,10 @@ function App() {
   const [notice, setNotice] = useState<{ tone: 'success' | 'danger' | 'info'; text: string }>();
 
   useEffect(() => applyTheme(theme), [theme]);
+  useEffect(() => {
+    const unlisten = listen<string>('agent-progress', event => setBusy(`Deep scan · ${event.payload}`));
+    return () => { void unlisten.then(stop => stop()); };
+  }, []);
   useEffect(() => {
     Promise.all([
       agent<{ settings: ProviderSettings; hasCredential: boolean }>('get-state'),
@@ -138,7 +143,7 @@ function App() {
   }
 
   async function scanSystem() {
-    const result = await run('Profiling Windows locally…', () => agent<ScanResult>('scan'));
+    const result = await run('Deep scan · starting hardware inventory…', () => agent<ScanResult>('scan'));
     if (result) {
       setScan(result);
       setActions(result.actions);
@@ -151,18 +156,23 @@ function App() {
 
   async function diagnose() {
     if (!scan) return scanSystem();
-    const result = await run('Requesting a structured diagnosis…', () =>
+    const conflicts = await run('Building the local objective-aware conflict graph…', () =>
+      agent<ConflictPattern[]>('analyze-local', { profile: scan.profile, goals }));
+    if (!conflicts) return;
+    const result = await run('AI synthesis · checking every claim against local evidence…', () =>
       agent<Diagnosis>('diagnose', { profile: scan.profile, goals }));
-    if (result) {
-      setDiagnosis(result);
-      setSelected(new Set());
-      setPage('review');
-    }
+    setDiagnosis(result ?? {
+      summary: 'The provider diagnosis failed, but the deterministic local conflict graph is still available.',
+      findings: [], recommendations: [], conflicts,
+      consentQuestion: 'Review the local conflicts and choose any supported reversible actions to apply.',
+    });
+    setSelected(new Set());
+    setPage('review');
   }
 
   function applyPreset(mode: 'all' | 'safe' | 'none') {
     const ids = actions.filter(action => {
-      if (!action.availability.canApply || !recommendations.has(action.id)) return false;
+      if (!action.availability.canApply) return false;
       if (mode === 'all') return true;
       if (mode === 'safe') return action.risk === 'low';
       return false;
@@ -171,7 +181,9 @@ function App() {
   }
 
   async function applyChanges() {
-    if (!selected.size || !window.confirm(`Apply ${selected.size} selected changes after creating a verified restore point?`)) return;
+    const highRisk = actions.filter(action => selected.has(action.id) && action.risk === 'high').length;
+    const warning = highRisk ? `\n\n${highRisk} selected action(s) are HIGH RISK. Review their evidence and rollback notes carefully.` : '';
+    if (!selected.size || !window.confirm(`Apply ${selected.size} selected changes after creating a verified restore point?${warning}`)) return;
     const result = await run('Creating backups and applying verified changes…', () =>
       agent<OperationManifest>('apply', { actionIds: [...selected] }));
     if (result) {
@@ -203,7 +215,7 @@ function App() {
         </nav>
         <div className="sidebar-foot">
           <div className="security-chip"><ShieldCheck size={16}/><span>Allowlisted actions</span></div>
-          <small>v0.4.0-alpha.1</small>
+          <small>v0.5.0-alpha.1</small>
         </div>
       </aside>
 
@@ -270,13 +282,25 @@ function ScanPage({ scan, diagnosis, goals, onGoals, onScan, onDiagnose }: { sca
     { id: 'networkLatency', label: 'Network', detail: 'Focus on measured connection conditions' },
     { id: 'efficiency', label: 'Efficiency', detail: 'Protect battery life and thermals' },
   ];
-  return <div className="stack-lg"><div className="page-actions"><div><span className="eyebrow">Local profile</span><h2>Set the target before diagnosis</h2></div><div className="button-row"><button className="secondary" onClick={onScan}><RefreshCw size={16}/>Scan again</button><button className="primary" onClick={onDiagnose}><Bot size={16}/>Run AI diagnosis</button></div></div><div className="metric-grid four"><Metric icon={Monitor} label="Windows" value={scan.profile.operatingSystem}/><Metric icon={Cpu} label="Processor" value={scan.profile.cpu}/><Metric icon={Database} label="Memory" value={scan.profile.memory}/><Metric icon={HardDrive} label="Registry checks" value={`${Object.keys(scan.profile.performanceRegistry).length} inspected`}/></div><section className="section-card goals-card"><div className="section-heading"><div><span className="eyebrow">Optimization intent</span><h3>What matters on this PC?</h3></div><Target size={22}/></div><div className="priority-options">{priorities.map(item => <button key={item.id} aria-pressed={goals.priority === item.id} className={goals.priority === item.id ? 'priority-option active' : 'priority-option'} onClick={() => onGoals({ ...goals, priority: item.id })}><strong>{item.label}</strong><small>{item.detail}</small></button>)}</div><div className="goal-fields"><label><span>Games or workloads</span><input maxLength={1200} defaultValue={goals.games.join(', ')} placeholder="Example: Valorant, Cyberpunk 2077" onChange={event => onGoals({ ...goals, games: event.target.value.split(',').map(x => x.trim()).filter(Boolean) })}/><small>Names provide context only; NeuroTune will not assume engine-specific behavior.</small></label><label><span>Anything else to preserve or improve?</span><textarea maxLength={1000} value={goals.notes} placeholder="Example: keep power use reasonable; Wi-Fi only" onChange={event => onGoals({ ...goals, notes: event.target.value })}/></label></div>{scan.profile.policyConflicts.length > 0 && <div className="local-observations"><strong>Local conflicts and manual overrides</strong><ul>{scan.profile.policyConflicts.map(item => <li key={item}>{item}</li>)}</ul></div>}</section><div className="split-panels"><section className="section-card"><div className="section-heading"><div><span className="eyebrow">Provider payload</span><h3>Sanitized profile</h3></div><span className="status-pill good">Reviewable</span></div><pre className="profile-json">{scan.sanitizedProfile}</pre></section><section className="section-card"><div className="section-heading"><div><span className="eyebrow">Model output</span><h3>Diagnosis</h3></div></div>{diagnosis ? <DiagnosisView diagnosis={diagnosis}/> : <div className="panel-placeholder"><Bot size={30}/><p>No data has been sent yet.</p><span>Your goals and this reviewed profile are sent only when you run diagnosis.</span></div>}</section></div></div>;
+  return <div className="stack-lg"><div className="page-actions"><div><span className="eyebrow">Local profile</span><h2>Set the target before diagnosis</h2></div><div className="button-row"><button className="secondary" onClick={onScan}><RefreshCw size={16}/>Scan again</button><button className="primary" onClick={onDiagnose}><Bot size={16}/>Run AI diagnosis</button></div></div><div className="metric-grid four"><Metric icon={Monitor} label="Windows" value={scan.profile.operatingSystem}/><Metric icon={Cpu} label="Processor" value={scan.profile.cpu}/><Metric icon={Database} label="Memory" value={scan.profile.memory}/><Metric icon={HardDrive} label="Registry checks" value={`${Object.keys(scan.profile.performanceRegistry).length} inspected`}/></div><section className="scan-summary"><div className="scan-phases">{scan.profile.scanPhases.map(phase => <article key={phase.name}><Check size={15}/><div><strong>{phase.name}</strong><small>{phase.factsCollected} facts · {(phase.durationMilliseconds / 1000).toFixed(1)} s</small></div></article>)}</div><div className="inventory-counts"><span><strong>{scan.profile.installedSoftware.length}</strong> applications</span><span><strong>{scan.profile.relevantDrivers.length}</strong> relevant drivers</span><span><strong>{scan.profile.softwareSignals.length}</strong> tuning/overlay signals</span><span><strong>{scan.profile.deviceIssues.length}</strong> device issues</span></div></section><section className="section-card goals-card"><div className="section-heading"><div><span className="eyebrow">Optimization intent</span><h3>What matters on this PC?</h3></div><Target size={22}/></div><div className="priority-options">{priorities.map(item => <button key={item.id} aria-pressed={goals.priority === item.id} className={goals.priority === item.id ? 'priority-option active' : 'priority-option'} onClick={() => onGoals({ ...goals, priority: item.id })}><strong>{item.label}</strong><small>{item.detail}</small></button>)}</div><div className="goal-fields"><label><span>Games or workloads</span><input maxLength={1200} defaultValue={goals.games.join(', ')} placeholder="Example: Valorant, Cyberpunk 2077" onChange={event => onGoals({ ...goals, games: event.target.value.split(',').map(x => x.trim()).filter(Boolean) })}/><small>Names provide context only; NeuroTune will not assume engine-specific behavior.</small></label><label><span>Anything else to preserve or improve?</span><textarea maxLength={1000} value={goals.notes} placeholder="Example: keep power use reasonable; Wi-Fi only" onChange={event => onGoals({ ...goals, notes: event.target.value })}/></label></div>{scan.profile.policyConflicts.length > 0 && <div className="local-observations"><strong>Local conflicts and manual overrides</strong><ul>{scan.profile.policyConflicts.map(item => <li key={item}>{item}</li>)}</ul></div>}</section><div className="split-panels"><section className="section-card"><div className="section-heading"><div><span className="eyebrow">Provider payload</span><h3>Sanitized profile</h3></div><span className="status-pill good">Reviewable</span></div><pre className="profile-json">{scan.sanitizedProfile}</pre></section><section className="section-card"><div className="section-heading"><div><span className="eyebrow">Model output</span><h3>Diagnosis</h3></div></div>{diagnosis ? <DiagnosisView diagnosis={diagnosis}/> : <div className="panel-placeholder"><Bot size={30}/><p>No data has been sent yet.</p><span>Your goals and this reviewed profile are sent only when you run diagnosis.</span></div>}</section></div></div>;
 }
 
 function ReviewPage({ diagnosis, actions, recommendations, selected, onToggle, onPreset, onApply }: { diagnosis?: Diagnosis; actions: OptimizationAction[]; recommendations: Map<string, string>; selected: Set<string>; onToggle: (id: string) => void; onPreset: (mode: 'all' | 'safe' | 'none') => void; onApply: () => void }) {
+  const [view, setView] = useState<'recommended' | 'conflicts' | 'all'>('recommended');
   if (!diagnosis) return <EmptyState icon={Bot} title="No diagnosis yet" text="Scan the PC, choose your priorities, and ask the configured model for an evidence-backed diagnosis."/>;
-  const proposed = actions.filter(action => recommendations.has(action.id));
-  return <div className="stack-lg report-root"><div className="page-actions"><div><span className="eyebrow">Dynamic plan</span><h2>Only fixes proposed for this diagnosis</h2></div><div className="button-row"><button className="secondary" onClick={() => window.print()}><Printer size={16}/>Print report</button><button className="ghost" onClick={() => onPreset('safe')}>Select safe only</button><button className="ghost" onClick={() => onPreset('all')}>Select all</button><button className="ghost" onClick={() => onPreset('none')}>Clear</button></div></div><section className="section-card report-summary"><div className="section-heading"><div><span className="eyebrow">Evidence-backed report</span><h3>AI diagnosis</h3></div><span className="status-pill good">No changes made</span></div><DiagnosisView diagnosis={diagnosis}/></section>{proposed.length > 0 ? <div className="action-list">{proposed.map(action => { const reason = recommendations.get(action.id); return <button key={action.id} aria-pressed={selected.has(action.id)} className={`action-card ${selected.has(action.id) ? 'selected' : ''} ${!action.availability.canApply ? 'disabled' : ''}`} disabled={!action.availability.canApply} onClick={() => onToggle(action.id)}><span className="check-box">{selected.has(action.id) && <Check size={15}/>}</span><div className="action-main"><div><strong>{action.name}</strong>{action.requiresRestart && <span className="tag">Restart</span>}</div><p>{action.description}</p><small>{reason}</small></div><div className="action-meta"><span className={`risk ${action.risk}`}>{action.risk} risk</span><strong>{action.availability.status}</strong><small>Current: {action.availability.currentValue}</small></div></button>; })}</div> : <section className="section-card no-fixes"><ShieldCheck size={22}/><div><strong>No allowlisted fix is justified by this diagnosis.</strong><p>The report remains useful; NeuroTune will not show unrelated catalog entries.</p></div></section>}<section className="consent-card"><Bot size={20}/><div><span className="eyebrow">Model request</span><strong>{diagnosis.consentQuestion}</strong><small>The model cannot execute commands. Your selection is mapped to compiled, reversible actions only.</small></div></section><div className="sticky-apply"><div><strong>{selected.size} changes selected</strong><span>A verified restore point and Registry exports are mandatory.</span></div><button className="primary" disabled={!selected.size} onClick={onApply}><ShieldCheck size={17}/>Back up & apply selected</button></div></div>;
+  const conflictActionIds = new Set(diagnosis.conflicts.flatMap(conflict => conflict.suggestedActionIds));
+  const visible = actions.filter(action => view === 'all' || (view === 'recommended' ? recommendations.has(action.id) : conflictActionIds.has(action.id)));
+  const selectedHighRisk = actions.filter(action => selected.has(action.id) && action.risk === 'high').length;
+  return <div className="stack-lg report-root">
+    <div className="page-actions"><div><span className="eyebrow">User-controlled plan</span><h2>Evidence guides the plan; you decide</h2></div><div className="button-row"><button className="secondary" onClick={() => window.print()}><Printer size={16}/>Print report</button><button className="ghost" onClick={() => onPreset('safe')}>Select safe only</button><button className="ghost" onClick={() => onPreset('all')}>Select all supported</button><button className="ghost" onClick={() => onPreset('none')}>Clear</button></div></div>
+    <section className="section-card report-summary"><div className="section-heading"><div><span className="eyebrow">Evidence-backed report</span><h3>AI diagnosis</h3></div><span className="status-pill good">No changes made</span></div><DiagnosisView diagnosis={diagnosis}/></section>
+    {diagnosis.conflicts.length > 0 && <ConflictView conflicts={diagnosis.conflicts}/>}
+    <div className="plan-tabs" role="tablist" aria-label="Action visibility"><button role="tab" aria-selected={view === 'recommended'} className={view === 'recommended' ? 'active' : ''} onClick={() => setView('recommended')}>AI recommended ({recommendations.size})</button><button role="tab" aria-selected={view === 'conflicts'} className={view === 'conflicts' ? 'active' : ''} onClick={() => setView('conflicts')}>Conflict fixes ({conflictActionIds.size})</button><button role="tab" aria-selected={view === 'all'} className={view === 'all' ? 'active' : ''} onClick={() => setView('all')}>All supported ({actions.length})</button></div>
+    {visible.length > 0 ? <div className="action-list">{visible.map(action => { const related = diagnosis.conflicts.filter(conflict => conflict.suggestedActionIds.includes(action.id)).map(conflict => conflict.title); const reason = recommendations.get(action.id) ?? (related.join(' · ') || 'Supported reversible action; not selected by the current AI diagnosis.'); return <button key={action.id} aria-pressed={selected.has(action.id)} className={`action-card ${selected.has(action.id) ? 'selected' : ''} ${!action.availability.canApply ? 'disabled' : ''}`} disabled={!action.availability.canApply} onClick={() => onToggle(action.id)}><span className="check-box">{selected.has(action.id) && <Check size={15}/>}</span><div className="action-main"><div><strong>{action.name}</strong>{action.requiresRestart && <span className="tag">Restart</span>}</div><p>{action.description}</p><small>{reason}</small></div><div className="action-meta"><span className={`risk ${action.risk}`}>{action.risk} risk</span><strong>{action.availability.status}</strong><small>Current: {action.availability.currentValue}</small></div></button>; })}</div> : <section className="section-card no-fixes"><ShieldCheck size={22}/><div><strong>No supported action in this view.</strong><p>The conflict report remains visible; unsupported arbitrary writes are not generated.</p></div></section>}
+    {selectedHighRisk > 0 && <div className="high-risk-warning" role="alert"><ShieldCheck size={19}/><span><strong>{selectedHighRisk} high-risk action(s) selected</strong><small>They remain selectable, but require an additional explicit confirmation before backup and execution.</small></span></div>}
+    <section className="consent-card"><Bot size={20}/><div><span className="eyebrow">Model request</span><strong>{diagnosis.consentQuestion}</strong><small>The model cannot execute commands. Your selection is mapped to compiled, reversible actions only.</small></div></section>
+    <div className="sticky-apply"><div><strong>{selected.size} changes selected</strong><span>A verified restore point and Registry exports are mandatory.</span></div><button className="primary" disabled={!selected.size} onClick={onApply}><ShieldCheck size={17}/>Back up & apply selected</button></div>
+  </div>;
 }
 
 function ActivityPage({ history, onRefresh, onRollback }: { history: OperationManifest[]; onRefresh: () => void; onRollback: (id: string) => void }) {
@@ -291,6 +315,7 @@ function Metric({ icon: Icon, label, value, tone }: { icon: typeof Bot; label: s
 function Step({ number, title, text }: { number: string; title: string; text: string }) { return <article><span>{number}</span><strong>{title}</strong><p>{text}</p></article>; }
 function EmptyState({ icon: Icon, title, text, action, onAction }: { icon: typeof Activity; title: string; text: string; action?: string; onAction?: () => void }) { return <div className="empty-state"><div><Icon size={30}/></div><h2>{title}</h2><p>{text}</p>{action && <button className="primary" onClick={onAction}>{action}<ChevronRight size={17}/></button>}</div>; }
 function DiagnosisView({ diagnosis }: { diagnosis: Diagnosis }) { return <div className="diagnosis"><p>{diagnosis.summary}</p>{diagnosis.findings.length > 0 && <><h4>Verified findings</h4><div className="finding-list">{diagnosis.findings.map(item => <article key={item.evidenceId}><strong>{item.title}</strong><code>{item.evidenceId}: {item.currentValue}</code><p>{item.assessment}</p></article>)}</div></>}{diagnosis.recommendations.length > 0 && <><h4>Allowlisted recommendations</h4><ul>{diagnosis.recommendations.map(item => <li key={item.actionId}>{item.reason}</li>)}</ul></>}</div>; }
+function ConflictView({ conflicts }: { conflicts: ConflictPattern[] }) { return <section className="section-card conflict-section"><div className="section-heading"><div><span className="eyebrow">Local conflict graph</span><h3>{conflicts.length} objective-aware relationships</h3></div><span className="status-pill">Deterministic rules</span></div><div className="conflict-list">{conflicts.map(conflict => <article key={conflict.id} className={`conflict-card ${conflict.kind}`}><div className="conflict-title"><div><span>{conflict.kind.replace(/([A-Z])/g, ' $1')}</span><strong>{conflict.title}</strong></div><small>{conflict.confidence} confidence</small></div><p>{conflict.explanation}</p><p><strong>Why it may be counterproductive:</strong> {conflict.whyCounterproductive}</p><div className="conflict-evidence">{Object.entries(conflict.evidence).map(([id, value]) => <code key={id}>{id} = {value}</code>)}</div><small>Objectives: {conflict.objectives.join(', ')}</small></article>)}</div></section>; }
 function ThemeOption({ active, icon: Icon, title, text, onClick }: { active: boolean; icon: typeof Sun; title: string; text: string; onClick: () => void }) { return <button className={active ? 'theme-option active' : 'theme-option'} onClick={onClick}><Icon size={21}/><span><strong>{title}</strong><small>{text}</small></span>{active && <Check size={17}/>}</button>; }
 function toggle(current: Set<string>, id: string) { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; }
 function pageTitle(page: Page) { return ({ overview: 'System control center', provider: 'Model connection', scan: 'Local system profile', review: 'Safe optimization plan', activity: 'Recovery and history', settings: 'Application preferences' } satisfies Record<Page, string>)[page]; }

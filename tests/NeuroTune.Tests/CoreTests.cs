@@ -94,6 +94,22 @@ public sealed class CoreTests
     }
 
     [TestMethod]
+    public void Conflict_graph_names_both_sides_and_their_values()
+    {
+        var profile = new SystemProfile();
+        profile.PerformanceRegistry[@"HKCU\Software\Microsoft\GameBar\AutoGameModeEnabled"] = "1";
+        profile.PerformanceRegistry[@"HKCU\Software\Microsoft\GameBar\AllowAutoGameMode"] = "0";
+
+        var conflict = ConflictAnalyzer.Analyze(profile, new TuningGoals { Priority = OptimizationPriority.Fps })
+            .Single(x => x.Id == "game-mode-policy");
+
+        Assert.HasCount(2, conflict.Evidence);
+        Assert.AreEqual("1", conflict.Evidence[@"registry:HKCU\Software\Microsoft\GameBar\AutoGameModeEnabled"]);
+        Assert.AreEqual("0", conflict.Evidence[@"registry:HKCU\Software\Microsoft\GameBar\AllowAutoGameMode"]);
+        Assert.Contains(OptimizationPriority.Fps, conflict.Objectives);
+    }
+
+    [TestMethod]
     public void Tuning_goals_are_trimmed_deduplicated_and_bounded()
     {
         var goals = new TuningGoals { Games = [" Valorant ", "valorant", ""] };
@@ -139,8 +155,19 @@ public sealed class CoreTests
         Assert.IsFalse(string.IsNullOrWhiteSpace(profile.OperatingSystem));
         Assert.IsNotNull(profile.GamingSettings);
         Assert.IsNotNull(profile.NetworkSettings);
-        Assert.IsGreaterThan(10, profile.PerformanceRegistry.Count);
+        Assert.IsGreaterThan(75, profile.PerformanceRegistry.Count);
         Assert.IsNotNull(profile.HardwareCapabilities);
+        Assert.IsNotNull(profile.FirmwareAndMemory);
+        Assert.IsNotNull(profile.BootConfiguration);
+        Assert.IsNotNull(profile.InstalledSoftware);
+        Assert.IsNotNull(profile.RelevantDrivers);
+        Assert.HasCount(5, profile.ScanPhases);
         Assert.IsNotNull(profile.PolicyConflicts);
+
+        var facts = LlmClient.BuildEvidenceFacts(profile);
+        var catalog = new OptimizationCatalog();
+        var conflicts = ConflictAnalyzer.Analyze(profile, new TuningGoals { Priority = OptimizationPriority.Fps });
+        Assert.IsTrue(conflicts.SelectMany(x => x.Evidence).All(item => facts[item.Key] == item.Value));
+        Assert.IsTrue(conflicts.SelectMany(x => x.SuggestedActionIds).All(catalog.Contains));
     }
 }

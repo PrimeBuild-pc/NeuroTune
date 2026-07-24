@@ -1,10 +1,11 @@
 use serde_json::Value;
 use std::{
-    io::Write,
+    io::{BufRead, BufReader, Write},
     path::PathBuf,
     process::{Command, Stdio},
+    thread,
 };
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 const COMMANDS: &[&str] = &[
     "get-state",
@@ -13,6 +14,7 @@ const COMMANDS: &[&str] = &[
     "oauth-openrouter",
     "models",
     "scan",
+    "analyze-local",
     "diagnose",
     "actions",
     "apply",
@@ -51,13 +53,24 @@ fn run_agent(app: &AppHandle, command: &str, payload: Option<Value>) -> Result<V
             .write_all(payload.unwrap_or(Value::Null).to_string().as_bytes())
             .map_err(|error| format!("Could not send the agent request: {error}"))?;
     }
+    let stderr = child.stderr.take();
+    let progress_app = app.clone();
+    let progress = thread::spawn(move || {
+        let mut messages = Vec::new();
+        if let Some(stderr) = stderr {
+            for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+                let _ = progress_app.emit("agent-progress", &line);
+                messages.push(line);
+            }
+        }
+        messages.join("\n")
+    });
     let output = child
         .wait_with_output()
         .map_err(|error| error.to_string())?;
-    let response: Value = serde_json::from_slice(&output.stdout).map_err(|_| {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        format!("The NeuroTune agent returned an invalid response. {stderr}")
-    })?;
+    let stderr = progress.join().unwrap_or_default();
+    let response: Value = serde_json::from_slice(&output.stdout)
+        .map_err(|_| format!("The NeuroTune agent returned an invalid response. {stderr}"))?;
     if response.get("ok").and_then(Value::as_bool) == Some(true) {
         Ok(response.get("data").cloned().unwrap_or(Value::Null))
     } else {

@@ -204,6 +204,34 @@ button.ghost { border: 1px solid transparent; background: transparent; color: va
 .goal-fields label small { display: block; margin-top: 6px; color: var(--muted); font-size: 10px; }
 .local-observations { padding: 13px 15px; border: 1px solid var(--warning-border); border-radius: 10px; background: var(--warning-soft); color: var(--warning-text); font-size: 12px; }
 .local-observations ul { margin: 8px 0 0; padding-left: 18px; line-height: 1.55; }
+.scan-summary { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; }
+.scan-phases, .inventory-counts { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.scan-phases { grid-template-columns: repeat(2, 1fr); }
+.scan-phases article { display: flex; align-items: flex-start; gap: 8px; }
+.scan-phases svg { color: var(--success); }
+.scan-phases strong, .scan-phases small { display: block; }
+.scan-phases strong { font-size: 11px; }
+.scan-phases small { margin-top: 2px; color: var(--muted); font-size: 9px; }
+.inventory-counts { grid-template-columns: repeat(2, 1fr); }
+.inventory-counts span { color: var(--muted); font-size: 10px; }
+.inventory-counts strong { display: block; margin-bottom: 3px; color: var(--text); font-size: 18px; }
+.plan-tabs { display: flex; gap: 7px; padding: 5px; width: fit-content; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+.plan-tabs button { padding: 8px 11px; border: 0; border-radius: 7px; background: transparent; color: var(--muted-strong); cursor: pointer; font-size: 11px; font-weight: 700; }
+.plan-tabs button.active { background: var(--accent-soft); color: var(--accent-text); }
+.conflict-section { display: grid; gap: 16px; }
+.conflict-list { display: grid; gap: 9px; }
+.conflict-card { padding: 14px; border: 1px solid var(--border); border-left: 3px solid var(--warning); border-radius: 10px; background: var(--surface-raised); }
+.conflict-card.confirmed { border-left-color: var(--danger-text); }
+.conflict-card.missingEvidence { border-left-color: var(--muted); }
+.conflict-title { display: flex; justify-content: space-between; gap: 16px; }
+.conflict-title span { display: block; margin-bottom: 4px; color: var(--warning-text); font-size: 9px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.conflict-title > small, .conflict-card > small { color: var(--muted); font-size: 9px; }
+.conflict-card > p { margin: 8px 0 0; color: var(--muted-strong); font-size: 11px; line-height: 1.5; }
+.conflict-evidence { display: grid; gap: 4px; margin: 10px 0; }
+.conflict-evidence code { overflow-wrap: anywhere; color: var(--accent-text); font: 9px/1.4 ui-monospace, Consolas, monospace; }
+.high-risk-warning { display: flex; align-items: flex-start; gap: 10px; padding: 13px; border: 1px solid var(--danger-border); border-radius: 10px; background: var(--danger-soft); color: var(--danger-text); }
+.high-risk-warning strong, .high-risk-warning small { display: block; }
+.high-risk-warning small { margin-top: 3px; font-size: 10px; }
 .no-fixes, .consent-card { display: flex; align-items: flex-start; gap: 12px; }
 .no-fixes svg, .consent-card svg { flex: 0 0 auto; color: var(--accent-text); }
 .no-fixes p { margin: 4px 0 0; color: var(--muted-strong); font-size: 12px; }
@@ -213,10 +241,10 @@ button.ghost { border: 1px solid transparent; background: transparent; color: va
 .consent-card small { color: var(--muted-strong); font-size: 11px; }
 
 @media print {
-  .sidebar, .topbar, .notice, .busy-bar, .recovery-banner, .page-actions, .sticky-apply, .consent-card { display: none !important; }
+  .sidebar, .topbar, .notice, .busy-bar, .recovery-banner, .page-actions, .sticky-apply, .consent-card, .plan-tabs, .high-risk-warning { display: none !important; }
   .app-shell { display: block; background: #fff; color: #111; }
   .page-content { max-width: none; padding: 0; }
-  .report-root > :not(.report-summary):not(.action-list):not(.no-fixes) { display: none !important; }
+  .report-root > :not(.report-summary):not(.conflict-section):not(.action-list):not(.no-fixes) { display: none !important; }
   .section-card, .action-card { break-inside: avoid; border-color: #bbb; box-shadow: none; background: #fff; color: #111; }
   .diagnosis, .diagnosis > p, .action-main p, .action-main small { color: #222; }
 }
@@ -229,4 +257,5 @@ button.ghost { border: 1px solid transparent; background: transparent; color: va
   .metric-grid.four { grid-template-columns: repeat(2, 1fr); }
   .priority-options { grid-template-columns: repeat(3, 1fr); }
   .goal-fields { grid-template-columns: 1fr; }
+  .scan-summary { grid-template-columns: 1fr; }
 }
