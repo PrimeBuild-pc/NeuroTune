@@ -1,0 +1,88 @@
+:root,
+:root[data-theme='light'] {
+  font-family: Inter, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  color: #111827;
+  background: #f4f6f9;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  --bg: #f4f6f9;
+  --sidebar: #ffffff;
+  --surface: #ffffff;
+  --surface-raised: #f7f8fb;
+  --input: #ffffff;
+  --disabled: #eef1f5;
+  --hover: #edf0f5;
+  --text: #111827;
+  --muted-strong: #4b5b70;
+  --muted: #65748a;
+  --border: #d8dee8;
+  --border-strong: #adb8c7;
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
+  --accent-text: #4338ca;
+  --accent-contrast: #ffffff;
+  --accent-soft: #eeedff;
+  --accent-border: #aaa5f5;
+  --accent-shadow: rgba(79, 70, 229, .18);
+  --success: #137a54;
+  --success-text: #0c6544;
+  --success-soft: #e7f7f0;
+  --success-border: #84cdb1;
+  --warning: #a35b00;
+  --warning-text: #7a4300;
+  --warning-soft: #fff3dc;
+  --warning-border: #dfb86f;
+  --danger-text: #a51d38;
+  --danger-soft: #fdecef;
+  --danger-border: #e7a2af;
+  --focus: #2563eb;
+  --code-bg: #f7f8fb;
+  --code-text: #26354a;
+  --shadow: 0 16px 40px rgba(31, 43, 61, .10);
+  --shadow-subtle: 0 5px 18px rgba(31, 43, 61, .05);
+}
+
+:root[data-theme='dark'] {
+  color: #f4f7fb;
+  background: #0b0e14;
+  --bg: #0b0e14;
+  --sidebar: #10141c;
+  --surface: #141a24;
+  --surface-raised: #1a2230;
+  --input: #0f141d;
+  --disabled: #1b222d;
+  --hover: #202938;
+  --text: #f4f7fb;
+  --muted-strong: #bdc7d5;
+  --muted: #96a5b8;
+  --border: #2d3747;
+  --border-strong: #526075;
+  --accent: #9388ff;
+  --accent-hover: #a79eff;
+  --accent-text: #c5bfff;
+  --accent-contrast: #10121a;
+  --accent-soft: #272344;
+  --accent-border: #655da7;
+  --accent-shadow: rgba(110, 93, 251, .24);
+  --success: #43d29a;
+  --success-text: #79e5bb;
+  --success-soft: #15372e;
+  --success-border: #2d775e;
+  --warning: #f1b24b;
+  --warning-text: #ffd58a;
+  --warning-soft: #3b2d17;
+  --warning-border: #785c29;
+  --danger-text: #ff9eb0;
+  --danger-soft: #421e28;
+  --danger-border: #834052;
+  --focus: #8ab4ff;
+  --code-bg: #0c1119;
+  --code-text: #d8e1ee;
+  --shadow: 0 18px 46px rgba(0, 0, 0, .32);
+  --shadow-subtle: 0 6px 22px rgba(0, 0, 0, .18);
+}
+
+html, body, #root { min-width: 1000px; min-height: 100%; margin: 0; }
+body { min-height: 100vh; }
+::selection { background: var(--accent); color: var(--accent-contrast); }
+* { scrollbar-color: var(--border-strong) transparent; }

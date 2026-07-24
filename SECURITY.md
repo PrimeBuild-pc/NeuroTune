@@ -15,7 +15,9 @@ Include the affected version, reproduction steps, expected impact, and a contact
 - The engine stops before making changes if it cannot verify a new restore point or export required Registry keys.
 - Every action attempt is journaled before execution and verified after application.
 - Automatic and manual rollback restore actions in reverse order and verify the saved state.
-- API keys are protected with DPAPI `CurrentUser` and redacted from local logs.
+- API keys and OpenRouter-issued OAuth keys are protected with DPAPI `CurrentUser` and redacted from local logs.
+- OpenRouter browser authorization uses PKCE, a random CSRF state, a loopback callback, and a two-minute timeout.
+- Built-in provider endpoints cannot be edited. Custom remote providers require HTTPS, HTTP is loopback-only, and authenticated HTTP redirects are disabled.
 - The exact sanitized profile sent to the provider is visible in the application.
 
 ## Known Limitations

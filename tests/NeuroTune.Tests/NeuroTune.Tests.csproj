@@ -12,7 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\NeuroTune\NeuroTune.csproj" />
+    <ProjectReference Include="..\..\src\NeuroTune.Core\NeuroTune.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

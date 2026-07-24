@@ -17,12 +17,22 @@ NeuroTune addresses:
 - **Safety:** every change must be inspectable, compatible, verified, and reversible.
 - **Time:** profiling, diagnosis, review, execution, and recovery should form one guided workflow.
 
+## Application Architecture
+
+- Tauri 2 native desktop shell using a React and TypeScript web frontend.
+- System-synchronized light/dark appearance with persistent manual overrides.
+- Semantic design tokens and automated WCAG AA contrast checks.
+- Local .NET agent for Windows-only profiling, DPAPI, backup, execution, and rollback.
+
 ## Core Capabilities
 
 ### 1. BYOK Provider Configuration
 
-- Secure local storage for OpenRouter, OpenAI, and Anthropic API keys.
-- Provider connection testing and model selection.
+- Secure local storage for OpenRouter, OpenAI, Anthropic, DeepSeek, and custom-provider API keys.
+- Official browser authorization where a provider exposes a supported third-party flow.
+- Custom OpenAI-compatible and Anthropic-compatible HTTPS endpoints.
+- Loopback-only HTTP support for Ollama, LM Studio, vLLM, and other local model servers.
+- Provider connection testing and dynamic model selection.
 - No proprietary subscription or NeuroTune-hosted backend.
 
 ### 2. Automatic System Inspection

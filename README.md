@@ -7,11 +7,14 @@
   </p>
   <p>
     <a href="https://github.com/PrimeBuild-pc/NeuroTune/actions/workflows/build.yml"><img alt="Build" src="https://github.com/PrimeBuild-pc/NeuroTune/actions/workflows/build.yml/badge.svg"></a>
-    <img alt=".NET 8" src="https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet&logoColor=white">
+    <img alt="Tauri 2" src="https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white">
+    <img alt="React" src="https://img.shields.io/badge/React-19-087EA4?logo=react&logoColor=white">
     <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?logo=windows&logoColor=white">
     <img alt="Status: Alpha" src="https://img.shields.io/badge/status-Alpha-orange">
   </p>
 </div>
+
+<p align="center"><img src="docs/screenshots/neurotune-dark.png" alt="NeuroTune desktop overview in dark mode" width="100%"></p>
 
 <hr>
 
@@ -19,7 +22,7 @@
 
 <ol>
   <li>Collects a local Windows hardware and software profile.</li>
-  <li>Sends the sanitized profile to OpenRouter, OpenAI, or Anthropic using your API key.</li>
+  <li>Sends the sanitized profile to your selected cloud, custom, or local model endpoint.</li>
   <li>Accepts recommendations only when they reference an action in the built-in allowlist.</li>
   <li>Creates a System Restore point and Registry backups before changing anything.</li>
   <li>Applies verified optimizations and records the previous state for one-click rollback.</li>
@@ -66,7 +69,9 @@
 
 <ul>
   <li><strong>Zero-input system profiling:</strong> CPU, GPU, drivers, memory, storage, Windows build, power plan, gaming settings, network configuration, startup items, processes, and services.</li>
-  <li><strong>BYOK providers:</strong> OpenRouter, OpenAI, and Anthropic, with connection testing and dynamic model discovery.</li>
+  <li><strong>Flexible model connections:</strong> OpenRouter, OpenAI, Anthropic, DeepSeek, any OpenAI-compatible or Anthropic-compatible API, Ollama, LM Studio, and vLLM.</li>
+  <li><strong>Official browser authorization:</strong> OpenRouter OAuth with PKCE; providers without a supported third-party authorization flow continue to use API credentials.</li>
+  <li><strong>Native web UI:</strong> Tauri 2 and React with high-contrast light/dark themes, Windows appearance synchronization, and manual override.</li>
   <li><strong>Guided workflow:</strong> Setup, local scan, AI diagnosis, compatibility review, apply, measure, and restore.</li>
   <li><strong>Optimization presets:</strong> Safe / Balanced, Extreme Gaming, and Custom.</li>
   <li><strong>Current allowlisted actions:</strong> High Performance power plan, Game Mode, HAGS, Game DVR, and Windows visual effects.</li>
@@ -80,8 +85,8 @@
   <li>Windows 10 or Windows 11, x64</li>
   <li>Administrator privileges</li>
   <li>System Protection enabled on the Windows drive</li>
-  <li>An OpenRouter, OpenAI, or Anthropic API key</li>
-  <li>.NET 8 SDK only when building from source</li>
+  <li>A supported API credential, OpenRouter browser account, or local OpenAI-compatible model server</li>
+  <li>For source builds: .NET 8 SDK, Node.js 24, Rust stable, and the Visual Studio C++ desktop workload</li>
 </ul>
 
 <h2>Build from Source</h2>
@@ -93,16 +98,16 @@ cd NeuroTune
 dotnet restore
 dotnet build --configuration Release
 dotnet test --configuration Release
-dotnet run --project src/NeuroTune</code></pre>
+cd ui
+npm ci
+npm test
+npm run tauri dev</code></pre>
 
 <h3>Publish a Self-Contained Build</h3>
 
-<pre><code>dotnet publish src/NeuroTune/NeuroTune.csproj `
-  --configuration Release `
-  --runtime win-x64 `
-  --self-contained true `
-  -p:PublishSingleFile=true `
-  -p:IncludeNativeLibrariesForSelfExtract=true</code></pre>
+<pre><code>cd ui
+npm ci
+npm run tauri -- build --bundles nsis</code></pre>
 
 <p>The GitHub Actions workflow also produces a <code>NeuroTune-win-x64</code> artifact and SHA-256 checksum after every successful push to <code>main</code>.</p>
 
@@ -117,9 +122,10 @@ dotnet run --project src/NeuroTune</code></pre>
 <h2>Project Status</h2>
 
 <p>
-  NeuroTune is currently an <strong>alpha</strong> intended for controlled testing. Destructive cleanup,
-  arbitrary Registry tweaks, generic network “optimizations,” LLM-generated scripts, automatic updates,
-  an installer, and code signing remain excluded until they can be implemented and validated safely.
+  NeuroTune is currently an <strong>alpha</strong> intended for controlled testing. The project now produces an
+  unsigned NSIS installer; code signing and automatic updates remain blocked until a trusted distribution
+  certificate and update channel are available. Destructive cleanup, arbitrary Registry tweaks, generic network
+  “optimizations,” and LLM-generated scripts remain intentionally excluded.
 </p>
 
 <h2>Documentation</h2>
@@ -127,6 +133,8 @@ dotnet run --project src/NeuroTune</code></pre>
 <ul>
   <li><a href="ROADMAP.md">Product roadmap and release criteria</a></li>
   <li><a href="docs/IMPLEMENTATION_PLAN.md">Implementation plan</a></li>
+  <li><a href="docs/DESIGN_SYSTEM.md">Design system and theme contract</a></li>
+  <li><a href="docs/PROVIDERS.md">Cloud, custom, OAuth, and local provider guide</a></li>
   <li><a href="docs/TESTING.md">Alpha test guide</a></li>
   <li><a href=".claude/PROJECT_SPECIFICATION.md">Project specification</a></li>
   <li><a href="SECURITY.md">Security policy</a></li>

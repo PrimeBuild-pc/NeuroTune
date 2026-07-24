@@ -1,0 +1,50 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "NeuroTune",
+  "version": "0.3.0-alpha.1",
+  "identifier": "com.primebuild.neurotune",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run agent:build && npm run dev -- --port 1420",
+    "beforeBuildCommand": "npm run agent:publish && npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "NeuroTune",
+        "width": 1360,
+        "height": 860,
+        "minWidth": 1080,
+        "minHeight": 700,
+        "center": true,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true,
+        "transparent": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "publisher": "PrimeBuild",
+    "shortDescription": "AI-guided, reversible Windows optimization",
+    "longDescription": "NeuroTune profiles Windows and applies only allowlisted, compatible, and reversible optimizations.",
+    "resources": ["agent/NeuroTune.Agent.exe"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "perMachine"
+      }
+    }
+  }
+}

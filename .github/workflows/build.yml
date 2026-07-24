@@ -17,18 +17,36 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 8.0.x
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+
       - run: dotnet restore
       - run: dotnet build --configuration Release --no-restore
       - run: dotnet test --configuration Release --no-build
-      - name: Publish
+      - run: npm ci
+        working-directory: ui
+      - run: npm test
+        working-directory: ui
+      - run: npm run typecheck
+        working-directory: ui
+      - run: npm run lint
+        working-directory: ui
+      - name: Build Tauri installer
+        working-directory: ui
+        run: npm run tauri -- build --bundles nsis
+
+      - name: Create checksum
         shell: pwsh
         run: |
-          dotnet publish src/NeuroTune/NeuroTune.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o artifacts/NeuroTune
-          Compress-Archive -Path artifacts/NeuroTune/* -DestinationPath artifacts/NeuroTune-win-x64.zip
-          (Get-FileHash artifacts/NeuroTune-win-x64.zip -Algorithm SHA256).Hash | Set-Content artifacts/NeuroTune-win-x64.zip.sha256
+          $installer = Get-ChildItem ui/src-tauri/target/release/bundle/nsis/*.exe | Select-Object -First 1
+          (Get-FileHash $installer.FullName -Algorithm SHA256).Hash | Set-Content "$($installer.FullName).sha256"
       - uses: actions/upload-artifact@v7
         with:
           name: NeuroTune-win-x64
           path: |
-            artifacts/NeuroTune-win-x64.zip
-            artifacts/NeuroTune-win-x64.zip.sha256
+            ui/src-tauri/target/release/bundle/nsis/*.exe
+            ui/src-tauri/target/release/bundle/nsis/*.sha256
