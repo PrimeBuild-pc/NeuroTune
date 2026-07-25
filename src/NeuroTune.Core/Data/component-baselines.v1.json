@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "cpu": [
+    {
+      "match": "GenuineIntel-6-B7-1|13th Gen Intel(R) Core(TM) i9-13900K",
+      "vendorSpecificationId": "Intel ARK 230496",
+      "reference": "base 3000 MHz; max turbo 5800 MHz",
+      "source": "https://www.intel.com/content/www/us/en/products/sku/230496/intel-core-i913900k-processor-36m-cache-up-to-5-80-ghz/specifications.html"
+    },
+    {
+      "match": "GenuineIntel-6-B7-1|Intel(R) Core(TM) i9-14900K",
+      "vendorSpecificationId": "Intel ARK 236773",
+      "reference": "base 3200 MHz; max turbo 6000 MHz",
+      "source": "https://www.intel.com/content/www/us/en/products/sku/236773/intel-core-i9-processor-14900k-36m-cache-up-to-6-00-ghz/specifications.html"
+    }
+  ],
+  "memory": [
+    {
+      "match": "Crucial Technology|CT16G4DFRA32A|17179869184",
+      "vendorSpecificationId": "Crucial CT16G4DFRA32A",
+      "reference": "16 GB DDR4-3200; 1.2 V",
+      "source": "https://www.crucial.com/memory/ddr4/ct16g4dfra32a"
+    }
+  ]
+}

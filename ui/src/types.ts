@@ -26,6 +26,9 @@ export interface SystemProfile {
   networkSettings: Record<string, string>;
   hardwareCapabilities: Record<string, string>;
   firmwareAndMemory: Record<string, string>;
+  componentIdentities: Record<string, string>;
+  factoryBaselines: Record<string, string>;
+  telemetryCapabilities: TelemetryCapability[];
   bootConfiguration: Record<string, string>;
   performanceRegistry: Record<string, string>;
   policyConflicts: string[];
@@ -37,6 +40,12 @@ export interface SystemProfile {
   topProcesses: string[];
   startupItems: string[];
   automaticServices: string[];
+}
+
+export interface TelemetryCapability {
+  name: string;
+  status: 'supported' | 'unavailable' | 'blockedByHvci' | 'driverNotApproved';
+  detail: string;
 }
 
 export interface PerformanceSnapshot {
@@ -113,9 +122,18 @@ export interface Diagnosis {
   consentQuestion: string;
 }
 
+export interface EvidencePayloadReport {
+  factCount: number;
+  utf8Bytes: number;
+  singlePassLimitBytes: number;
+  fitsSinglePass: boolean;
+  privacyClasses: Record<string, number>;
+}
+
 export interface ScanResult {
   profile: SystemProfile;
   sanitizedProfile: string;
+  payloadReport: EvidencePayloadReport;
   snapshot: PerformanceSnapshot;
   actions: OptimizationAction[];
 }

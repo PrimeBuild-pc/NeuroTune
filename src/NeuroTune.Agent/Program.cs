@@ -82,10 +82,13 @@ async Task<object> Scan(OptimizationCatalog actionCatalog)
     var profileTask = Task.Run(() => new SystemProfiler().Collect(phase => Console.Error.WriteLine(phase)));
     var snapshotTask = Task.Run(() => new PerformanceSnapshotService().Collect());
     await Task.WhenAll(profileTask, snapshotTask);
+    var profile = await profileTask;
+    var evidence = LlmClient.BuildEvidenceFacts(profile);
     return new
     {
-        profile = await profileTask,
-        sanitizedProfile = JsonSerializer.Serialize(LlmClient.BuildEvidenceFacts(await profileTask), new JsonSerializerOptions { WriteIndented = true }),
+        profile,
+        sanitizedProfile = JsonSerializer.Serialize(evidence, new JsonSerializerOptions { WriteIndented = true }),
+        payloadReport = LlmClient.MeasureEvidence(evidence),
         snapshot = await snapshotTask,
         actions = Actions(actionCatalog)
     };

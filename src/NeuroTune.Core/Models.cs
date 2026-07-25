@@ -7,6 +7,8 @@ public enum ApiProtocol { OpenAiCompatible, Anthropic }
 public enum RiskLevel { Low, Medium, High }
 public enum OptimizationPriority { Balanced, Fps, SystemLatency, NetworkLatency, Efficiency }
 public enum ConflictKind { Confirmed, Conditional, SuspiciousOverride, MissingEvidence }
+public enum EvidencePrivacy { General, SystemConfiguration, SoftwareInventory }
+public enum TelemetryStatus { Supported, Unavailable, BlockedByHvci, DriverNotApproved }
 
 public sealed class UserSettings
 {
@@ -28,7 +30,7 @@ public sealed class UserSettings
 
 public sealed class SystemProfile
 {
-    public int SchemaVersion { get; set; } = 3;
+    public int SchemaVersion { get; set; } = 4;
     public DateTimeOffset CollectedAt { get; set; } = DateTimeOffset.Now;
     public string OperatingSystem { get; set; } = "Unavailable";
     public string Cpu { get; set; } = "Unavailable";
@@ -42,6 +44,9 @@ public sealed class SystemProfile
     public Dictionary<string, string> NetworkSettings { get; set; } = [];
     public Dictionary<string, string> HardwareCapabilities { get; set; } = [];
     public Dictionary<string, string> FirmwareAndMemory { get; set; } = [];
+    public Dictionary<string, string> ComponentIdentities { get; set; } = [];
+    public Dictionary<string, string> FactoryBaselines { get; set; } = [];
+    public List<TelemetryCapability> TelemetryCapabilities { get; set; } = [];
     public Dictionary<string, string> BootConfiguration { get; set; } = [];
     public Dictionary<string, string> PerformanceRegistry { get; set; } = [];
     public List<string> PolicyConflicts { get; set; } = [];
@@ -56,6 +61,8 @@ public sealed class SystemProfile
 }
 
 public sealed record ScanPhase(string Name, long DurationMilliseconds, int FactsCollected);
+public sealed record TelemetryCapability(string Name, TelemetryStatus Status, string Detail);
+public sealed record EvidencePayloadReport(int FactCount, int Utf8Bytes, int SinglePassLimitBytes, bool FitsSinglePass, Dictionary<EvidencePrivacy, int> PrivacyClasses);
 
 public sealed class ConflictPattern
 {

@@ -1,3 +1,5 @@
+using Microsoft.Win32;
+
 namespace NeuroTune.Tests;
 
 [TestClass]
@@ -94,6 +96,48 @@ public sealed class CoreTests
     }
 
     [TestMethod]
+    public void Probe_catalog_and_payload_report_are_typed_and_complete()
+    {
+        Assert.HasCount(83, ProbeCatalog.Registry);
+        Assert.HasCount(83, ProbeCatalog.Registry.Select(probe => probe.StableEvidenceId).Distinct());
+        Assert.IsTrue(ProbeCatalog.Registry.All(probe => probe.Source == ProbeSource.Registry &&
+            probe.Privacy == EvidencePrivacy.SystemConfiguration && !string.IsNullOrWhiteSpace(probe.AbsenceSemantics)));
+
+        var report = LlmClient.MeasureEvidence(new Dictionary<string, string>
+        {
+            ["system:cpu"] = "CPU",
+            ["software:0"] = "Application"
+        });
+        Assert.AreEqual(2, report.FactCount);
+        Assert.IsGreaterThan(0, report.Utf8Bytes);
+        Assert.IsTrue(report.FitsSinglePass);
+        Assert.IsFalse(LlmClient.MeasureEvidence(new Dictionary<string, string>
+        {
+            ["system:oversized"] = new string('x', LlmClient.MaxSinglePassEvidenceBytes)
+        }).FitsSinglePass);
+        Assert.AreEqual(1, report.PrivacyClasses[EvidencePrivacy.SystemConfiguration]);
+        Assert.AreEqual(1, report.PrivacyClasses[EvidencePrivacy.SoftwareInventory]);
+    }
+
+    [TestMethod]
+    public void Factory_baselines_require_an_exact_local_match()
+    {
+        var exact = ComponentBaselineCatalog.Compare(new Dictionary<string, string>
+        {
+            ["CPU specification ID"] = "GenuineIntel-6-B7-1",
+            ["CPU model"] = "13th Gen Intel(R) Core(TM) i9-13900K"
+        });
+        var missing = ComponentBaselineCatalog.Compare(new Dictionary<string, string>
+        {
+            ["CPU specification ID"] = "GenuineIntel-6-B7-1",
+            ["CPU model"] = "Different CPU"
+        });
+
+        StringAssert.Contains(exact["CPU"], "Intel ARK 230496");
+        StringAssert.StartsWith(missing["CPU"], "Baseline unavailable");
+    }
+
+    [TestMethod]
     public void Conflict_graph_names_both_sides_and_their_values()
     {
         var profile = new SystemProfile();
@@ -107,6 +151,27 @@ public sealed class CoreTests
         Assert.AreEqual("1", conflict.Evidence[@"registry:HKCU\Software\Microsoft\GameBar\AutoGameModeEnabled"]);
         Assert.AreEqual("0", conflict.Evidence[@"registry:HKCU\Software\Microsoft\GameBar\AllowAutoGameMode"]);
         Assert.Contains(OptimizationPriority.Fps, conflict.Objectives);
+    }
+
+    [TestMethod]
+    public void Conflict_graph_relates_vpn_filters_to_offload_overrides()
+    {
+        var profile = new SystemProfile
+        {
+            SoftwareSignals = ["Detected software family: WireGuard"],
+            NetworkSettings = { ["Installed network components"] = "ms_tcpip" },
+            PerformanceRegistry =
+            {
+                [@"HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\DisableTaskOffload"] = "1",
+                [@"HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\EnableRSS"] = "Not configured"
+            }
+        };
+
+        var conflict = ConflictAnalyzer.Analyze(profile, new TuningGoals { Priority = OptimizationPriority.NetworkLatency })
+            .Single(item => item.Id == "vpn-offload-policy");
+
+        Assert.HasCount(4, conflict.Evidence);
+        CollectionAssert.Contains(conflict.SuggestedActionIds, "network.tcp-default");
     }
 
     [TestMethod]
@@ -130,6 +195,23 @@ public sealed class CoreTests
 
         Assert.ThrowsExactly<InvalidOperationException>(() =>
             LlmClient.ParseDiagnosis(json, new OptimizationCatalog()));
+    }
+
+    [TestMethod]
+    public void Registry_snapshots_preserve_value_kinds()
+    {
+        var binary = new byte[] { 0, 1, 255 };
+        var multi = new[] { "one", "two" };
+
+        CollectionAssert.AreEqual(binary, (byte[])OptimizationCatalog.DeserializeRegistryValue(
+            RegistryValueKind.Binary, OptimizationCatalog.SerializeRegistryValue(RegistryValueKind.Binary, binary)));
+        CollectionAssert.AreEqual(multi, (string[])OptimizationCatalog.DeserializeRegistryValue(
+            RegistryValueKind.MultiString, OptimizationCatalog.SerializeRegistryValue(RegistryValueKind.MultiString, multi)));
+        Assert.AreEqual(42L, OptimizationCatalog.DeserializeRegistryValue(
+            RegistryValueKind.QWord, OptimizationCatalog.SerializeRegistryValue(RegistryValueKind.QWord, 42L)));
+        var legacy = OptimizationCatalog.DeserializeRegistrySnapshot("{\"Exists\":true,\"Value\":7}");
+        Assert.AreEqual(RegistryValueKind.DWord, legacy.Kind);
+        Assert.AreEqual("7", legacy.Value);
     }
 
     [TestMethod]
@@ -158,6 +240,10 @@ public sealed class CoreTests
         Assert.IsGreaterThan(75, profile.PerformanceRegistry.Count);
         Assert.IsNotNull(profile.HardwareCapabilities);
         Assert.IsNotNull(profile.FirmwareAndMemory);
+        Assert.IsNotNull(profile.ComponentIdentities);
+        Assert.IsNotNull(profile.FactoryBaselines);
+        Assert.HasCount(4, profile.TelemetryCapabilities);
+        Assert.IsFalse(profile.TelemetryCapabilities.Any(capability => capability.Status == TelemetryStatus.Supported));
         Assert.IsNotNull(profile.BootConfiguration);
         Assert.IsNotNull(profile.InstalledSoftware);
         Assert.IsNotNull(profile.RelevantDrivers);

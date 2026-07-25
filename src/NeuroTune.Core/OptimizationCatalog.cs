@@ -1,5 +1,6 @@
 using Microsoft.Win32;
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -148,11 +149,7 @@ public sealed class OptimizationCatalog
             catch (Exception exception) { return ActionAvailability.Unavailable(exception.Message); }
         }
 
-        string Capture()
-        {
-            var current = ReadCurrent();
-            return JsonSerializer.Serialize(new RegistrySnapshot(current is not null, current));
-        }
+        string Capture() => JsonSerializer.Serialize(CaptureRegistryValue(hive, path, valueName));
 
         void Apply()
         {
@@ -161,15 +158,7 @@ public sealed class OptimizationCatalog
             key.SetValue(valueName, desiredValue, RegistryValueKind.DWord);
         }
 
-        void Restore(string state)
-        {
-            var snapshot = JsonSerializer.Deserialize<RegistrySnapshot>(state)
-                ?? throw new InvalidOperationException("The Registry snapshot is invalid.");
-            using var key = RegistryKey.OpenBaseKey(hive, RegistryView.Registry64).CreateSubKey(path, true)
-                ?? throw new InvalidOperationException($"Cannot open {exportPath}.");
-            if (snapshot.Exists) key.SetValue(valueName, snapshot.Value ?? 0, RegistryValueKind.DWord);
-            else key.DeleteValue(valueName, false);
-        }
+        void Restore(string state) => RestoreRegistryValue(hive, path, valueName, DeserializeRegistrySnapshot(state));
 
         bool Verify() => ReadCurrent() == desiredValue;
 
@@ -203,7 +192,10 @@ public sealed class OptimizationCatalog
             catch (Exception exception) { return ActionAvailability.Unavailable(exception.Message); }
         }
 
-        string Capture() => JsonSerializer.Serialize(ReadCurrent());
+        string Capture() => JsonSerializer.Serialize(valueNames.ToDictionary(
+            valueName => valueName,
+            valueName => CaptureRegistryValue(hive, path, valueName),
+            StringComparer.OrdinalIgnoreCase));
 
         void Apply()
         {
@@ -214,13 +206,9 @@ public sealed class OptimizationCatalog
 
         void Restore(string state)
         {
-            var snapshot = JsonSerializer.Deserialize<Dictionary<string, int?>>(state)
-                ?? throw new InvalidOperationException("The Registry snapshot is invalid.");
-            using var key = RegistryKey.OpenBaseKey(hive, RegistryView.Registry64).CreateSubKey(path, true)
-                ?? throw new InvalidOperationException($"Cannot open {exportPath}.");
+            var snapshot = DeserializeRegistrySnapshots(state);
             foreach (var (valueName, value) in snapshot)
-                if (value is not null) key.SetValue(valueName, value.Value, RegistryValueKind.DWord);
-                else key.DeleteValue(valueName, false);
+                RestoreRegistryValue(hive, path, valueName, value);
         }
 
         return new(id, name, description, category, risk, restart, exportPath,
@@ -251,11 +239,7 @@ public sealed class OptimizationCatalog
             catch (Exception exception) { return ActionAvailability.Unavailable(exception.Message); }
         }
 
-        string Capture()
-        {
-            var current = ReadCurrent();
-            return JsonSerializer.Serialize(new RegistrySnapshot(current is not null, current));
-        }
+        string Capture() => JsonSerializer.Serialize(CaptureRegistryValue(hive, path, valueName));
 
         void Apply()
         {
@@ -264,19 +248,72 @@ public sealed class OptimizationCatalog
             key.DeleteValue(valueName, false);
         }
 
-        void Restore(string state)
-        {
-            var snapshot = JsonSerializer.Deserialize<RegistrySnapshot>(state)
-                ?? throw new InvalidOperationException("The Registry snapshot is invalid.");
-            if (!snapshot.Exists) return;
-            using var key = RegistryKey.OpenBaseKey(hive, RegistryView.Registry64).CreateSubKey(path, true)
-                ?? throw new InvalidOperationException($"Cannot open {exportPath}.");
-            key.SetValue(valueName, snapshot.Value ?? 0, RegistryValueKind.DWord);
-        }
+        void Restore(string state) => RestoreRegistryValue(hive, path, valueName, DeserializeRegistrySnapshot(state));
 
         return new(id, name, description, category, risk, restart, exportPath,
             Inspect, Capture, Apply, Restore, () => ReadCurrent() is null);
     }
+
+    private static RegistryValueSnapshot CaptureRegistryValue(RegistryHive hive, string path, string valueName)
+    {
+        using var key = RegistryKey.OpenBaseKey(hive, RegistryView.Registry64).OpenSubKey(path);
+        var value = key?.GetValue(valueName, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
+        if (value is null) return new(false, RegistryValueKind.Unknown, null);
+        var kind = key!.GetValueKind(valueName);
+        return new(true, kind, SerializeRegistryValue(kind, value));
+    }
+
+    private static void RestoreRegistryValue(RegistryHive hive, string path, string valueName, RegistryValueSnapshot snapshot)
+    {
+        using var key = RegistryKey.OpenBaseKey(hive, RegistryView.Registry64).CreateSubKey(path, true)
+            ?? throw new InvalidOperationException($"Cannot open {(hive == RegistryHive.CurrentUser ? "HKCU" : "HKLM")}\\{path}.");
+        if (!snapshot.Exists)
+        {
+            key.DeleteValue(valueName, false);
+            return;
+        }
+        key.SetValue(valueName, DeserializeRegistryValue(snapshot.Kind, snapshot.Value), snapshot.Kind);
+    }
+
+    internal static RegistryValueSnapshot DeserializeRegistrySnapshot(string state)
+    {
+        using var json = JsonDocument.Parse(state);
+        if (json.RootElement.TryGetProperty("Kind", out _))
+            return JsonSerializer.Deserialize<RegistryValueSnapshot>(state)
+                ?? throw new InvalidOperationException("The Registry snapshot is invalid.");
+        var exists = json.RootElement.GetProperty("Exists").GetBoolean();
+        var value = json.RootElement.GetProperty("Value");
+        return new(exists, RegistryValueKind.DWord, value.ValueKind == JsonValueKind.Null ? null : value.GetRawText());
+    }
+
+    private static Dictionary<string, RegistryValueSnapshot> DeserializeRegistrySnapshots(string state)
+    {
+        using var json = JsonDocument.Parse(state);
+        return json.RootElement.EnumerateObject().ToDictionary(
+            item => item.Name,
+            item => item.Value.ValueKind == JsonValueKind.Object
+                ? DeserializeRegistrySnapshot(item.Value.GetRawText())
+                : new RegistryValueSnapshot(item.Value.ValueKind != JsonValueKind.Null, RegistryValueKind.DWord,
+                    item.Value.ValueKind == JsonValueKind.Null ? null : item.Value.GetRawText()),
+            StringComparer.OrdinalIgnoreCase);
+    }
+
+    internal static string? SerializeRegistryValue(RegistryValueKind kind, object value) => kind switch
+    {
+        RegistryValueKind.Binary => Convert.ToBase64String((byte[])value),
+        RegistryValueKind.MultiString => JsonSerializer.Serialize((string[])value),
+        _ => Convert.ToString(value, CultureInfo.InvariantCulture)
+    };
+
+    internal static object DeserializeRegistryValue(RegistryValueKind kind, string? value) => kind switch
+    {
+        RegistryValueKind.DWord => int.Parse(value ?? "0", CultureInfo.InvariantCulture),
+        RegistryValueKind.QWord => long.Parse(value ?? "0", CultureInfo.InvariantCulture),
+        RegistryValueKind.Binary => Convert.FromBase64String(value ?? ""),
+        RegistryValueKind.MultiString => JsonSerializer.Deserialize<string[]>(value ?? "[]") ?? [],
+        RegistryValueKind.String or RegistryValueKind.ExpandString => value ?? "",
+        _ => throw new InvalidOperationException($"Unsupported saved Registry kind: {kind}.")
+    };
 
     private static string OnOffState(int? value) => value switch
     {
@@ -304,5 +341,5 @@ public sealed class OptimizationCatalog
         return output;
     }
 
-    private sealed record RegistrySnapshot(bool Exists, int? Value);
+    internal sealed record RegistryValueSnapshot(bool Exists, RegistryValueKind Kind, string? Value);
 }

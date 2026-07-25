@@ -77,13 +77,21 @@ public static class ConflictAnalyzer
             "Static Internet-era values can conflict with auto-tuning, adapter offloads, VPN filters, or the actual path and may worsen throughput or retransmission behavior rather than latency.",
             [OptimizationPriority.NetworkLatency, OptimizationPriority.Balanced], "High", ["network.tcp-default"]);
 
-        foreach (var setting in new[] { "useplatformclock", "disabledynamictick", "tscsyncpolicy", "useplatformtick", "numproc", "truncatememory", "removememory" })
+        Add("bcd-timer-policy", "BCD timer policy overrides platform timing", ConflictKind.SuspiciousOverride,
+            ["boot:BCD useplatformclock", "boot:BCD useplatformtick", "boot:BCD disabledynamictick", "boot:BCD tscsyncpolicy", "hardware:Performance counter", "firmware:CPUID vendor"],
+            values => values.Take(4).Any(value => value != "Not configured" && value != "Unavailable") &&
+                values[4] != "Unavailable" && values[5] != "Unavailable",
+            "The active boot entry overrides one or more timer choices while Windows reports a high-resolution performance counter and a known CPUID vendor.",
+            "Forcing HPET, platform ticks, dynamic-tick behavior, or TSC synchronization can replace Windows platform selection and increase latency or timing jitter.",
+            [OptimizationPriority.Fps, OptimizationPriority.SystemLatency, OptimizationPriority.Balanced], "High", []);
+
+        foreach (var setting in new[] { "numproc", "truncatememory", "removememory" })
         {
             var id = $"boot:BCD {setting}";
             Add($"bcd-{setting}", $"Manual BCD override: {setting}", ConflictKind.SuspiciousOverride,
                 [id, "system:operating-system", "system:cpu"], values => values[0] != "Not configured" && values[0] != "Unavailable",
                 $"The active boot entry explicitly configures {setting}.",
-                "Generic boot timer, CPU, or memory overrides replace Windows hardware detection and can increase latency, reduce available resources, or destabilize timing on modern hardware.",
+                "The override replaces Windows hardware detection and can reduce available CPU or memory resources.",
                 [OptimizationPriority.Fps, OptimizationPriority.SystemLatency, OptimizationPriority.Balanced], "High", []);
         }
 
@@ -103,17 +111,67 @@ public static class ConflictAnalyzer
                 "Concurrent hooks can compete in a game's presentation path and make frametime regressions difficult to attribute; presence does not prove they are active.",
                 [OptimizationPriority.Fps, OptimizationPriority.SystemLatency], "Medium", []);
 
+        var vpnEvidence = facts.Where(pair => pair.Key.StartsWith("software-signal:", StringComparison.Ordinal) &&
+            new[] { "VPN", "WireGuard", "OpenVPN", "ExitLag" }.Any(name => pair.Value.Contains(name, StringComparison.OrdinalIgnoreCase)))
+            .Select(pair => pair.Key).ToList();
+        if (vpnEvidence.Count > 0)
+            Add("vpn-offload-policy", "VPN/filter software and global offload overrides coexist", ConflictKind.Conditional,
+                [vpnEvidence[0], R(@"HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\DisableTaskOffload"), R(@"HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\EnableRSS"), "network:Installed network components"],
+                values => values[1] != "Not configured" || values[2] != "Not configured",
+                "A VPN or routing software family is installed while one or more global adapter-offload values are manually configured.",
+                "Static offload policy can interact with filter drivers and tunnel paths; it may trade throughput and CPU work without reducing end-to-end latency.",
+                [OptimizationPriority.NetworkLatency, OptimizationPriority.Balanced], "Medium", ["network.tcp-default"]);
+
+        var tuningEvidence = facts.Where(pair => pair.Key.StartsWith("software-signal:", StringComparison.Ordinal) &&
+            new[] { "Afterburner", "RivaTuner", "Ryzen Master", "Intel Extreme Tuning", "ThrottleStop" }
+                .Any(name => pair.Value.Contains(name, StringComparison.OrdinalIgnoreCase))).Select(pair => pair.Key).ToList();
+        if (tuningEvidence.Count > 0)
+            Add("tdr-tuning-stack", "GPU timeout overrides coexist with tuning software", ConflictKind.Conditional,
+                [R(@"HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers\TdrDelay"), R(@"HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers\TdrDdiDelay"), tuningEvidence[0]],
+                values => values[0] != "Not configured" || values[1] != "Not configured",
+                "Manual GPU recovery delays are present alongside software capable of hardware tuning or presentation hooks.",
+                "Longer timeout values can conceal an unstable tune and turn a recoverable driver reset into a longer freeze; software presence alone does not prove an active overclock.",
+                [OptimizationPriority.Fps, OptimizationPriority.SystemLatency, OptimizationPriority.Balanced], "High", ["graphics.tdr-default"]);
+
+        Add("manual-pagefile", "Manual page-file policy replaces Windows sizing", ConflictKind.Conditional,
+            ["hardware:Page file and system type", "system:memory", R(@"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\DisablePagingExecutive")],
+            values => values[0].Contains("Windows-managed=False", StringComparison.OrdinalIgnoreCase),
+            "Windows reports that automatic page-file management is disabled.",
+            "A fixed page-file policy can under-provision commit for the installed memory and workload; the scan does not expose enough detail to prescribe a size.",
+            [OptimizationPriority.Fps, OptimizationPriority.SystemLatency, OptimizationPriority.Balanced], "Medium", []);
+
+        Add("mobile-high-performance", "High-performance power plan on a mobile system", ConflictKind.Conditional,
+            ["system:active-power-plan", "hardware:Page file and system type", "hardware:Battery", "hardware:ACPI thermal zones"],
+            values => goals.Priority is OptimizationPriority.Efficiency or OptimizationPriority.Balanced &&
+                (values[0].Contains("High performance", StringComparison.OrdinalIgnoreCase) ||
+                 values[0].Contains("8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c", StringComparison.OrdinalIgnoreCase)) &&
+                (values[1].Contains("laptop", StringComparison.OrdinalIgnoreCase) || values[2] != "Not detected"),
+            "The High Performance plan is active on a laptop or battery-equipped system.",
+            "Higher background power and temperature can reduce efficiency and may reduce sustained boost after thermal limits are reached; ACPI temperatures may be unavailable or indirect.",
+            [OptimizationPriority.Efficiency, OptimizationPriority.Balanced], "Medium", []);
+
         foreach (var issue in facts.Keys.Where(key => key.StartsWith("device-issue:", StringComparison.Ordinal)))
             AddDirect($"device-{issue[13..]}", "Windows reports a device error", ConflictKind.Confirmed, [issue],
                 "A Plug and Play device has a non-zero Configuration Manager error code.",
                 "Driver or device failures should be resolved before attributing instability or latency to performance settings.",
                 [goals.Priority], "High", []);
 
+        var deviceIssue = facts.Keys.FirstOrDefault(key => key.StartsWith("device-issue:", StringComparison.Ordinal));
+        var staleDriver = facts.FirstOrDefault(pair => pair.Key.StartsWith("driver:", StringComparison.Ordinal) &&
+            DateTime.TryParse(pair.Value.Split('|').Last().Trim(), out var date) && date < profile.CollectedAt.AddYears(-5));
+        if (deviceIssue is not null && staleDriver.Key is not null)
+            AddDirect("stale-driver-device-error", "Old driver record and device error coexist", ConflictKind.Conditional,
+                [staleDriver.Key, deviceIssue],
+                "A relevant driver date is more than five years older than this scan and Windows reports a Plug and Play device error.",
+                "Resolve the concrete device/driver failure before changing broad performance settings; age alone does not prove that the driver is unsupported.",
+                [goals.Priority], "Medium", []);
+
         var firmwareAssessment = "firmware:Memory profile assessment";
+        var dimmEvidence = facts.Keys.Where(key => key.StartsWith("firmware:DIMM ", StringComparison.Ordinal)).ToList();
         Add("memory-training", "DIMM configuration requires firmware verification", ConflictKind.MissingEvidence,
-            [firmwareAssessment], values => values[0].Contains("Possible", StringComparison.OrdinalIgnoreCase) || values[0].Contains("differ", StringComparison.OrdinalIgnoreCase),
-            "Windows exposes a memory speed relationship that may indicate a profile or mismatched training.",
-            "SMBIOS/WMI cannot prove XMP, DOCP, EXPO, timings, or stability; a low-level read-only telemetry provider is required before making a stronger claim.",
+            [firmwareAssessment, .. dimmEvidence, "hardware:ACPI thermal zones"], values => values[0].Contains("Possible", StringComparison.OrdinalIgnoreCase) || values[0].Contains("differ", StringComparison.OrdinalIgnoreCase),
+            "Windows exposes DIMM identity and speed relationships that may indicate a profile or mismatched training; ACPI thermal evidence is included when available.",
+            "SMBIOS/WMI cannot prove XMP, DOCP, EXPO, timings, memory temperature, or stability; a validated read-only telemetry provider is required before making a stronger claim.",
             [OptimizationPriority.Fps, OptimizationPriority.SystemLatency, OptimizationPriority.Balanced], "Low", []);
 
         return conflicts;
