@@ -139,6 +139,7 @@ npm run tauri -- build --bundles nsis</code></pre>
 <ul>
   <li><a href="ROADMAP.md">Product roadmap and release criteria</a></li>
   <li><a href="docs/IMPLEMENTATION_PLAN.md">Implementation plan</a></li>
+  <li><a href="docs/ISSUE_3_IMPLEMENTATION_PLAN.md">Issue #3 continuation hand-off</a></li>
   <li><a href="docs/DESIGN_SYSTEM.md">Design system and theme contract</a></li>
   <li><a href="docs/PROVIDERS.md">Cloud, custom, OAuth, and local provider guide</a></li>
   <li><a href="docs/TESTING.md">Alpha test guide</a></li>
