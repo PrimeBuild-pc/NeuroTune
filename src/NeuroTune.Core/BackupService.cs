@@ -100,11 +100,13 @@ public sealed class BackupService
         var start = new ProcessStartInfo("reg.exe")
         {
             UseShellExecute = false,
+            RedirectStandardOutput = true,
             RedirectStandardError = true,
             CreateNoWindow = true
         };
         foreach (var argument in new[] { "export", registryPath, output, "/y" }) start.ArgumentList.Add(argument);
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Cannot start reg.exe.");
+        _ = process.StandardOutput.ReadToEnd();
         var error = process.StandardError.ReadToEnd();
         process.WaitForExit();
         if (process.ExitCode != 0) throw new InvalidOperationException($"Registry backup failed: {error.Trim()}");

@@ -9,7 +9,7 @@ namespace NeuroTune;
 
 public sealed class SystemProfiler
 {
-    public SystemProfile Collect(Action<string>? progress = null)
+    public SystemProfile Collect(Action<string>? progress = null, bool optionalTelemetryConsent = false)
     {
         var profile = new SystemProfile();
         RunPhase("Hardware and firmware", () =>
@@ -24,7 +24,7 @@ public sealed class SystemProfiler
             profile.FirmwareAndMemory = ReadFirmwareAndMemory();
             profile.ComponentIdentities = ReadComponentIdentities();
             profile.FactoryBaselines = ComponentBaselineCatalog.Compare(profile.ComponentIdentities);
-            profile.TelemetryCapabilities = ReadTelemetryCapabilities();
+            profile.TelemetryCapabilities = TelemetryProcessClient.QueryCapabilities(optionalTelemetryConsent);
         });
         RunPhase("Windows, boot, and Registry", () =>
         {
@@ -245,13 +245,13 @@ public sealed class SystemProfiler
             ["Motherboard"] = Query("SELECT Manufacturer, Product, Version FROM Win32_BaseBoard", row => $"{row["Manufacturer"]}|{row["Product"]}|{row["Version"]}").FirstOrDefault() ?? "Unavailable",
             ["BIOS"] = Query("SELECT Manufacturer, SMBIOSBIOSVersion FROM Win32_BIOS", row => $"{row["Manufacturer"]}|{row["SMBIOSBIOSVersion"]}").FirstOrDefault() ?? "Unavailable"
         };
-        var gpus = Query("SELECT Name, PNPDeviceID, VideoBIOSVersion FROM Win32_VideoController", row =>
+        var gpus = Query("SELECT Name, PNPDeviceID FROM Win32_VideoController", row =>
         {
             var parts = row["PNPDeviceID"]?.ToString()?.Split('\\') ?? [];
             var pciId = parts.Length > 1 ? parts[1] : "Unavailable";
-            return $"{pciId}|{row["Name"]}|VBIOS={row["VideoBIOSVersion"]}";
+            return $"{pciId}|{row["Name"]?.ToString()?.Trim()}";
         });
-        for (var index = 0; index < gpus.Count; index++) identities[$"GPU {index + 1}"] = gpus[index];
+        for (var index = 0; index < gpus.Count; index++) identities[$"GPU {index + 1} specification ID"] = gpus[index];
 
         var modules = Query("SELECT Manufacturer, PartNumber, Capacity, ConfiguredClockSpeed FROM Win32_PhysicalMemory", row =>
         {
@@ -268,24 +268,6 @@ public sealed class SystemProfiler
             identities[$"DIMM {index + 1} configured rate"] = $"{module.Configured} MT/s";
         }
         return identities;
-    }
-
-    private static List<TelemetryCapability> ReadTelemetryCapabilities()
-    {
-        var pawnIo = DetectPawnIo();
-        var status = pawnIo.StartsWith("PawnIO service detected", StringComparison.Ordinal)
-            ? TelemetryStatus.DriverNotApproved
-            : TelemetryStatus.Unavailable;
-        var detail = status == TelemetryStatus.DriverNotApproved
-            ? "PawnIO was detected, but NeuroTune will not load it until its driver, modules, license, signature, IOCTL boundary, HVCI compatibility, and uninstall path are approved."
-            : "No reviewed optional telemetry adapter is installed; Windows APIs cannot provide this value reliably.";
-        return
-        [
-            new("SPD and XMP/EXPO profiles", status, detail),
-            new("Memory timings and voltage", status, detail),
-            new("CPU effective clocks, limits, and throttling", status, detail),
-            new("Motherboard temperatures, power, and sensors", status, detail)
-        ];
     }
 
     private static string ReadCpuSpecificationId()

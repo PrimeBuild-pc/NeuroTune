@@ -82,7 +82,7 @@
   --shadow-subtle: 0 6px 22px rgba(0, 0, 0, .18);
 }
 
-html, body, #root { min-width: 1000px; min-height: 100%; margin: 0; }
+html, body, #root { min-width: 0; min-height: 100%; margin: 0; }
 body { min-height: 100vh; }
 ::selection { background: var(--accent); color: var(--accent-contrast); }
 * { scrollbar-color: var(--border-strong) transparent; }

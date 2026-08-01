@@ -120,6 +120,24 @@ public sealed class CoreTests
     }
 
     [TestMethod]
+    public void Payload_metrics_store_only_bounded_metadata()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"neurotune-metrics-{Guid.NewGuid():N}.ndjson");
+        try
+        {
+            new PayloadMetricsService(path).Record(
+                new EvidencePayloadReport(678, 65_704, 256_000, true, []),
+                LlmClient.Defaults(LlmProvider.Local),
+                "local-scan-completed");
+            var row = File.ReadAllText(path);
+            StringAssert.Contains(row, "\"factCount\":678");
+            StringAssert.Contains(row, "\"utf8Bytes\":65704");
+            Assert.DoesNotContain("profile", row, StringComparison.OrdinalIgnoreCase);
+        }
+        finally { File.Delete(path); }
+    }
+
+    [TestMethod]
     public void Factory_baselines_require_an_exact_local_match()
     {
         var exact = ComponentBaselineCatalog.Compare(new Dictionary<string, string>
@@ -135,6 +153,15 @@ public sealed class CoreTests
 
         StringAssert.Contains(exact["CPU"], "Intel ARK 230496");
         StringAssert.StartsWith(missing["CPU"], "Baseline unavailable");
+
+        var amd = ComponentBaselineCatalog.Compare(new Dictionary<string, string>
+        {
+            ["CPU specification ID"] = "AuthenticAMD-25-21-2",
+            ["CPU model"] = "AMD Ryzen 7 5800X3D 8-Core Processor",
+            ["GPU 1 specification ID"] = "VEN_1002&DEV_73A5&SUBSYS_05041043&REV_C0|AMD Radeon RX 6950 XT"
+        });
+        StringAssert.Contains(amd["CPU"], "100-100000651WOF");
+        StringAssert.Contains(amd["GPU 1"], "PCI 1002:73A5");
     }
 
     [TestMethod]

@@ -146,6 +146,8 @@ npm run tauri -- build --bundles nsis</code></pre>
   <li><a href="docs/DESIGN_SYSTEM.md">Design system and theme contract</a></li>
   <li><a href="docs/PROVIDERS.md">Cloud, custom, OAuth, and local provider guide</a></li>
   <li><a href="docs/TESTING.md">Alpha test guide</a></li>
+  <li><a href="docs/VALIDATION_MATRIX.md">VM, accessibility, scaling, and hardware validation matrix</a></li>
+  <li><a href="docs/PAWNIO_TRUST_REVIEW.md">PawnIO / LibreHardwareMonitor trust decision</a></li>
   <li><a href=".claude/PROJECT_SPECIFICATION.md">Project specification</a></li>
   <li><a href="SECURITY.md">Security policy</a></li>
 </ul>

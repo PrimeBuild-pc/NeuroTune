@@ -73,21 +73,30 @@ async fn cancel_agent(app: AppHandle, request_id: String) -> Result<bool, String
         agent.process_id
     };
 
-    let process_id = process_id.to_string();
-    let status = Command::new("taskkill.exe")
-        .args(["/PID", &process_id, "/T", "/F"])
-        .creation_flags(0x08000000)
-        .status()
-        .map_err(|error| format!("Could not cancel the NeuroTune scan: {error}"))?;
-    if !status.success() {
+    if let Err(error) = terminate_process_tree(process_id) {
         if let Ok(mut active) = app.state::<AgentState>().0.lock() {
             if let Some(agent) = active.get_mut(&request_id) {
                 agent.cancelled = false;
             }
         }
-        return Err("Windows could not terminate the NeuroTune scan process tree".into());
+        return Err(error);
     }
     Ok(true)
+}
+
+fn terminate_process_tree(process_id: u32) -> Result<(), String> {
+    let process_id = process_id.to_string();
+    let status = Command::new("taskkill.exe")
+        .args(["/PID", &process_id, "/T", "/F"])
+        .creation_flags(0x08000000)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map_err(|error| format!("Could not cancel the NeuroTune scan: {error}"))?;
+    status
+        .success()
+        .then_some(())
+        .ok_or_else(|| "Windows could not terminate the NeuroTune scan process tree".into())
 }
 
 fn run_agent(
@@ -201,7 +210,13 @@ fn validate_request(request_id: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_cancellable, validate_request};
+    use super::{is_cancellable, terminate_process_tree, validate_request};
+    #[cfg(target_os = "windows")]
+    use std::os::windows::process::CommandExt;
+    use std::{
+        io::{BufRead, BufReader},
+        process::{Command, Stdio},
+    };
 
     #[test]
     fn request_ids_are_restricted() {
@@ -210,6 +225,58 @@ mod tests {
         assert!(validate_request("").is_err());
         assert!(is_cancellable("scan"));
         assert!(!is_cancellable("apply"));
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn cancelling_fake_agent_terminates_its_blocking_subprocess() {
+        let mut fake_agent = Command::new("powershell.exe")
+            .args([
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "$child = Start-Process ping.exe -ArgumentList '-t','127.0.0.1' -WindowStyle Hidden -PassThru; [Console]::Out.WriteLine($child.Id); [Console]::Out.Flush(); $child.WaitForExit()",
+            ])
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .creation_flags(0x08000000)
+            .spawn()
+            .expect("fake agent should start");
+        let child_pid: u32 = BufReader::new(
+            fake_agent
+                .stdout
+                .take()
+                .expect("fake agent stdout should exist"),
+        )
+        .lines()
+        .next()
+        .expect("fake agent should report child readiness")
+        .expect("fake agent child PID should be readable")
+        .parse()
+        .expect("fake agent child PID should be numeric");
+
+        terminate_process_tree(fake_agent.id()).expect("the fake agent tree should terminate");
+        let _ = fake_agent.wait();
+
+        assert!(
+            !process_exists(child_pid),
+            "blocking subprocess was orphaned"
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    fn process_exists(process_id: u32) -> bool {
+        let filter = format!("PID eq {process_id}");
+        let output = Command::new("tasklist.exe")
+            .args(["/FI", &filter, "/FO", "CSV", "/NH"])
+            .creation_flags(0x08000000)
+            .output()
+            .expect("tasklist should run");
+        let csv = String::from_utf8_lossy(&output.stdout);
+        csv.lines()
+            .any(|line| line.split(',').nth(1) == Some(&format!("\"{process_id}\"")))
     }
 }
 

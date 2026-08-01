@@ -46,6 +46,9 @@ const navigation: Array<{ id: Page; label: string; icon: typeof Activity }> = [
 function App() {
   const [page, setPage] = useState<Page>('overview');
   const [theme, setTheme] = useState<ThemePreference>(loadThemePreference);
+  const [telemetryConsent, setTelemetryConsent] = useState(
+    () => localStorage.getItem('neurotune.optionalTelemetryConsent') === 'true',
+  );
   const [provider, setProvider] = useState<ProviderSettings>(defaults.openRouter);
   const [apiKey, setApiKey] = useState('');
   const [hasCredential, setHasCredential] = useState(false);
@@ -155,7 +158,7 @@ function App() {
     setBusy('Deep scan · starting hardware inventory…');
     setNotice(undefined);
     try {
-      const result = await agent<ScanResult>('scan', undefined, requestId);
+      const result = await agent<ScanResult>('scan', { optionalTelemetryConsent: telemetryConsent }, requestId);
       setScan(result);
       setActions(result.actions);
       setDiagnosis(undefined);
@@ -240,7 +243,7 @@ function App() {
       <aside className="sidebar">
         <div className="brand"><div className="brand-mark">N</div><div><strong>NeuroTune</strong><span>Windows intelligence</span></div></div>
         <nav aria-label="Main navigation">
-          {navigation.map(item => <button key={item.id} className={page === item.id ? 'nav-item active' : 'nav-item'} onClick={() => setPage(item.id)}><item.icon size={18}/><span>{item.label}</span></button>)}
+          {navigation.map(item => <button key={item.id} aria-current={page === item.id ? 'page' : undefined} className={page === item.id ? 'nav-item active' : 'nav-item'} onClick={() => setPage(item.id)}><item.icon size={18}/><span>{item.label}</span></button>)}
         </nav>
         <div className="sidebar-foot">
           <div className="security-chip"><ShieldCheck size={16}/><span>Allowlisted actions</span></div>
@@ -267,7 +270,10 @@ function App() {
           {page === 'scan' && <ScanPage scan={scan} diagnosis={diagnosis} goals={goals} scanning={Boolean(scanRequestId)} onGoals={setGoals} onScan={scanSystem} onDiagnose={diagnose}/>}
           {page === 'review' && <ReviewPage diagnosis={diagnosis} actions={actions} recommendations={recommendations} selected={selected} onToggle={id => setSelected(current => toggle(current, id))} onPreset={applyPreset} onApply={applyChanges}/>}
           {page === 'activity' && <ActivityPage history={history} onRefresh={async () => setHistory(await agent<OperationManifest[]>('history'))} onRollback={rollback}/>}
-          {page === 'settings' && <SettingsPage theme={theme} onTheme={setTheme}/>}
+          {page === 'settings' && <SettingsPage theme={theme} onTheme={setTheme} telemetryConsent={telemetryConsent} onTelemetryConsent={value => {
+            setTelemetryConsent(value);
+            localStorage.setItem('neurotune.optionalTelemetryConsent', String(value));
+          }}/>}
         </section>
       </main>
     </div>
@@ -336,8 +342,8 @@ function ActivityPage({ history, onRefresh, onRollback }: { history: OperationMa
   return <div className="stack-lg"><div className="page-actions"><div><span className="eyebrow">Operation journal</span><h2>Every attempted change remains traceable</h2></div><button className="secondary" onClick={onRefresh}><RefreshCw size={16}/>Refresh</button></div>{history.length ? <div className="history-list">{history.map(item => <article className="history-card" key={item.id}><div className="history-icon"><Activity size={19}/></div><div className="history-main"><div><strong>{item.status}</strong><span>{new Date(item.createdAt).toLocaleString()}</span></div><p>{item.actions.length} journaled actions · {item.id}</p>{item.error && <small className="error-text">{item.error}</small>}</div><button className="secondary" disabled={!item.actions.some(action => (action.applied || action.attempted) && !action.rolledBack)} onClick={() => onRollback(item.id)}><RotateCcw size={15}/>Restore</button></article>)}</div> : <EmptyState icon={Activity} title="No operations yet" text="Completed and interrupted operations will appear here with their rollback state."/>}</div>;
 }
 
-function SettingsPage({ theme, onTheme }: { theme: ThemePreference; onTheme: (value: ThemePreference) => void }) {
-  return <div className="settings-grid"><section className="section-card"><div className="section-heading"><div><span className="eyebrow">Appearance</span><h3>Theme</h3></div><Palette size={22}/></div><p className="muted-copy">Follow the Windows appearance automatically, or keep a manual override.</p><div className="theme-options"><ThemeOption active={theme === 'system'} icon={MonitorCog} title="Use Windows setting" text="Switch automatically with the operating system" onClick={() => onTheme('system')}/><ThemeOption active={theme === 'light'} icon={Sun} title="Light" text="High-contrast light surfaces" onClick={() => onTheme('light')}/><ThemeOption active={theme === 'dark'} icon={Moon} title="Dark" text="Low-glare dark surfaces" onClick={() => onTheme('dark')}/></div></section><section className="section-card"><div className="section-heading"><div><span className="eyebrow">Security posture</span><h3>Local enforcement</h3></div><ShieldCheck size={22}/></div><div className="settings-lines"><div><LockKeyhole size={18}/><span><strong>Credentials</strong><small>Encrypted with Windows DPAPI for this user</small></span></div><div><TerminalSquare size={18}/><span><strong>Model output</strong><small>Cannot introduce executable commands or unknown action IDs</small></span></div><div><RotateCcw size={18}/><span><strong>Recovery</strong><small>Verified restore point, Registry exports, and action journal</small></span></div></div></section></div>;
+function SettingsPage({ theme, onTheme, telemetryConsent, onTelemetryConsent }: { theme: ThemePreference; onTheme: (value: ThemePreference) => void; telemetryConsent: boolean; onTelemetryConsent: (value: boolean) => void }) {
+  return <div className="settings-grid"><section className="section-card"><div className="section-heading"><div><span className="eyebrow">Appearance</span><h3>Theme</h3></div><Palette size={22}/></div><p className="muted-copy">Follow the Windows appearance automatically, or keep a manual override.</p><div className="theme-options"><ThemeOption active={theme === 'system'} icon={MonitorCog} title="Use Windows setting" text="Switch automatically with the operating system" onClick={() => onTheme('system')}/><ThemeOption active={theme === 'light'} icon={Sun} title="Light" text="High-contrast light surfaces" onClick={() => onTheme('light')}/><ThemeOption active={theme === 'dark'} icon={Moon} title="Dark" text="Low-glare dark surfaces" onClick={() => onTheme('dark')}/></div></section><section className="section-card"><div className="section-heading"><div><span className="eyebrow">Security posture</span><h3>Local enforcement</h3></div><ShieldCheck size={22}/></div><div className="settings-lines"><div><LockKeyhole size={18}/><span><strong>Credentials</strong><small>Encrypted with Windows DPAPI for this user</small></span></div><div><TerminalSquare size={18}/><span><strong>Model output</strong><small>Cannot introduce executable commands or unknown action IDs</small></span></div><div><RotateCcw size={18}/><span><strong>Recovery</strong><small>Verified restore point, Registry exports, and action journal</small></span></div></div><label className="consent-toggle"><input type="checkbox" checked={telemetryConsent} onChange={event => onTelemetryConsent(event.target.checked)}/><span><strong>Query isolated optional telemetry</strong><small>Runs a no-network helper only during a scan. PawnIO remains blocked: no driver is installed or loaded.</small></span></label></section></div>;
 }
 
 function Metric({ icon: Icon, label, value, tone }: { icon: typeof Bot; label: string; value: string; tone?: string }) { return <article className="metric-card"><div className={`metric-icon ${tone ?? ''}`}><Icon size={19}/></div><div><span>{label}</span><strong>{value}</strong></div></article>; }

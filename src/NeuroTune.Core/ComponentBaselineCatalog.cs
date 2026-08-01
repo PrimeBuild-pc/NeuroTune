@@ -15,6 +15,8 @@ internal static class ComponentBaselineCatalog
 
         foreach (var (key, value) in identities.Where(item => item.Key.StartsWith("DIMM ", StringComparison.Ordinal) && item.Key.EndsWith(" specification ID", StringComparison.Ordinal)))
             results[key[..^" specification ID".Length]] = Describe(Data.Memory.FirstOrDefault(item => item.Match == value), value);
+        foreach (var (key, value) in identities.Where(item => item.Key.StartsWith("GPU ", StringComparison.Ordinal) && item.Key.EndsWith(" specification ID", StringComparison.Ordinal)))
+            results[key[..^" specification ID".Length]] = Describe(Data.Gpu.FirstOrDefault(item => item.Match == value), value);
         return results;
     }
 
@@ -37,6 +39,7 @@ internal static class ComponentBaselineCatalog
         public int SchemaVersion { get; set; }
         public List<Baseline> Cpu { get; set; } = [];
         public List<Baseline> Memory { get; set; } = [];
+        public List<Baseline> Gpu { get; set; } = [];
     }
 
     private sealed class Baseline
