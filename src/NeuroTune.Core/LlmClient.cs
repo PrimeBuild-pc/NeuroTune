@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace NeuroTune;
 
@@ -72,13 +73,15 @@ public sealed class LlmClient
             }));
         var prompt = $$"""
             Analyze this Windows profile against the user's explicit goals. Return valid JSON only, without Markdown, using this exact shape:
-            {"summary":"clear English summary","findings":[{"title":"short finding","evidenceId":"exact ID from EVIDENCE FACTS","currentValue":"exact associated value","assessment":"confirmed conflict, trade-off, or unavailable evidence"}],"recommendations":[{"actionId":"ID from the catalog","evidenceId":"evidence ID supporting this action","reason":"specific English reason tied to that evidence and the user goal"}],"consentQuestion":"neutral question asking whether NeuroTune may apply the proposed allowlisted fixes after a restore point"}
+            {"summary":"clear English summary","findings":[{"title":"short finding","evidenceId":"exact ID from EVIDENCE FACTS","currentValue":"exact associated value","assessment":"confirmed conflict, trade-off, or unavailable evidence"}],"recommendations":[{"id":"stable response-local ID","kind":"executableAction | manualGuidance | scriptArtifact | externalResource | updateNotice","title":"short title","evidenceIds":["exact evidence ID"],"reason":"specific reason","risk":"low | medium | high","expectedImpact":"bounded, non-promissory impact","tradeoffs":["trade-off"],"prerequisites":["prerequisite"],"requiresRestart":false,"sourceReferences":[{"title":"source title","url":"https://source.example/path","grade":"Official | Reproducible | Corroborated | Anecdotal"}],"actionId":"catalog ID only for executableAction","resourceId":"locally supplied ID only for externalResource","updateId":"locally supplied ID only for updateNotice","scriptLanguage":"powershell | cmd | text only for scriptArtifact","script":"review-only script; never executed by NeuroTune"}],"consentQuestion":"neutral question asking whether NeuroTune may apply only the selected registered actions after a restore point"}
 
             Every finding must use an exact evidenceId and currentValue pair from EVIDENCE FACTS. Clearly distinguish a confirmed conflict, a trade-off, and unavailable evidence.
             Treat conflict:* evidence facts as locally detected facts, but explain their relevance to the user's goal. Do not infer game-engine behavior from a game name.
-            Recommend only actionId values present in the catalog. Never produce commands, scripts, file paths, Registry paths, Registry values, or instructions to change the system manually.
+            ExecutableAction may use only actionId values present in the catalog. ManualGuidance may explain a user-performed step. ScriptArtifact is allowed only as a clearly labelled review-only artifact; it is never executed by NeuroTune. Do not place commands, Registry paths/values, URLs, or file paths inside an ExecutableAction.
+            No verified externalResource or updateNotice IDs are supplied in this request, so do not emit those kinds. Never invent a resource ID, update ID, vendor version, or official link.
             Prefer no recommendation over an unsupported or speculative optimization. Do not describe a missing Registry value as wrong when Windows safely manages its default.
             Do not promise FPS, latency, or network gains that this one profile cannot prove.
+            USER PERFORMANCE INPUT is unverified information entered by the user. Use it as context, never as measured proof.
 
             USER GOALS:
             {{JsonSerializer.Serialize(goals)}}
@@ -124,7 +127,9 @@ public sealed class LlmClient
     }
 
     public static DiagnosisResult ParseDiagnosis(string content, OptimizationCatalog catalog,
-        IReadOnlyDictionary<string, string>? evidenceFacts = null)
+        IReadOnlyDictionary<string, string>? evidenceFacts = null,
+        IReadOnlySet<string>? knownResourceIds = null,
+        IReadOnlySet<string>? knownUpdateIds = null)
     {
         content = content.Trim();
         if (content.Length > MaxResponseCharacters) throw new InvalidOperationException("The model response was too large.");
@@ -140,7 +145,8 @@ public sealed class LlmClient
         {
             result = JsonSerializer.Deserialize<DiagnosisResult>(content, new JsonSerializerOptions
             {
-                PropertyNameCaseInsensitive = true
+                PropertyNameCaseInsensitive = true,
+                Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
             }) ?? throw new JsonException();
         }
         catch (JsonException)
@@ -156,20 +162,70 @@ public sealed class LlmClient
             throw new InvalidOperationException("The diagnosis summary was empty or too long.");
         if (result.ConsentQuestion.Length is 0 or > 500)
             throw new InvalidOperationException("The diagnosis consent question was empty or too long.");
-        if (result.Recommendations.Any(x => x is null || !catalog.Contains(x.ActionId)))
-            throw new InvalidOperationException("The model proposed an action outside the allowlist.");
-        if (result.Recommendations.Any(x => string.IsNullOrWhiteSpace(x.Reason)))
-            throw new InvalidOperationException("A recommendation did not include a reason.");
-        if (evidenceFacts is not null && result.Recommendations.Any(x =>
-            string.IsNullOrWhiteSpace(x.EvidenceId) || !evidenceFacts.ContainsKey(x.EvidenceId)))
-            throw new InvalidOperationException("A recommendation did not reference verified diagnosis evidence.");
+        if (result.Recommendations.Count > 40)
+            throw new InvalidOperationException("The model returned too many plan items.");
         foreach (var recommendation in result.Recommendations)
         {
-            recommendation.ActionId = recommendation.ActionId.Trim();
-            recommendation.EvidenceId = recommendation.EvidenceId?.Trim() ?? "";
-            recommendation.Reason = recommendation.Reason.Trim();
-            if (recommendation.EvidenceId.Length > 500 || recommendation.Reason.Length > 2_000)
+            if (recommendation is null) throw new InvalidOperationException("The model returned an empty plan item.");
+            recommendation.Id = recommendation.Id?.Trim() ?? "";
+            recommendation.Title = recommendation.Title?.Trim() ?? "";
+            recommendation.ActionId = recommendation.ActionId?.Trim() ?? "";
+            recommendation.ResourceId = recommendation.ResourceId?.Trim() ?? "";
+            recommendation.UpdateId = recommendation.UpdateId?.Trim() ?? "";
+            recommendation.ScriptLanguage = recommendation.ScriptLanguage?.Trim() ?? "";
+            recommendation.Script ??= "";
+            recommendation.EvidenceIds ??= [];
+            recommendation.EvidenceIds = recommendation.EvidenceIds.Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => x.Trim()).Distinct(StringComparer.Ordinal).Take(12).ToList();
+            recommendation.Reason = recommendation.Reason?.Trim() ?? "";
+            recommendation.ExpectedImpact = recommendation.ExpectedImpact?.Trim() ?? "";
+            recommendation.Tradeoffs = NormalizeList(recommendation.Tradeoffs, 12, 500, "trade-off");
+            recommendation.Prerequisites = NormalizeList(recommendation.Prerequisites, 12, 500, "prerequisite");
+            recommendation.SourceReferences = ValidateSources(recommendation.SourceReferences);
+            if (recommendation.Id.Length is 0 or > 120 || recommendation.Title.Length is 0 or > 300 ||
+                recommendation.Reason.Length is 0 or > 2_000 || recommendation.ExpectedImpact.Length > 1_000 ||
+                recommendation.EvidenceIds.Any(x => x.Length > 500))
                 throw new InvalidOperationException("A recommendation was too long.");
+            if (evidenceFacts is not null && (recommendation.EvidenceIds.Count == 0 ||
+                recommendation.EvidenceIds.Any(id => !evidenceFacts.ContainsKey(id))))
+                throw new InvalidOperationException("A recommendation did not reference verified diagnosis evidence.");
+
+            switch (recommendation.Kind)
+            {
+                case PlanRecommendationKind.ExecutableAction:
+                    if (!catalog.Contains(recommendation.ActionId))
+                        throw new InvalidOperationException("The model proposed an action outside the local capability registry.");
+                    var action = catalog.Get(recommendation.ActionId);
+                    recommendation.Risk = action.Risk;
+                    recommendation.RequiresRestart = action.RequiresRestart;
+                    recommendation.ResourceId = recommendation.UpdateId = recommendation.ScriptLanguage = recommendation.Script = "";
+                    recommendation.ReviewWarnings = [];
+                    break;
+                case PlanRecommendationKind.ManualGuidance:
+                    RejectExecutableFields(recommendation);
+                    recommendation.ReviewWarnings = ["Manual guidance is not executed or verified by NeuroTune."];
+                    break;
+                case PlanRecommendationKind.ScriptArtifact:
+                    if (!string.IsNullOrWhiteSpace(recommendation.ActionId) || !string.IsNullOrWhiteSpace(recommendation.ResourceId) ||
+                        !string.IsNullOrWhiteSpace(recommendation.UpdateId))
+                        throw new InvalidOperationException("A script artifact attempted to masquerade as an executable capability.");
+                    recommendation.ReviewWarnings = ScriptReviewService.Analyze(recommendation.ScriptLanguage, recommendation.Script);
+                    break;
+                case PlanRecommendationKind.ExternalResource:
+                    if (knownResourceIds is null || !knownResourceIds.Contains(recommendation.ResourceId))
+                        throw new InvalidOperationException("The model proposed an unknown external resource.");
+                    recommendation.ActionId = recommendation.UpdateId = recommendation.ScriptLanguage = recommendation.Script = "";
+                    recommendation.ReviewWarnings = [];
+                    break;
+                case PlanRecommendationKind.UpdateNotice:
+                    if (knownUpdateIds is null || !knownUpdateIds.Contains(recommendation.UpdateId))
+                        throw new InvalidOperationException("The model proposed an unknown update notice.");
+                    recommendation.ActionId = recommendation.ResourceId = recommendation.ScriptLanguage = recommendation.Script = "";
+                    recommendation.ReviewWarnings = [];
+                    break;
+                default:
+                    throw new InvalidOperationException("The model returned an unknown recommendation kind.");
+            }
         }
         if (result.Findings.Any(x => x is null || string.IsNullOrWhiteSpace(x.Title) ||
             string.IsNullOrWhiteSpace(x.EvidenceId) || string.IsNullOrWhiteSpace(x.CurrentValue) ||
@@ -190,9 +246,43 @@ public sealed class LlmClient
         }
         result.Findings = result.Findings.DistinctBy(x => x.EvidenceId, StringComparer.Ordinal).Take(30).ToList();
         result.Recommendations = result.Recommendations
-            .Where(x => !string.IsNullOrWhiteSpace(x.ActionId))
-            .DistinctBy(x => x.ActionId, StringComparer.OrdinalIgnoreCase).Take(20).ToList();
+            .DistinctBy(x => x.Id, StringComparer.OrdinalIgnoreCase).Take(40).ToList();
         return result;
+    }
+
+    private static List<string> NormalizeList(List<string>? values, int count, int length, string field)
+    {
+        values ??= [];
+        if (values.Count > count || values.Any(value => value is null || value.Trim().Length > length))
+            throw new InvalidOperationException($"A recommendation {field} list was too large.");
+        return values.Where(value => !string.IsNullOrWhiteSpace(value)).Select(value => value.Trim())
+            .Distinct(StringComparer.Ordinal).ToList();
+    }
+
+    private static List<SourceReference> ValidateSources(List<SourceReference>? sources)
+    {
+        sources ??= [];
+        if (sources.Count > 12) throw new InvalidOperationException("A recommendation cited too many sources.");
+        foreach (var source in sources)
+        {
+            source.Title = source.Title?.Trim() ?? "";
+            source.Url = source.Url?.Trim() ?? "";
+            source.Grade = source.Grade?.Trim() ?? "Unrated";
+            if (source.Title.Length is 0 or > 300 || source.Url.Length > 2_000 || source.Grade.Length > 100)
+                throw new InvalidOperationException("A recommendation source was invalid.");
+            if (source.Url.Length > 0 && (!Uri.TryCreate(source.Url, UriKind.Absolute, out var uri) ||
+                uri.Scheme is not ("http" or "https") || !string.IsNullOrEmpty(uri.UserInfo)))
+                throw new InvalidOperationException("A recommendation source URL was invalid.");
+        }
+        return sources;
+    }
+
+    private static void RejectExecutableFields(PlanRecommendation recommendation)
+    {
+        if (!string.IsNullOrWhiteSpace(recommendation.ActionId) || !string.IsNullOrWhiteSpace(recommendation.ResourceId) ||
+            !string.IsNullOrWhiteSpace(recommendation.UpdateId) || !string.IsNullOrWhiteSpace(recommendation.Script))
+            throw new InvalidOperationException("Manual guidance contained an executable field.");
+        recommendation.ScriptLanguage = "";
     }
 
     public static IReadOnlyDictionary<string, string> BuildEvidenceFacts(SystemProfile profile)
