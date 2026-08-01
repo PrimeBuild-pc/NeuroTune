@@ -9,7 +9,7 @@ namespace NeuroTune;
 
 public sealed class SystemProfiler
 {
-    public SystemProfile Collect(Action<string>? progress = null)
+    public SystemProfile Collect(Action<string>? progress = null, bool optionalTelemetryConsent = false)
     {
         var profile = new SystemProfile();
         RunPhase("Hardware and firmware", () =>
@@ -22,6 +22,9 @@ public sealed class SystemProfiler
             profile.Disks = ReadDisks();
             profile.HardwareCapabilities = ReadHardwareCapabilities();
             profile.FirmwareAndMemory = ReadFirmwareAndMemory();
+            profile.ComponentIdentities = ReadComponentIdentities();
+            profile.FactoryBaselines = ComponentBaselineCatalog.Compare(profile.ComponentIdentities);
+            profile.TelemetryCapabilities = TelemetryProcessClient.QueryCapabilities(optionalTelemetryConsent);
         });
         RunPhase("Windows, boot, and Registry", () =>
         {
@@ -67,7 +70,8 @@ public sealed class SystemProfiler
     private static int CountFacts(SystemProfile profile) =>
         profile.Gpus.Count + profile.Disks.Count + profile.WindowsSettings.Count + profile.GamingSettings.Count +
         profile.NetworkAdapters.Count + profile.NetworkSettings.Count + profile.HardwareCapabilities.Count +
-        profile.FirmwareAndMemory.Count + profile.BootConfiguration.Count + profile.PerformanceRegistry.Count +
+        profile.FirmwareAndMemory.Count + profile.ComponentIdentities.Count + profile.FactoryBaselines.Count +
+        profile.TelemetryCapabilities.Count + profile.BootConfiguration.Count + profile.PerformanceRegistry.Count +
         profile.PolicyConflicts.Count + profile.InstalledSoftware.Count + profile.RelevantDrivers.Count +
         profile.DeviceIssues.Count + profile.SoftwareSignals.Count + profile.TopProcesses.Count +
         profile.StartupItems.Count + profile.AutomaticServices.Count;
@@ -136,102 +140,13 @@ public sealed class SystemProfiler
         };
     }
 
-    private static Dictionary<string, string> ReadPerformanceRegistry()
-    {
-        var values = new Dictionary<string, string>
-        {
-            [@"HKCU\Software\Microsoft\GameBar\AutoGameModeEnabled"] = ReadRegistry(Registry.CurrentUser, @"Software\Microsoft\GameBar", "AutoGameModeEnabled"),
-            [@"HKCU\Software\Microsoft\GameBar\AllowAutoGameMode"] = ReadRegistry(Registry.CurrentUser, @"Software\Microsoft\GameBar", "AllowAutoGameMode"),
-            [@"HKCU\System\GameConfigStore\GameDVR_Enabled"] = ReadRegistry(Registry.CurrentUser, @"System\GameConfigStore", "GameDVR_Enabled"),
-            [@"HKCU\Software\Microsoft\Windows\CurrentVersion\GameDVR\AppCaptureEnabled"] = ReadRegistry(Registry.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\GameDVR", "AppCaptureEnabled"),
-            [@"HKLM\SOFTWARE\Policies\Microsoft\Windows\GameDVR\AllowGameDVR"] = ReadRegistry(Registry.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\GameDVR", "AllowGameDVR"),
-            [@"HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers\HwSchMode"] = ReadRegistry(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\GraphicsDrivers", "HwSchMode"),
-            [@"HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects\VisualFXSetting"] = ReadRegistry(Registry.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects", "VisualFXSetting"),
-            [@"HKCU\Control Panel\Mouse\MouseSpeed"] = ReadRegistry(Registry.CurrentUser, @"Control Panel\Mouse", "MouseSpeed"),
-            [@"HKCU\Control Panel\Mouse\MouseThreshold1"] = ReadRegistry(Registry.CurrentUser, @"Control Panel\Mouse", "MouseThreshold1"),
-            [@"HKCU\Control Panel\Mouse\MouseThreshold2"] = ReadRegistry(Registry.CurrentUser, @"Control Panel\Mouse", "MouseThreshold2"),
-            [@"HKLM\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling\PowerThrottlingOff"] = ReadRegistry(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Power\PowerThrottling", "PowerThrottlingOff"),
-            [@"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\NetworkThrottlingIndex"] = ReadRegistry(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", "NetworkThrottlingIndex"),
-            [@"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\SystemResponsiveness"] = ReadRegistry(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", "SystemResponsiveness"),
-            [@"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\LargeSystemCache"] = ReadRegistry(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management", "LargeSystemCache"),
-            [@"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\DisablePagingExecutive"] = ReadRegistry(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management", "DisablePagingExecutive"),
-            [@"HKLM\SOFTWARE\Microsoft\Windows\Dwm\OverlayTestMode"] = ReadRegistry(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows\Dwm", "OverlayTestMode"),
-            [@"HKLM\SYSTEM\CurrentControlSet\Control\PriorityControl\Win32PrioritySeparation"] = ReadRegistry(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\PriorityControl", "Win32PrioritySeparation"),
-            [@"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games\GPU Priority"] = ReadRegistry(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games", "GPU Priority"),
-            [@"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games\Priority"] = ReadRegistry(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games", "Priority"),
-            [@"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games\Scheduling Category"] = ReadRegistry(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games", "Scheduling Category"),
-            [@"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games\SFIO Priority"] = ReadRegistry(Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games", "SFIO Priority"),
-            [@"HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\TcpTimedWaitDelay"] = ReadRegistry(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", "TcpTimedWaitDelay"),
-            [@"HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\MaxUserPort"] = ReadRegistry(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", "MaxUserPort"),
-            [@"HKLM\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\DefaultTTL"] = ReadRegistry(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", "DefaultTTL"),
-            [@"HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers\TdrDelay"] = ReadRegistry(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\GraphicsDrivers", "TdrDelay"),
-            [@"HKLM\SYSTEM\CurrentControlSet\Control\GraphicsDrivers\TdrDdiDelay"] = ReadRegistry(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\GraphicsDrivers", "TdrDdiDelay"),
-            [@"HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity\Enabled"] = ReadRegistry(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity", "Enabled"),
-            [@"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Power\HiberbootEnabled"] = ReadRegistry(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Session Manager\Power", "HiberbootEnabled"),
-            [@"HKLM\SYSTEM\CurrentControlSet\Control\FileSystem\NtfsDisableLastAccessUpdate"] = ReadRegistry(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\FileSystem", "NtfsDisableLastAccessUpdate"),
-            [@"HKCU\Software\Microsoft\DirectX\UserGpuPreferences\DirectXUserGlobalSettings"] = ReadRegistry(Registry.CurrentUser, @"Software\Microsoft\DirectX\UserGpuPreferences", "DirectXUserGlobalSettings")
-        };
-        var probes = new (RegistryKey Hive, string Prefix, string Path, string Name)[]
-        {
-            (Registry.CurrentUser, "HKCU", @"System\GameConfigStore", "GameDVR_FSEBehaviorMode"),
-            (Registry.CurrentUser, "HKCU", @"System\GameConfigStore", "GameDVR_HonorUserFSEBehaviorMode"),
-            (Registry.CurrentUser, "HKCU", @"System\GameConfigStore", "GameDVR_DXGIHonorFSEWindowsCompatible"),
-            (Registry.CurrentUser, "HKCU", @"System\GameConfigStore", "GameDVR_EFSEFeatureFlags"),
-            (Registry.CurrentUser, "HKCU", @"Software\Microsoft\GameBar", "UseNexusForGameBarEnabled"),
-            (Registry.CurrentUser, "HKCU", @"Software\Microsoft\GameBar", "ShowStartupPanel"),
-            (Registry.CurrentUser, "HKCU", @"Software\Microsoft\Windows\CurrentVersion\GameDVR", "HistoricalCaptureEnabled"),
-            (Registry.LocalMachine, "HKLM", @"SYSTEM\CurrentControlSet\Control\GraphicsDrivers", "TdrLevel"),
-            (Registry.LocalMachine, "HKLM", @"SYSTEM\CurrentControlSet\Control\GraphicsDrivers", "TdrDebugMode"),
-            (Registry.LocalMachine, "HKLM", @"SYSTEM\CurrentControlSet\Control\GraphicsDrivers", "DisableOverlays"),
-            (Registry.LocalMachine, "HKLM", @"SOFTWARE\Microsoft\Windows\Dwm", "EnableMPO"),
-            (Registry.LocalMachine, "HKLM", @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", "AlwaysOn"),
-            (Registry.LocalMachine, "HKLM", @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", "NoLazyMode"),
-            (Registry.LocalMachine, "HKLM", @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile", "LazyModeTimeout"),
-            (Registry.LocalMachine, "HKLM", @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games", "Clock Rate"),
-            (Registry.LocalMachine, "HKLM", @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games", "Background Only"),
-            (Registry.LocalMachine, "HKLM", @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\Tasks\Games", "Affinity"),
-            (Registry.LocalMachine, "HKLM", @"SYSTEM\CurrentControlSet\Control\PriorityControl", "IRQ8Priority"),
-            (Registry.LocalMachine, "HKLM", @"SYSTEM\CurrentControlSet\Control\PriorityControl", "IRQ16Priority"),
-            (Registry.LocalMachine, "HKLM", @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management", "ClearPageFileAtShutdown"),
-            (Registry.LocalMachine, "HKLM", @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management", "SecondLevelDataCache"),
-            (Registry.LocalMachine, "HKLM", @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management", "IoPageLockLimit"),
-            (Registry.LocalMachine, "HKLM", @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management", "FeatureSettingsOverride"),
-            (Registry.LocalMachine, "HKLM", @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management", "FeatureSettingsOverrideMask"),
-            (Registry.LocalMachine, "HKLM", @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters", "EnablePrefetcher"),
-            (Registry.LocalMachine, "HKLM", @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters", "EnableSuperfetch"),
-            (Registry.LocalMachine, "HKLM", @"SYSTEM\CurrentControlSet\Control\FileSystem", "NtfsMemoryUsage"),
-            (Registry.LocalMachine, "HKLM", @"SYSTEM\CurrentControlSet\Control\FileSystem", "NtfsDisable8dot3NameCreation"),
-            (Registry.LocalMachine, "HKLM", @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", "Tcp1323Opts"),
-            (Registry.LocalMachine, "HKLM", @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", "EnablePMTUDiscovery"),
-            (Registry.LocalMachine, "HKLM", @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", "DisableTaskOffload"),
-            (Registry.LocalMachine, "HKLM", @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", "EnableTCPChimney"),
-            (Registry.LocalMachine, "HKLM", @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", "EnableRSS"),
-            (Registry.LocalMachine, "HKLM", @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", "EnableDCA"),
-            (Registry.LocalMachine, "HKLM", @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", "SackOpts"),
-            (Registry.LocalMachine, "HKLM", @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", "GlobalMaxTcpWindowSize"),
-            (Registry.LocalMachine, "HKLM", @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", "TcpWindowSize"),
-            (Registry.LocalMachine, "HKLM", @"SYSTEM\CurrentControlSet\Services\Tcpip\Parameters", "KeepAliveTime"),
-            (Registry.LocalMachine, "HKLM", @"SYSTEM\CurrentControlSet\Services\AFD\Parameters", "FastSendDatagramThreshold"),
-            (Registry.LocalMachine, "HKLM", @"SYSTEM\CurrentControlSet\Services\AFD\Parameters", "DefaultReceiveWindow"),
-            (Registry.LocalMachine, "HKLM", @"SYSTEM\CurrentControlSet\Services\AFD\Parameters", "DefaultSendWindow"),
-            (Registry.LocalMachine, "HKLM", @"SOFTWARE\Policies\Microsoft\Windows\Psched", "NonBestEffortLimit"),
-            (Registry.LocalMachine, "HKLM", @"SYSTEM\CurrentControlSet\Control\DeviceGuard", "EnableVirtualizationBasedSecurity"),
-            (Registry.LocalMachine, "HKLM", @"SYSTEM\CurrentControlSet\Control\Lsa", "LsaCfgFlags"),
-            (Registry.CurrentUser, "HKCU", @"Control Panel\Keyboard", "KeyboardDelay"),
-            (Registry.CurrentUser, "HKCU", @"Control Panel\Keyboard", "KeyboardSpeed"),
-            (Registry.CurrentUser, "HKCU", @"Control Panel\Mouse", "MouseSensitivity"),
-            (Registry.LocalMachine, "HKLM", @"SYSTEM\CurrentControlSet\Services\mouclass\Parameters", "MouseDataQueueSize"),
-            (Registry.LocalMachine, "HKLM", @"SYSTEM\CurrentControlSet\Services\kbdclass\Parameters", "KeyboardDataQueueSize"),
-            (Registry.CurrentUser, "HKCU", @"Control Panel\Desktop", "MenuShowDelay"),
-            (Registry.CurrentUser, "HKCU", @"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced", "TaskbarAnimations"),
-            (Registry.CurrentUser, "HKCU", @"Software\Microsoft\Windows\DWM", "EnableAeroPeek"),
-            (Registry.LocalMachine, "HKLM", @"SYSTEM\CurrentControlSet\Control\Session Manager\Power", "HiberbootEnabled"),
-            (Registry.LocalMachine, "HKLM", @"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU", "NoAutoRebootWithLoggedOnUsers")
-        };
-        foreach (var probe in probes)
-            values[$@"{probe.Prefix}\{probe.Path}\{probe.Name}"] = ReadRegistry(probe.Hive, probe.Path, probe.Name);
-        return values;
-    }
+    private static Dictionary<string, string> ReadPerformanceRegistry() => ProbeCatalog.Registry.ToDictionary(
+        probe => probe.ProfileKey,
+        probe => ReadRegistry(
+            probe.Hive == RegistryProbeHive.CurrentUser ? Registry.CurrentUser : Registry.LocalMachine,
+            probe.Path,
+            probe.ValueName),
+        StringComparer.Ordinal);
 
     private static Dictionary<string, string> ReadHardwareCapabilities()
     {
@@ -270,6 +185,7 @@ public sealed class SystemProfiler
             ["Page file and system type"] = pageFile,
             ["Virtualization-based security status"] = deviceGuard,
             ["CPU clock sample"] = cpuClock,
+            ["Performance counter"] = $"high-resolution={Stopwatch.IsHighResolution}; frequency={Stopwatch.Frequency} Hz",
             ["ACPI thermal zones"] = thermalZones.Count == 0 ? "Unavailable" : string.Join("; ", thermalZones),
             ["Storage reliability"] = storageHealth.Count == 0 ? "Unavailable" : string.Join("; ", storageHealth)
         };
@@ -318,6 +234,53 @@ public sealed class SystemProfiler
                 return "Configured DIMM speeds differ; verify channel and firmware training";
             return "No profile can be confirmed from SMBIOS/WMI alone";
         }
+    }
+
+    private static Dictionary<string, string> ReadComponentIdentities()
+    {
+        var identities = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["CPU specification ID"] = ReadCpuSpecificationId(),
+            ["CPU model"] = Query("SELECT Name FROM Win32_Processor", row => row["Name"]?.ToString()?.Trim() ?? "").FirstOrDefault(value => value.Length > 0) ?? "Unavailable",
+            ["Motherboard"] = Query("SELECT Manufacturer, Product, Version FROM Win32_BaseBoard", row => $"{row["Manufacturer"]}|{row["Product"]}|{row["Version"]}").FirstOrDefault() ?? "Unavailable",
+            ["BIOS"] = Query("SELECT Manufacturer, SMBIOSBIOSVersion FROM Win32_BIOS", row => $"{row["Manufacturer"]}|{row["SMBIOSBIOSVersion"]}").FirstOrDefault() ?? "Unavailable"
+        };
+        var gpus = Query("SELECT Name, PNPDeviceID FROM Win32_VideoController", row =>
+        {
+            var parts = row["PNPDeviceID"]?.ToString()?.Split('\\') ?? [];
+            var pciId = parts.Length > 1 ? parts[1] : "Unavailable";
+            return $"{pciId}|{row["Name"]?.ToString()?.Trim()}";
+        });
+        for (var index = 0; index < gpus.Count; index++) identities[$"GPU {index + 1} specification ID"] = gpus[index];
+
+        var modules = Query("SELECT Manufacturer, PartNumber, Capacity, ConfiguredClockSpeed FROM Win32_PhysicalMemory", row =>
+        {
+            var manufacturer = row["Manufacturer"]?.ToString()?.Trim() ?? "";
+            var partNumber = row["PartNumber"]?.ToString()?.Trim() ?? "";
+            return (Manufacturer: manufacturer, PartNumber: partNumber,
+                Capacity: Convert.ToUInt64(row["Capacity"] ?? 0), Configured: Convert.ToUInt32(row["ConfiguredClockSpeed"] ?? 0));
+        });
+        for (var index = 0; index < modules.Count; index++)
+        {
+            var module = modules[index];
+            if (module.Manufacturer.Length == 0 || module.PartNumber.Length == 0) continue;
+            identities[$"DIMM {index + 1} specification ID"] = $"{module.Manufacturer}|{module.PartNumber}|{module.Capacity}";
+            identities[$"DIMM {index + 1} configured rate"] = $"{module.Configured} MT/s";
+        }
+        return identities;
+    }
+
+    private static string ReadCpuSpecificationId()
+    {
+        if (!System.Runtime.Intrinsics.X86.X86Base.IsSupported) return "Unavailable";
+        var vendor = ReadCpuIdVendor();
+        var eax = System.Runtime.Intrinsics.X86.X86Base.CpuId(1, 0).Eax;
+        var stepping = eax & 0xf;
+        var baseModel = (eax >> 4) & 0xf;
+        var baseFamily = (eax >> 8) & 0xf;
+        var family = baseFamily == 0xf ? baseFamily + ((eax >> 20) & 0xff) : baseFamily;
+        var model = baseFamily is 0x6 or 0xf ? baseModel + (((eax >> 16) & 0xf) << 4) : baseModel;
+        return $"{vendor}-{family}-{model:X}-{stepping}";
     }
 
     private static string ReadFirmwareType() => GetFirmwareType(out var type)

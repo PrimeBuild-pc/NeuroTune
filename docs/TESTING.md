@@ -24,10 +24,12 @@ Use a disposable Windows virtual machine. Do not use a primary PC for the first 
 
 1. Select **Scan this PC** without requesting an AI diagnosis.
 2. Confirm that live phase progress appears for hardware/firmware, Windows/Registry, network/devices, software, and services.
-3. Confirm that CPU, GPU, motherboard, BIOS, DIMMs, BCD, drivers, applications, device issues, and 80+ Registry facts are populated.
-4. Review the sanitized JSON profile and any locally detected policy conflicts or manual overrides.
-5. Confirm that the Windows username and device name do not appear.
-6. Confirm that no provider request occurs until **Run AI diagnosis** is selected.
+3. During a second scan, select **Cancel scan** and confirm the UI treats it as informational, keeps no partial profile, and leaves no agent, `powercfg`, `netsh`, WMI, or other probe process running.
+4. Confirm that CPU, GPU, motherboard, BIOS, DIMMs, BCD, drivers, applications, device issues, and all 83 Registry facts are populated.
+5. Review the sanitized JSON, fact count, UTF-8 payload size/limit, telemetry support matrix, exact component baselines, and local conflicts.
+6. Confirm that unknown components report `baseline unavailable` rather than a nearest-model guess.
+7. Confirm that the Windows username, device name, serial numbers, and MAC addresses do not appear.
+8. Confirm that no provider request occurs until **Run AI diagnosis** is selected.
 
 ## 3. Diagnosis and Review
 
@@ -56,3 +58,13 @@ In a disposable VM only, terminate NeuroTune while an operation is marked **Appl
 ## Reporting
 
 Include the Windows build, hardware/VM configuration, provider, selected action IDs, operation status, and redacted log lines. Never include an API key or an unredacted system profile.
+
+## Hyper-V automation
+
+From an elevated host PowerShell run scripts/vm-provision.ps1, then run scripts/vm-validation.ps1 with InstallerPath set to the generated NSIS installer.
+
+For the slower per-action Registry integrity pass, run scripts/vm-action-integrity.ps1 with InstallerPath set to the same final installer. It creates real restore points, validates mixed Registry value kinds and absent values, and restores the selected clean Hyper-V checkpoint in a finally block.
+
+Provisioning refuses to overwrite an existing VM or VM directory. Validation restores Clean-NeuroTune-Alpha2, so use it only with the disposable NeuroTune-W11 and NeuroTune-W10 guests created for this project.
+
+The automated validation report covers installation, the 12-action apply/verify/rollback cycle, interrupted Apply and Rollback recovery, orphan-process checks, Defender, PawnIO absence, and clean uninstall. Scaling, keyboard navigation, forced-colors, physical sensors, SPD/XMP/EXPO, and real-GPU HAGS remain manual or physical-hardware checks.

@@ -1,8 +1,11 @@
+use serde::Serialize;
 use serde_json::Value;
 use std::{
+    collections::HashMap,
     io::{BufRead, BufReader, Write},
     path::PathBuf,
     process::{Command, Stdio},
+    sync::Mutex,
     thread,
 };
 use tauri::{AppHandle, Emitter, Manager};
@@ -22,17 +25,86 @@ const COMMANDS: &[&str] = &[
     "rollback",
 ];
 
+#[derive(Default)]
+struct AgentState(Mutex<HashMap<String, ActiveAgent>>);
+
+struct ActiveAgent {
+    process_id: u32,
+    cancellable: bool,
+    cancelled: bool,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct ProgressEvent<'a> {
+    request_id: &'a str,
+    message: &'a str,
+}
+
 #[tauri::command]
-async fn agent(app: AppHandle, command: String, payload: Option<Value>) -> Result<Value, String> {
+async fn agent(
+    app: AppHandle,
+    request_id: String,
+    command: String,
+    payload: Option<Value>,
+) -> Result<Value, String> {
+    validate_request(&request_id)?;
     if !COMMANDS.contains(&command.as_str()) {
         return Err("Unsupported NeuroTune agent command".into());
     }
-    tauri::async_runtime::spawn_blocking(move || run_agent(&app, &command, payload))
+    tauri::async_runtime::spawn_blocking(move || run_agent(&app, &request_id, &command, payload))
         .await
         .map_err(|error| error.to_string())?
 }
 
-fn run_agent(app: &AppHandle, command: &str, payload: Option<Value>) -> Result<Value, String> {
+#[tauri::command]
+async fn cancel_agent(app: AppHandle, request_id: String) -> Result<bool, String> {
+    validate_request(&request_id)?;
+    let process_id = {
+        let state = app.state::<AgentState>();
+        let mut active = state.0.lock().map_err(|_| "Agent state is unavailable")?;
+        let Some(agent) = active.get_mut(&request_id) else {
+            return Ok(false);
+        };
+        if !agent.cancellable {
+            return Err("Only a NeuroTune scan can be cancelled".into());
+        }
+        agent.cancelled = true;
+        agent.process_id
+    };
+
+    if let Err(error) = terminate_process_tree(process_id) {
+        if let Ok(mut active) = app.state::<AgentState>().0.lock() {
+            if let Some(agent) = active.get_mut(&request_id) {
+                agent.cancelled = false;
+            }
+        }
+        return Err(error);
+    }
+    Ok(true)
+}
+
+fn terminate_process_tree(process_id: u32) -> Result<(), String> {
+    let process_id = process_id.to_string();
+    let status = Command::new("taskkill.exe")
+        .args(["/PID", &process_id, "/T", "/F"])
+        .creation_flags(0x08000000)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map_err(|error| format!("Could not cancel the NeuroTune scan: {error}"))?;
+    status
+        .success()
+        .then_some(())
+        .ok_or_else(|| "Windows could not terminate the NeuroTune scan process tree".into())
+}
+
+fn run_agent(
+    app: &AppHandle,
+    request_id: &str,
+    command: &str,
+    payload: Option<Value>,
+) -> Result<Value, String> {
     let executable = agent_path(app)?;
     let mut child = Command::new(&executable)
         .arg(command)
@@ -47,28 +119,66 @@ fn run_agent(app: &AppHandle, command: &str, payload: Option<Value>) -> Result<V
                 executable.display()
             )
         })?;
+    {
+        let state = app.state::<AgentState>();
+        let mut active = state.0.lock().map_err(|_| "Agent state is unavailable")?;
+        if active
+            .insert(
+                request_id.to_string(),
+                ActiveAgent {
+                    process_id: child.id(),
+                    cancellable: is_cancellable(command),
+                    cancelled: false,
+                },
+            )
+            .is_some()
+        {
+            let _ = child.kill();
+            return Err("Duplicate agent request ID".into());
+        }
+    }
 
     if let Some(mut stdin) = child.stdin.take() {
-        stdin
-            .write_all(payload.unwrap_or(Value::Null).to_string().as_bytes())
-            .map_err(|error| format!("Could not send the agent request: {error}"))?;
+        if let Err(error) = stdin.write_all(payload.unwrap_or(Value::Null).to_string().as_bytes()) {
+            let _ = child.kill();
+            if let Ok(mut active) = app.state::<AgentState>().0.lock() {
+                active.remove(request_id);
+            }
+            return Err(format!("Could not send the agent request: {error}"));
+        }
     }
     let stderr = child.stderr.take();
     let progress_app = app.clone();
+    let progress_request_id = request_id.to_string();
     let progress = thread::spawn(move || {
         let mut messages = Vec::new();
         if let Some(stderr) = stderr {
             for line in BufReader::new(stderr).lines().map_while(Result::ok) {
-                let _ = progress_app.emit("agent-progress", &line);
+                let _ = progress_app.emit(
+                    "agent-progress",
+                    ProgressEvent {
+                        request_id: &progress_request_id,
+                        message: &line,
+                    },
+                );
                 messages.push(line);
             }
         }
         messages.join("\n")
     });
-    let output = child
-        .wait_with_output()
-        .map_err(|error| error.to_string())?;
+    let output = child.wait_with_output().map_err(|error| error.to_string());
+    let cancelled = app
+        .state::<AgentState>()
+        .0
+        .lock()
+        .map_err(|_| "Agent state is unavailable")?
+        .remove(request_id)
+        .is_some_and(|agent| agent.cancelled);
+    let output = output?;
     let stderr = progress.join().unwrap_or_default();
+    if cancelled {
+        return Err("Agent request cancelled".into());
+    }
     let response: Value = serde_json::from_slice(&output.stdout)
         .map_err(|_| format!("The NeuroTune agent returned an invalid response. {stderr}"))?;
     if response.get("ok").and_then(Value::as_bool) == Some(true) {
@@ -79,6 +189,94 @@ fn run_agent(app: &AppHandle, command: &str, payload: Option<Value>) -> Result<V
             .and_then(Value::as_str)
             .unwrap_or("The NeuroTune agent failed")
             .to_string())
+    }
+}
+
+fn is_cancellable(command: &str) -> bool {
+    command == "scan"
+}
+
+fn validate_request(request_id: &str) -> Result<(), String> {
+    if request_id.is_empty()
+        || request_id.len() > 128
+        || !request_id
+            .bytes()
+            .all(|value| value.is_ascii_alphanumeric() || value == b'-')
+    {
+        return Err("Invalid agent request ID".into());
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{is_cancellable, terminate_process_tree, validate_request};
+    #[cfg(target_os = "windows")]
+    use std::os::windows::process::CommandExt;
+    use std::{
+        io::{BufRead, BufReader},
+        process::{Command, Stdio},
+    };
+
+    #[test]
+    fn request_ids_are_restricted() {
+        assert!(validate_request("550e8400-e29b-41d4-a716-446655440000").is_ok());
+        assert!(validate_request("../other-process").is_err());
+        assert!(validate_request("").is_err());
+        assert!(is_cancellable("scan"));
+        assert!(!is_cancellable("apply"));
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn cancelling_fake_agent_terminates_its_blocking_subprocess() {
+        let mut fake_agent = Command::new("powershell.exe")
+            .args([
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "$child = Start-Process ping.exe -ArgumentList '-t','127.0.0.1' -WindowStyle Hidden -PassThru; [Console]::Out.WriteLine($child.Id); [Console]::Out.Flush(); $child.WaitForExit()",
+            ])
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .creation_flags(0x08000000)
+            .spawn()
+            .expect("fake agent should start");
+        let child_pid: u32 = BufReader::new(
+            fake_agent
+                .stdout
+                .take()
+                .expect("fake agent stdout should exist"),
+        )
+        .lines()
+        .next()
+        .expect("fake agent should report child readiness")
+        .expect("fake agent child PID should be readable")
+        .parse()
+        .expect("fake agent child PID should be numeric");
+
+        terminate_process_tree(fake_agent.id()).expect("the fake agent tree should terminate");
+        let _ = fake_agent.wait();
+
+        assert!(
+            !process_exists(child_pid),
+            "blocking subprocess was orphaned"
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    fn process_exists(process_id: u32) -> bool {
+        let filter = format!("PID eq {process_id}");
+        let output = Command::new("tasklist.exe")
+            .args(["/FI", &filter, "/FO", "CSV", "/NH"])
+            .creation_flags(0x08000000)
+            .output()
+            .expect("tasklist should run");
+        let csv = String::from_utf8_lossy(&output.stdout);
+        csv.lines()
+            .any(|line| line.split(',').nth(1) == Some(&format!("\"{process_id}\"")))
     }
 }
 
@@ -109,7 +307,8 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![agent])
+        .manage(AgentState::default())
+        .invoke_handler(tauri::generate_handler![agent, cancel_agent])
         .run(tauri::generate_context!())
         .expect("error while running NeuroTune");
 }

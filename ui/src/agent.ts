@@ -1,5 +1,13 @@
 import { invoke } from '@tauri-apps/api/core';
 
-export async function agent<T>(command: string, payload?: unknown): Promise<T> {
-  return invoke<T>('agent', { command, payload: payload ?? null });
+export function newRequestId(): string {
+  return crypto.randomUUID();
+}
+
+export async function agent<T>(command: string, payload?: unknown, requestId = newRequestId()): Promise<T> {
+  return invoke<T>('agent', { requestId, command, payload: payload ?? null });
+}
+
+export async function cancelAgent(requestId: string): Promise<boolean> {
+  return invoke<boolean>('cancel_agent', { requestId });
 }

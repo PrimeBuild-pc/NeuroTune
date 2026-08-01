@@ -23,7 +23,7 @@ try
         "save-provider" => SaveProvider(Read<SaveProviderRequest>(input), settingsService),
         "oauth-openrouter" => await OAuth(settingsService),
         "models" => await Models(settingsService, catalog),
-        "scan" => await Scan(catalog),
+        "scan" => await Scan(catalog, settingsService, ReadOptional<ScanRequest>(input)),
         "analyze-local" => AnalyzeLocal(Read<DiagnoseRequest>(input)),
         "diagnose" => await Diagnose(Read<DiagnoseRequest>(input), settingsService, catalog),
         "actions" => Actions(catalog),
@@ -42,6 +42,9 @@ catch (Exception exception)
 
 T Read<T>(string value) => JsonSerializer.Deserialize<T>(value, json)
     ?? throw new InvalidOperationException("The agent request was empty or invalid.");
+
+T? ReadOptional<T>(string value) where T : class =>
+    string.IsNullOrWhiteSpace(value) ? null : JsonSerializer.Deserialize<T>(value, json);
 
 void Write(object value) => Console.Write(JsonSerializer.Serialize(value, json));
 
@@ -77,15 +80,21 @@ async Task<object> Models(SettingsService service, OptimizationCatalog actionCat
     return new { models };
 }
 
-async Task<object> Scan(OptimizationCatalog actionCatalog)
+async Task<object> Scan(OptimizationCatalog actionCatalog, SettingsService settingsService, ScanRequest? request)
 {
-    var profileTask = Task.Run(() => new SystemProfiler().Collect(phase => Console.Error.WriteLine(phase)));
+    var profileTask = Task.Run(() => new SystemProfiler().Collect(
+        phase => Console.Error.WriteLine(phase), request?.OptionalTelemetryConsent == true));
     var snapshotTask = Task.Run(() => new PerformanceSnapshotService().Collect());
     await Task.WhenAll(profileTask, snapshotTask);
+    var profile = await profileTask;
+    var evidence = LlmClient.BuildEvidenceFacts(profile);
+    var payloadReport = LlmClient.MeasureEvidence(evidence);
+    new PayloadMetricsService().Record(payloadReport, settingsService.Load(), "local-scan-completed");
     return new
     {
-        profile = await profileTask,
-        sanitizedProfile = JsonSerializer.Serialize(LlmClient.BuildEvidenceFacts(await profileTask), new JsonSerializerOptions { WriteIndented = true }),
+        profile,
+        sanitizedProfile = JsonSerializer.Serialize(evidence, new JsonSerializerOptions { WriteIndented = true }),
+        payloadReport,
         snapshot = await snapshotTask,
         actions = Actions(actionCatalog)
     };
@@ -105,7 +114,18 @@ async Task<object> Diagnose(DiagnoseRequest request, SettingsService service, Op
         throw new InvalidOperationException("Diagnosis requires a system profile and tuning goals.");
     var settings = service.Load();
     var key = service.LoadApiKey(settings);
-    return await new LlmClient(actionCatalog).DiagnoseAsync(request.Profile, request.Goals, settings, key);
+    var report = LlmClient.MeasureEvidence(LlmClient.BuildEvidenceFacts(request.Profile));
+    try
+    {
+        var result = await new LlmClient(actionCatalog).DiagnoseAsync(request.Profile, request.Goals, settings, key);
+        new PayloadMetricsService().Record(report, settings, "diagnosis-completed");
+        return result;
+    }
+    catch
+    {
+        new PayloadMetricsService().Record(report, settings, "provider-error");
+        throw;
+    }
 }
 
 object Actions(OptimizationCatalog actionCatalog) => actionCatalog.All.Select(action => new
@@ -132,3 +152,4 @@ sealed record SaveProviderRequest(UserSettings Settings, string? ApiKey);
 sealed record DiagnoseRequest(SystemProfile? Profile, TuningGoals? Goals);
 sealed record ApplyRequest(List<string> ActionIds);
 sealed record RollbackRequest(Guid OperationId);
+sealed record ScanRequest(bool OptionalTelemetryConsent);
