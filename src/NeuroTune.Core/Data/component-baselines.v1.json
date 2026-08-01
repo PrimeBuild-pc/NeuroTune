@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "cpu": [
+    {
+      "match": "GenuineIntel-6-B7-1|13th Gen Intel(R) Core(TM) i9-13900K",
+      "vendorSpecificationId": "Intel ARK 230496",
+      "reference": "base 3000 MHz; max turbo 5800 MHz",
+      "source": "https://www.intel.com/content/www/us/en/products/sku/230496/intel-core-i913900k-processor-36m-cache-up-to-5-80-ghz/specifications.html"
+    },
+    {
+      "match": "GenuineIntel-6-B7-1|Intel(R) Core(TM) i9-14900K",
+      "vendorSpecificationId": "Intel ARK 236773",
+      "reference": "base 3200 MHz; max turbo 6000 MHz",
+      "source": "https://www.intel.com/content/www/us/en/products/sku/236773/intel-core-i9-processor-14900k-36m-cache-up-to-6-00-ghz/specifications.html"
+    },
+    {
+      "match": "AuthenticAMD-25-21-2|AMD Ryzen 7 5800X3D 8-Core Processor",
+      "vendorSpecificationId": "AMD 100-100000651WOF",
+      "reference": "8 cores / 16 threads; base 3400 MHz; max boost 4500 MHz; 96 MB L3; 105 W",
+      "source": "https://www.amd.com/en/products/processors/desktops/ryzen/5000-series/amd-ryzen-7-5800x3d.html"
+    }
+  ],
+  "memory": [
+    {
+      "match": "Crucial Technology|CT16G4DFRA32A|17179869184",
+      "vendorSpecificationId": "Crucial CT16G4DFRA32A",
+      "reference": "16 GB DDR4-3200; 1.2 V",
+      "source": "https://www.crucial.com/memory/ddr4/ct16g4dfra32a"
+    }
+  ],
+  "gpu": [
+    {
+      "match": "VEN_1002&DEV_73A5&SUBSYS_05041043&REV_C0|AMD Radeon RX 6950 XT",
+      "vendorSpecificationId": "AMD Radeon RX 6950 XT / PCI 1002:73A5",
+      "reference": "80 compute units; game clock 2100 MHz; boost up to 2310 MHz; 16 GB GDDR6",
+      "source": "https://www.amd.com/en/products/graphics/desktops/radeon/6000-series.html"
+    }
+  ]
+}

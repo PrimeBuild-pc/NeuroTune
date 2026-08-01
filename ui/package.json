@@ -1,7 +1,7 @@
 {
   "name": "neurotune-ui",
   "private": true,
-  "version": "0.5.0-alpha.1",
+  "version": "0.5.0-alpha.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,8 +10,8 @@
     "test": "vitest run",
     "lint": "oxlint src",
     "preview": "vite preview",
-    "agent:build": "dotnet build ../src/NeuroTune.Agent/NeuroTune.Agent.csproj -c Release",
-    "agent:publish": "dotnet publish ../src/NeuroTune.Agent/NeuroTune.Agent.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o src-tauri/agent",
+    "agent:build": "dotnet build ../src/NeuroTune.Agent/NeuroTune.Agent.csproj -c Release && dotnet build ../src/NeuroTune.Telemetry/NeuroTune.Telemetry.csproj -c Release",
+    "agent:publish": "dotnet publish ../src/NeuroTune.Agent/NeuroTune.Agent.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o src-tauri/agent && dotnet publish ../src/NeuroTune.Telemetry/NeuroTune.Telemetry.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o src-tauri/agent",
     "tauri": "tauri"
   },
   "dependencies": {

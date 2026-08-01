@@ -72,17 +72,20 @@
 <h2>Features</h2>
 
 <ul>
-  <li><strong>Deep evidence inventory:</strong> 80+ performance Registry values plus BCD, drivers, devices, filters, software, firmware, DIMMs, power, gaming, networking, runtime, and startup state.</li>
+  <li><strong>Deep evidence inventory:</strong> 83 typed Registry probes plus BCD, drivers, devices, filters, software, firmware, DIMMs, power, gaming, networking, runtime, and startup state.</li>
   <li><strong>Flexible model connections:</strong> OpenRouter, OpenAI, Anthropic, DeepSeek, any OpenAI-compatible or Anthropic-compatible API, Ollama, LM Studio, and vLLM.</li>
   <li><strong>Official browser authorization:</strong> OpenRouter OAuth with PKCE; providers without a supported third-party authorization flow continue to use API credentials.</li>
   <li><strong>Native web UI:</strong> Tauri 2 and React with high-contrast light/dark themes, Windows appearance synchronization, and manual override.</li>
   <li><strong>Guided workflow:</strong> Setup, local scan, AI diagnosis, compatibility review, apply, measure, and restore.</li>
   <li><strong>Goal-aware diagnosis:</strong> tell the model which games or workloads matter and prioritize frame rate, system latency, network latency, balance, or efficiency.</li>
-  <li><strong>Explicit conflict graph:</strong> names the exact settings and values involved, their relationship, confidence, and why they may oppose the selected objective.</li>
+  <li><strong>Explicit conflict graph:</strong> names the exact settings and values involved, including timer, filter/VPN, overlay, memory, device, power, and recovery relationships.</li>
+  <li><strong>Cancellable scans:</strong> cancellation terminates only the matching agent process tree and never keeps a partial profile.</li>
+  <li><strong>Reviewable payload limits:</strong> shows evidence fact count, UTF-8 size, privacy classes, and the enforced single-pass limit before diagnosis.</li>
+  <li><strong>Exact local baselines:</strong> versioned CPU and memory references match exact component identifiers; unknown hardware reports <code>baseline unavailable</code>.</li>
   <li><strong>User-controlled plans:</strong> switch between AI recommendations, conflict fixes, and every supported reversible action; risk changes warnings, not visibility.</li>
   <li><strong>Current allowlisted actions:</strong> power, gaming, graphics, visual, memory, GPU-timeout, and legacy TCP repairs with local capture, verification, and rollback.</li>
   <li><strong>Local operation history:</strong> Per-action state snapshots and rollback from the desktop interface.</li>
-  <li><strong>No proprietary telemetry:</strong> Runtime data remains local except for the profile explicitly sent to the selected LLM provider.</li>
+  <li><strong>Honest telemetry boundary:</strong> low-level capabilities remain read-only and unavailable or driver-not-approved until a separate adapter and driver trust review is complete.</li>
 </ul>
 
 <h2>Requirements</h2>
@@ -143,6 +146,8 @@ npm run tauri -- build --bundles nsis</code></pre>
   <li><a href="docs/DESIGN_SYSTEM.md">Design system and theme contract</a></li>
   <li><a href="docs/PROVIDERS.md">Cloud, custom, OAuth, and local provider guide</a></li>
   <li><a href="docs/TESTING.md">Alpha test guide</a></li>
+  <li><a href="docs/VALIDATION_MATRIX.md">VM, accessibility, scaling, and hardware validation matrix</a></li>
+  <li><a href="docs/PAWNIO_TRUST_REVIEW.md">PawnIO / LibreHardwareMonitor trust decision</a></li>
   <li><a href=".claude/PROJECT_SPECIFICATION.md">Project specification</a></li>
   <li><a href="SECURITY.md">Security policy</a></li>
 </ul>

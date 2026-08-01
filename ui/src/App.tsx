@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import {
   Activity, Bot, Check, ChevronRight, CircleGauge, Cloud, Cpu, Database,
   HardDrive, KeyRound, Laptop, ListChecks, LoaderCircle, LockKeyhole, LogIn,
   Monitor, MonitorCog, Moon, Palette, Printer, RefreshCw, RotateCcw, ScanLine, Settings,
-  ShieldCheck, SlidersHorizontal, Sun, Target, TerminalSquare, Wifi,
+  ShieldCheck, SlidersHorizontal, Sun, Target, TerminalSquare, Wifi, X,
 } from 'lucide-react';
-import { agent } from './agent';
+import { agent, cancelAgent, newRequestId } from './agent';
 import { applyTheme, loadThemePreference } from './theme';
 import type {
   ConflictPattern, Diagnosis, OperationManifest, OptimizationAction, ProviderKind, ProviderSettings,
@@ -46,6 +46,9 @@ const navigation: Array<{ id: Page; label: string; icon: typeof Activity }> = [
 function App() {
   const [page, setPage] = useState<Page>('overview');
   const [theme, setTheme] = useState<ThemePreference>(loadThemePreference);
+  const [telemetryConsent, setTelemetryConsent] = useState(
+    () => localStorage.getItem('neurotune.optionalTelemetryConsent') === 'true',
+  );
   const [provider, setProvider] = useState<ProviderSettings>(defaults.openRouter);
   const [apiKey, setApiKey] = useState('');
   const [hasCredential, setHasCredential] = useState(false);
@@ -57,11 +60,16 @@ function App() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [history, setHistory] = useState<OperationManifest[]>([]);
   const [busy, setBusy] = useState('');
+  const [scanRequestId, setScanRequestId] = useState<string>();
+  const activeScan = useRef<string | undefined>(undefined);
+  const cancellationPending = useRef(false);
   const [notice, setNotice] = useState<{ tone: 'success' | 'danger' | 'info'; text: string }>();
 
   useEffect(() => applyTheme(theme), [theme]);
   useEffect(() => {
-    const unlisten = listen<string>('agent-progress', event => setBusy(`Deep scan · ${event.payload}`));
+    const unlisten = listen<{ requestId: string; message: string }>('agent-progress', event => {
+      if (event.payload.requestId === activeScan.current) setBusy(`Deep scan · ${event.payload.message}`);
+    });
     return () => { void unlisten.then(stop => stop()); };
   }, []);
   useEffect(() => {
@@ -143,15 +151,39 @@ function App() {
   }
 
   async function scanSystem() {
-    const result = await run('Deep scan · starting hardware inventory…', () => agent<ScanResult>('scan'));
-    if (result) {
+    if (activeScan.current) return cancelScan();
+    const requestId = newRequestId();
+    activeScan.current = requestId;
+    setScanRequestId(requestId);
+    setBusy('Deep scan · starting hardware inventory…');
+    setNotice(undefined);
+    try {
+      const result = await agent<ScanResult>('scan', { optionalTelemetryConsent: telemetryConsent }, requestId);
       setScan(result);
       setActions(result.actions);
       setDiagnosis(undefined);
       setSelected(new Set());
       setPage('scan');
       setNotice({ tone: 'success', text: 'Local scan complete. No profile was sent to an AI provider.' });
+    } catch (error) {
+      if (String(error).includes('Agent request cancelled'))
+        setNotice({ tone: 'info', text: 'Scan cancelled. No partial profile was kept.' });
+      else showError(error);
+    } finally {
+      if (activeScan.current === requestId) activeScan.current = undefined;
+      cancellationPending.current = false;
+      setScanRequestId(current => current === requestId ? undefined : current);
+      setBusy('');
     }
+  }
+
+  async function cancelScan() {
+    const requestId = activeScan.current;
+    if (!requestId || cancellationPending.current) return;
+    cancellationPending.current = true;
+    setBusy('Cancelling scan and its child processes…');
+    try { await cancelAgent(requestId); }
+    catch (error) { cancellationPending.current = false; showError(error); }
   }
 
   async function diagnose() {
@@ -211,11 +243,11 @@ function App() {
       <aside className="sidebar">
         <div className="brand"><div className="brand-mark">N</div><div><strong>NeuroTune</strong><span>Windows intelligence</span></div></div>
         <nav aria-label="Main navigation">
-          {navigation.map(item => <button key={item.id} className={page === item.id ? 'nav-item active' : 'nav-item'} onClick={() => setPage(item.id)}><item.icon size={18}/><span>{item.label}</span></button>)}
+          {navigation.map(item => <button key={item.id} aria-current={page === item.id ? 'page' : undefined} className={page === item.id ? 'nav-item active' : 'nav-item'} onClick={() => setPage(item.id)}><item.icon size={18}/><span>{item.label}</span></button>)}
         </nav>
         <div className="sidebar-foot">
           <div className="security-chip"><ShieldCheck size={16}/><span>Allowlisted actions</span></div>
-          <small>v0.5.0-alpha.1</small>
+          <small>v0.5.0-alpha.2</small>
         </div>
       </aside>
 
@@ -229,25 +261,28 @@ function App() {
         </header>
 
         {notice && <div className={`notice ${notice.tone}`} role="status"><span>{notice.text}</span><button aria-label="Dismiss message" onClick={() => setNotice(undefined)}>×</button></div>}
-        {busy && <div className="busy-bar" role="status"><LoaderCircle size={16} className="spin"/><span>{busy}</span></div>}
+        {busy && <div className="busy-bar" role="status"><LoaderCircle size={16} className="spin"/><span>{busy}</span>{scanRequestId && <button className="ghost" onClick={cancelScan}><X size={14}/>Cancel scan</button>}</div>}
         {pendingRecovery && <div className="recovery-banner" role="alert"><div><RotateCcw size={18}/><span><strong>An interrupted operation needs attention.</strong><small>{pendingRecovery.id}</small></span></div><button className="secondary" onClick={() => setPage('activity')}>Review recovery</button></div>}
 
         <section className="page-content">
-          {page === 'overview' && <Overview hasProvider={hasCredential || !provider.requiresApiKey} scan={scan} history={history} onProvider={() => setPage('provider')} onScan={scanSystem}/>}
+          {page === 'overview' && <Overview hasProvider={hasCredential || !provider.requiresApiKey} scan={scan} history={history} scanning={Boolean(scanRequestId)} onProvider={() => setPage('provider')} onScan={scanSystem}/>}
           {page === 'provider' && <ProviderPage provider={provider} apiKey={apiKey} hasCredential={hasCredential} models={models} onChoose={chooseProvider} onChange={setProvider} onKey={setApiKey} onSave={saveProvider} onLoadModels={loadModels} onBrowserSignIn={browserSignIn}/>}
-          {page === 'scan' && <ScanPage scan={scan} diagnosis={diagnosis} goals={goals} onGoals={setGoals} onScan={scanSystem} onDiagnose={diagnose}/>}
+          {page === 'scan' && <ScanPage scan={scan} diagnosis={diagnosis} goals={goals} scanning={Boolean(scanRequestId)} onGoals={setGoals} onScan={scanSystem} onDiagnose={diagnose}/>}
           {page === 'review' && <ReviewPage diagnosis={diagnosis} actions={actions} recommendations={recommendations} selected={selected} onToggle={id => setSelected(current => toggle(current, id))} onPreset={applyPreset} onApply={applyChanges}/>}
           {page === 'activity' && <ActivityPage history={history} onRefresh={async () => setHistory(await agent<OperationManifest[]>('history'))} onRollback={rollback}/>}
-          {page === 'settings' && <SettingsPage theme={theme} onTheme={setTheme}/>}
+          {page === 'settings' && <SettingsPage theme={theme} onTheme={setTheme} telemetryConsent={telemetryConsent} onTelemetryConsent={value => {
+            setTelemetryConsent(value);
+            localStorage.setItem('neurotune.optionalTelemetryConsent', String(value));
+          }}/>}
         </section>
       </main>
     </div>
   );
 }
 
-function Overview({ hasProvider, scan, history, onProvider, onScan }: { hasProvider: boolean; scan?: ScanResult; history: OperationManifest[]; onProvider: () => void; onScan: () => void }) {
+function Overview({ hasProvider, scan, history, scanning, onProvider, onScan }: { hasProvider: boolean; scan?: ScanResult; history: OperationManifest[]; scanning: boolean; onProvider: () => void; onScan: () => void }) {
   return <div className="stack-xl">
-    <section className="hero-panel"><div className="hero-copy"><span className="kicker">CONTROLLED SYSTEM TUNING</span><h2>Understand the machine.<br/>Change only what is safe.</h2><p>NeuroTune combines a local Windows profile with your chosen AI model, then limits execution to compatible, reversible actions.</p><div className="button-row"><button className="primary" onClick={hasProvider ? onScan : onProvider}>{hasProvider ? 'Scan this PC' : 'Connect a provider'}<ChevronRight size={17}/></button><button className="secondary" onClick={onProvider}>Provider settings</button></div></div><div className="hero-visual"><div className="orbit one"/><div className="orbit two"/><Cpu size={48}/><span>LOCAL<br/>CONTROL</span></div></section>
+    <section className="hero-panel"><div className="hero-copy"><span className="kicker">CONTROLLED SYSTEM TUNING</span><h2>Understand the machine.<br/>Change only what is safe.</h2><p>NeuroTune combines a local Windows profile with your chosen AI model, then limits execution to compatible, reversible actions.</p><div className="button-row"><button className="primary" onClick={hasProvider ? onScan : onProvider}>{hasProvider ? (scanning ? 'Cancel scan' : 'Scan this PC') : 'Connect a provider'}{scanning ? <X size={17}/> : <ChevronRight size={17}/>}</button><button className="secondary" onClick={onProvider}>Provider settings</button></div></div><div className="hero-visual"><div className="orbit one"/><div className="orbit two"/><Cpu size={48}/><span>LOCAL<br/>CONTROL</span></div></section>
     <div className="metric-grid three"><Metric icon={Bot} label="AI provider" value={hasProvider ? 'Connected' : 'Not configured'} tone={hasProvider ? 'good' : 'warn'}/><Metric icon={ScanLine} label="System profile" value={scan ? 'Ready' : 'Not scanned'}/><Metric icon={RotateCcw} label="Recoverable operations" value={String(history.filter(item => item.actions.some(action => action.applied && !action.rolledBack)).length)}/></div>
     <section className="section-card"><div className="section-heading"><div><span className="eyebrow">How it works</span><h3>A visible boundary at every step</h3></div></div><div className="steps"><Step number="01" title="Profile locally" text="Review the exact sanitized system data before it leaves the PC."/><Step number="02" title="Ask your model" text="Use OpenRouter, a direct API, a custom endpoint, or a local model."/><Step number="03" title="Review compatibility" text="Unsupported and already-configured actions remain unavailable."/><Step number="04" title="Back up and apply" text="A verified restore point and per-action journal are mandatory."/></div></section>
   </div>;
@@ -273,8 +308,8 @@ function ProviderPage({ provider, apiKey, hasCredential, models, onChoose, onCha
   </div>;
 }
 
-function ScanPage({ scan, diagnosis, goals, onGoals, onScan, onDiagnose }: { scan?: ScanResult; diagnosis?: Diagnosis; goals: TuningGoals; onGoals: (value: TuningGoals) => void; onScan: () => void; onDiagnose: () => void }) {
-  if (!scan) return <EmptyState icon={ScanLine} title="No local profile yet" text="Scan Windows locally first. NeuroTune will not contact your AI provider during this step." action="Scan this PC" onAction={onScan}/>;
+function ScanPage({ scan, diagnosis, goals, scanning, onGoals, onScan, onDiagnose }: { scan?: ScanResult; diagnosis?: Diagnosis; goals: TuningGoals; scanning: boolean; onGoals: (value: TuningGoals) => void; onScan: () => void; onDiagnose: () => void }) {
+  if (!scan) return <EmptyState icon={ScanLine} title="No local profile yet" text="Scan Windows locally first. NeuroTune will not contact your AI provider during this step." action={scanning ? 'Cancel scan' : 'Scan this PC'} onAction={onScan}/>;
   const priorities: Array<{ id: TuningGoals['priority']; label: string; detail: string }> = [
     { id: 'balanced', label: 'Balanced', detail: 'No single metric at any cost' },
     { id: 'fps', label: 'Frame rate', detail: 'Prioritize consistent gaming throughput' },
@@ -282,7 +317,7 @@ function ScanPage({ scan, diagnosis, goals, onGoals, onScan, onDiagnose }: { sca
     { id: 'networkLatency', label: 'Network', detail: 'Focus on measured connection conditions' },
     { id: 'efficiency', label: 'Efficiency', detail: 'Protect battery life and thermals' },
   ];
-  return <div className="stack-lg"><div className="page-actions"><div><span className="eyebrow">Local profile</span><h2>Set the target before diagnosis</h2></div><div className="button-row"><button className="secondary" onClick={onScan}><RefreshCw size={16}/>Scan again</button><button className="primary" onClick={onDiagnose}><Bot size={16}/>Run AI diagnosis</button></div></div><div className="metric-grid four"><Metric icon={Monitor} label="Windows" value={scan.profile.operatingSystem}/><Metric icon={Cpu} label="Processor" value={scan.profile.cpu}/><Metric icon={Database} label="Memory" value={scan.profile.memory}/><Metric icon={HardDrive} label="Registry checks" value={`${Object.keys(scan.profile.performanceRegistry).length} inspected`}/></div><section className="scan-summary"><div className="scan-phases">{scan.profile.scanPhases.map(phase => <article key={phase.name}><Check size={15}/><div><strong>{phase.name}</strong><small>{phase.factsCollected} facts · {(phase.durationMilliseconds / 1000).toFixed(1)} s</small></div></article>)}</div><div className="inventory-counts"><span><strong>{scan.profile.installedSoftware.length}</strong> applications</span><span><strong>{scan.profile.relevantDrivers.length}</strong> relevant drivers</span><span><strong>{scan.profile.softwareSignals.length}</strong> tuning/overlay signals</span><span><strong>{scan.profile.deviceIssues.length}</strong> device issues</span></div></section><section className="section-card goals-card"><div className="section-heading"><div><span className="eyebrow">Optimization intent</span><h3>What matters on this PC?</h3></div><Target size={22}/></div><div className="priority-options">{priorities.map(item => <button key={item.id} aria-pressed={goals.priority === item.id} className={goals.priority === item.id ? 'priority-option active' : 'priority-option'} onClick={() => onGoals({ ...goals, priority: item.id })}><strong>{item.label}</strong><small>{item.detail}</small></button>)}</div><div className="goal-fields"><label><span>Games or workloads</span><input maxLength={1200} defaultValue={goals.games.join(', ')} placeholder="Example: Valorant, Cyberpunk 2077" onChange={event => onGoals({ ...goals, games: event.target.value.split(',').map(x => x.trim()).filter(Boolean) })}/><small>Names provide context only; NeuroTune will not assume engine-specific behavior.</small></label><label><span>Anything else to preserve or improve?</span><textarea maxLength={1000} value={goals.notes} placeholder="Example: keep power use reasonable; Wi-Fi only" onChange={event => onGoals({ ...goals, notes: event.target.value })}/></label></div>{scan.profile.policyConflicts.length > 0 && <div className="local-observations"><strong>Local conflicts and manual overrides</strong><ul>{scan.profile.policyConflicts.map(item => <li key={item}>{item}</li>)}</ul></div>}</section><div className="split-panels"><section className="section-card"><div className="section-heading"><div><span className="eyebrow">Provider payload</span><h3>Sanitized profile</h3></div><span className="status-pill good">Reviewable</span></div><pre className="profile-json">{scan.sanitizedProfile}</pre></section><section className="section-card"><div className="section-heading"><div><span className="eyebrow">Model output</span><h3>Diagnosis</h3></div></div>{diagnosis ? <DiagnosisView diagnosis={diagnosis}/> : <div className="panel-placeholder"><Bot size={30}/><p>No data has been sent yet.</p><span>Your goals and this reviewed profile are sent only when you run diagnosis.</span></div>}</section></div></div>;
+  return <div className="stack-lg"><div className="page-actions"><div><span className="eyebrow">Local profile</span><h2>Set the target before diagnosis</h2></div><div className="button-row"><button className="secondary" onClick={onScan}>{scanning ? <X size={16}/> : <RefreshCw size={16}/>} {scanning ? 'Cancel scan' : 'Scan again'}</button><button className="primary" disabled={scanning || !scan.payloadReport.fitsSinglePass} onClick={onDiagnose}><Bot size={16}/>{scan.payloadReport.fitsSinglePass ? 'Run AI diagnosis' : 'Payload exceeds single-pass limit'}</button></div></div><div className="metric-grid four"><Metric icon={Monitor} label="Windows" value={scan.profile.operatingSystem}/><Metric icon={Cpu} label="Processor" value={scan.profile.cpu}/><Metric icon={Database} label="Memory" value={scan.profile.memory}/><Metric icon={HardDrive} label="Registry checks" value={`${Object.keys(scan.profile.performanceRegistry).length} inspected`}/></div><section className="scan-summary"><div className="scan-phases">{scan.profile.scanPhases.map(phase => <article key={phase.name}><Check size={15}/><div><strong>{phase.name}</strong><small>{phase.factsCollected} facts · {(phase.durationMilliseconds / 1000).toFixed(1)} s</small></div></article>)}</div><div className="inventory-counts"><span><strong>{scan.profile.installedSoftware.length}</strong> applications</span><span><strong>{scan.profile.relevantDrivers.length}</strong> relevant drivers</span><span><strong>{scan.profile.softwareSignals.length}</strong> tuning/overlay signals</span><span><strong>{scan.profile.deviceIssues.length}</strong> device issues</span></div></section><section className="section-card telemetry-card"><div className="section-heading"><div><span className="eyebrow">Optional low-level telemetry</span><h3>Read-only support matrix</h3></div><span className="status-pill">No driver installation</span></div><div className="telemetry-grid">{scan.profile.telemetryCapabilities.map(capability => <article key={capability.name}><div><strong>{capability.name}</strong><span className={`telemetry-status ${capability.status}`}>{capability.status.replace(/([A-Z])/g, ' $1')}</span></div><p>{capability.detail}</p></article>)}</div></section><section className="section-card goals-card"><div className="section-heading"><div><span className="eyebrow">Optimization intent</span><h3>What matters on this PC?</h3></div><Target size={22}/></div><div className="priority-options">{priorities.map(item => <button key={item.id} aria-pressed={goals.priority === item.id} className={goals.priority === item.id ? 'priority-option active' : 'priority-option'} onClick={() => onGoals({ ...goals, priority: item.id })}><strong>{item.label}</strong><small>{item.detail}</small></button>)}</div><div className="goal-fields"><label><span>Games or workloads</span><input maxLength={1200} defaultValue={goals.games.join(', ')} placeholder="Example: Valorant, Cyberpunk 2077" onChange={event => onGoals({ ...goals, games: event.target.value.split(',').map(x => x.trim()).filter(Boolean) })}/><small>Names provide context only; NeuroTune will not assume engine-specific behavior.</small></label><label><span>Anything else to preserve or improve?</span><textarea maxLength={1000} value={goals.notes} placeholder="Example: keep power use reasonable; Wi-Fi only" onChange={event => onGoals({ ...goals, notes: event.target.value })}/></label></div>{scan.profile.policyConflicts.length > 0 && <div className="local-observations"><strong>Local conflicts and manual overrides</strong><ul>{scan.profile.policyConflicts.map(item => <li key={item}>{item}</li>)}</ul></div>}</section><div className="split-panels"><section className="section-card"><div className="section-heading"><div><span className="eyebrow">Provider payload</span><h3>Sanitized profile</h3></div><span className={`status-pill ${scan.payloadReport.fitsSinglePass ? 'good' : ''}`}>{scan.payloadReport.factCount} facts · {formatBytes(scan.payloadReport.utf8Bytes)} / {formatBytes(scan.payloadReport.singlePassLimitBytes)}</span></div><div className="payload-privacy">{Object.entries(scan.payloadReport.privacyClasses).map(([privacy, count]) => <span key={privacy}>{privacy.replace(/([A-Z])/g, ' $1')}: {count}</span>)}</div><pre className="profile-json">{scan.sanitizedProfile}</pre></section><section className="section-card"><div className="section-heading"><div><span className="eyebrow">Model output</span><h3>Diagnosis</h3></div></div>{diagnosis ? <DiagnosisView diagnosis={diagnosis}/> : <div className="panel-placeholder"><Bot size={30}/><p>No data has been sent yet.</p><span>Your goals and this reviewed profile are sent only when you run diagnosis.</span></div>}</section></div></div>;
 }
 
 function ReviewPage({ diagnosis, actions, recommendations, selected, onToggle, onPreset, onApply }: { diagnosis?: Diagnosis; actions: OptimizationAction[]; recommendations: Map<string, string>; selected: Set<string>; onToggle: (id: string) => void; onPreset: (mode: 'all' | 'safe' | 'none') => void; onApply: () => void }) {
@@ -307,8 +342,8 @@ function ActivityPage({ history, onRefresh, onRollback }: { history: OperationMa
   return <div className="stack-lg"><div className="page-actions"><div><span className="eyebrow">Operation journal</span><h2>Every attempted change remains traceable</h2></div><button className="secondary" onClick={onRefresh}><RefreshCw size={16}/>Refresh</button></div>{history.length ? <div className="history-list">{history.map(item => <article className="history-card" key={item.id}><div className="history-icon"><Activity size={19}/></div><div className="history-main"><div><strong>{item.status}</strong><span>{new Date(item.createdAt).toLocaleString()}</span></div><p>{item.actions.length} journaled actions · {item.id}</p>{item.error && <small className="error-text">{item.error}</small>}</div><button className="secondary" disabled={!item.actions.some(action => (action.applied || action.attempted) && !action.rolledBack)} onClick={() => onRollback(item.id)}><RotateCcw size={15}/>Restore</button></article>)}</div> : <EmptyState icon={Activity} title="No operations yet" text="Completed and interrupted operations will appear here with their rollback state."/>}</div>;
 }
 
-function SettingsPage({ theme, onTheme }: { theme: ThemePreference; onTheme: (value: ThemePreference) => void }) {
-  return <div className="settings-grid"><section className="section-card"><div className="section-heading"><div><span className="eyebrow">Appearance</span><h3>Theme</h3></div><Palette size={22}/></div><p className="muted-copy">Follow the Windows appearance automatically, or keep a manual override.</p><div className="theme-options"><ThemeOption active={theme === 'system'} icon={MonitorCog} title="Use Windows setting" text="Switch automatically with the operating system" onClick={() => onTheme('system')}/><ThemeOption active={theme === 'light'} icon={Sun} title="Light" text="High-contrast light surfaces" onClick={() => onTheme('light')}/><ThemeOption active={theme === 'dark'} icon={Moon} title="Dark" text="Low-glare dark surfaces" onClick={() => onTheme('dark')}/></div></section><section className="section-card"><div className="section-heading"><div><span className="eyebrow">Security posture</span><h3>Local enforcement</h3></div><ShieldCheck size={22}/></div><div className="settings-lines"><div><LockKeyhole size={18}/><span><strong>Credentials</strong><small>Encrypted with Windows DPAPI for this user</small></span></div><div><TerminalSquare size={18}/><span><strong>Model output</strong><small>Cannot introduce executable commands or unknown action IDs</small></span></div><div><RotateCcw size={18}/><span><strong>Recovery</strong><small>Verified restore point, Registry exports, and action journal</small></span></div></div></section></div>;
+function SettingsPage({ theme, onTheme, telemetryConsent, onTelemetryConsent }: { theme: ThemePreference; onTheme: (value: ThemePreference) => void; telemetryConsent: boolean; onTelemetryConsent: (value: boolean) => void }) {
+  return <div className="settings-grid"><section className="section-card"><div className="section-heading"><div><span className="eyebrow">Appearance</span><h3>Theme</h3></div><Palette size={22}/></div><p className="muted-copy">Follow the Windows appearance automatically, or keep a manual override.</p><div className="theme-options"><ThemeOption active={theme === 'system'} icon={MonitorCog} title="Use Windows setting" text="Switch automatically with the operating system" onClick={() => onTheme('system')}/><ThemeOption active={theme === 'light'} icon={Sun} title="Light" text="High-contrast light surfaces" onClick={() => onTheme('light')}/><ThemeOption active={theme === 'dark'} icon={Moon} title="Dark" text="Low-glare dark surfaces" onClick={() => onTheme('dark')}/></div></section><section className="section-card"><div className="section-heading"><div><span className="eyebrow">Security posture</span><h3>Local enforcement</h3></div><ShieldCheck size={22}/></div><div className="settings-lines"><div><LockKeyhole size={18}/><span><strong>Credentials</strong><small>Encrypted with Windows DPAPI for this user</small></span></div><div><TerminalSquare size={18}/><span><strong>Model output</strong><small>Cannot introduce executable commands or unknown action IDs</small></span></div><div><RotateCcw size={18}/><span><strong>Recovery</strong><small>Verified restore point, Registry exports, and action journal</small></span></div></div><label className="consent-toggle"><input type="checkbox" checked={telemetryConsent} onChange={event => onTelemetryConsent(event.target.checked)}/><span><strong>Query isolated optional telemetry</strong><small>Runs a no-network helper only during a scan. PawnIO remains blocked: no driver is installed or loaded.</small></span></label></section></div>;
 }
 
 function Metric({ icon: Icon, label, value, tone }: { icon: typeof Bot; label: string; value: string; tone?: string }) { return <article className="metric-card"><div className={`metric-icon ${tone ?? ''}`}><Icon size={19}/></div><div><span>{label}</span><strong>{value}</strong></div></article>; }
@@ -318,6 +353,7 @@ function DiagnosisView({ diagnosis }: { diagnosis: Diagnosis }) { return <div cl
 function ConflictView({ conflicts }: { conflicts: ConflictPattern[] }) { return <section className="section-card conflict-section"><div className="section-heading"><div><span className="eyebrow">Local conflict graph</span><h3>{conflicts.length} objective-aware relationships</h3></div><span className="status-pill">Deterministic rules</span></div><div className="conflict-list">{conflicts.map(conflict => <article key={conflict.id} className={`conflict-card ${conflict.kind}`}><div className="conflict-title"><div><span>{conflict.kind.replace(/([A-Z])/g, ' $1')}</span><strong>{conflict.title}</strong></div><small>{conflict.confidence} confidence</small></div><p>{conflict.explanation}</p><p><strong>Why it may be counterproductive:</strong> {conflict.whyCounterproductive}</p><div className="conflict-evidence">{Object.entries(conflict.evidence).map(([id, value]) => <code key={id}>{id} = {value}</code>)}</div><small>Objectives: {conflict.objectives.join(', ')}</small></article>)}</div></section>; }
 function ThemeOption({ active, icon: Icon, title, text, onClick }: { active: boolean; icon: typeof Sun; title: string; text: string; onClick: () => void }) { return <button className={active ? 'theme-option active' : 'theme-option'} onClick={onClick}><Icon size={21}/><span><strong>{title}</strong><small>{text}</small></span>{active && <Check size={17}/>}</button>; }
 function toggle(current: Set<string>, id: string) { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; }
+function formatBytes(bytes: number) { return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KiB`; }
 function pageTitle(page: Page) { return ({ overview: 'System control center', provider: 'Model connection', scan: 'Local system profile', review: 'Safe optimization plan', activity: 'Recovery and history', settings: 'Application preferences' } satisfies Record<Page, string>)[page]; }
 
 export default App;

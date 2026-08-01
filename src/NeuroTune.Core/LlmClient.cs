@@ -9,6 +9,7 @@ namespace NeuroTune;
 public sealed class LlmClient
 {
     private const int MaxResponseCharacters = 256_000;
+    public const int MaxSinglePassEvidenceBytes = 256_000;
     private static readonly HttpClient Http = new(new HttpClientHandler { AllowAutoRedirect = false })
     {
         Timeout = TimeSpan.FromMinutes(8)
@@ -55,6 +56,8 @@ public sealed class LlmClient
         if (string.IsNullOrWhiteSpace(settings.Model)) throw new InvalidOperationException("Select a model.");
 
         var evidenceFacts = BuildEvidenceFacts(profile);
+        if (!MeasureEvidence(evidenceFacts).FitsSinglePass)
+            throw new InvalidOperationException("The evidence bundle exceeds NeuroTune's local single-pass safety limit. Review the payload and use a smaller scan; unvalidated character slicing is not allowed.");
         var localConflicts = ConflictAnalyzer.Analyze(profile, goals);
         var catalogJson = JsonSerializer.Serialize(_catalog.All.Select(x => (Action: x, Availability: x.Inspect()))
             .Where(x => x.Availability.CanApply)
@@ -206,6 +209,8 @@ public sealed class LlmClient
         for (var index = 0; index < gpus.Count; index++) facts[$"hardware:gpu:{index}"] = gpus[index] ?? "Unavailable";
         Add("hardware", profile.HardwareCapabilities);
         Add("firmware", profile.FirmwareAndMemory);
+        Add("component", profile.ComponentIdentities);
+        Add("baseline", profile.FactoryBaselines);
         Add("boot", profile.BootConfiguration);
         Add("windows", profile.WindowsSettings);
         Add("gaming", profile.GamingSettings);
@@ -221,6 +226,8 @@ public sealed class LlmClient
         AddList("startup", profile.StartupItems);
         AddList("service", profile.AutomaticServices);
         AddList("conflict-observation", profile.PolicyConflicts);
+        foreach (var capability in profile.TelemetryCapabilities ?? [])
+            facts[$"telemetry:{capability.Name}"] = $"{capability.Status}: {capability.Detail}";
         foreach (var key in facts.Keys.ToList()) facts[key] = ProfileSanitizer.Redact(facts[key]);
         return facts;
 
@@ -235,6 +242,22 @@ public sealed class LlmClient
             for (var index = 0; index < items.Count; index++) facts[$"{prefix}:{index}"] = items[index] ?? "Unavailable";
         }
     }
+
+    public static EvidencePayloadReport MeasureEvidence(IReadOnlyDictionary<string, string> facts)
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+        var classes = facts.Keys.GroupBy(ClassifyEvidence).ToDictionary(group => group.Key, group => group.Count());
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(facts).Length;
+        return new(facts.Count, bytes, MaxSinglePassEvidenceBytes, bytes <= MaxSinglePassEvidenceBytes, classes);
+    }
+
+    public static EvidencePrivacy ClassifyEvidence(string evidenceId) => evidenceId.Split(':', 2)[0] switch
+    {
+        "software" or "driver" or "device-issue" or "software-signal" or "runtime-process" or "startup" or "service"
+            => EvidencePrivacy.SoftwareInventory,
+        "conflict-observation" => EvidencePrivacy.General,
+        _ => EvidencePrivacy.SystemConfiguration
+    };
 
     public static Uri ValidateBaseUrl(UserSettings settings)
     {

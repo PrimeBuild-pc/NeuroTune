@@ -36,6 +36,7 @@ public sealed class OptimizationEngine
             {
                 manifest.Status = "Applying";
                 _backup.Save(manifest);
+                TestDelay();
                 foreach (var action in actions)
                 {
                     var record = new ActionRecord { ActionId = action.Id, OriginalState = action.Capture(), Attempted = true };
@@ -76,6 +77,7 @@ public sealed class OptimizationEngine
             _backup.CreateRestorePoint($"NeuroTune before rollback {manifest.Id:N}");
             manifest.Status = "Rolling back";
             _backup.Save(manifest);
+            TestDelay();
             RollbackApplied(manifest);
             manifest.Status = Pending(manifest).Any() ? "Rollback incomplete" : "Rollback completed";
             _backup.Save(manifest);
@@ -110,5 +112,12 @@ public sealed class OptimizationEngine
     {
         try { return mutex.WaitOne(TimeSpan.Zero); }
         catch (AbandonedMutexException) { return true; }
+    }
+
+    private static void TestDelay()
+    {
+        if (int.TryParse(Environment.GetEnvironmentVariable("NEUROTUNE_TEST_STEP_DELAY_MS"), out var milliseconds) &&
+            milliseconds is >= 1 and <= 10_000)
+            Thread.Sleep(milliseconds);
     }
 }

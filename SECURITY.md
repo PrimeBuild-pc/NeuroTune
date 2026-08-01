@@ -19,8 +19,10 @@ Include the affected version, reproduction steps, expected impact, and a contact
 - API keys and OpenRouter-issued OAuth keys are protected with DPAPI `CurrentUser` and redacted from local logs.
 - OpenRouter browser authorization uses PKCE, a random CSRF state, a loopback callback, and a two-minute timeout.
 - Built-in provider endpoints cannot be edited. Custom remote providers require HTTPS, HTTP is loopback-only, and authenticated HTTP redirects are disabled.
-- The exact sanitized evidence bundle sent to the provider is visible in the application.
-- Firmware heuristics are read-only and labelled as uncertain; no kernel telemetry driver is downloaded or installed silently.
+- The exact sanitized evidence bundle, privacy classes, UTF-8 size, and enforced single-pass limit are visible before diagnosis.
+- Scan cancellation can target only the matching NeuroTune.Agent child and terminates its probe process tree.
+- Factory baselines are versioned local data, require exact non-unique component identifiers, and never use serial numbers or nearest-model guesses.
+- Firmware heuristics and the telemetry support matrix are read-only and labelled as uncertain; no kernel telemetry driver is downloaded, loaded, or installed silently.
 
 ## Known Limitations
 

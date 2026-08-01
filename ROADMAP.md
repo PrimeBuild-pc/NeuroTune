@@ -48,9 +48,12 @@ NeuroTune is developed safety-first: a feature is not considered complete merely
 - [x] Add native SMBIOS/WMI/CPUID firmware and DIMM inspection with explicitly labelled XMP/DOCP/EXPO heuristics
 - [x] Let users review AI-recommended, conflict-related, or all supported reversible actions regardless of risk
 - [x] Add reversible high-risk repair actions for TDR and legacy global TCP overrides
-- [ ] Add cancellation for an in-progress probe phase
+- [x] Add request-scoped cancellation that terminates the matching agent process tree and discards partial scans
+- [x] Extract 83 Registry probes into a typed, local catalog and report evidence size/privacy classes
+- [x] Expand deterministic timer, VPN/filter, TDR/tuning, page-file, mobile-power, memory, and driver/device relationships
+- [x] Add exact, versioned offline CPU and memory baselines with explicit `baseline unavailable` fallback
+- [x] Expose a read-only low-level telemetry support matrix without installing or loading a driver
 - [ ] Add a reviewed optional PawnIO/LibreHardwareMonitor telemetry adapter without silent driver installation ([#3](../../issues/3))
-- [ ] Add trustworthy offline component baselines before claiming factory-vs-current clock, timing, or voltage differences
 
 ## v0.6 — Distribution Beta
 
