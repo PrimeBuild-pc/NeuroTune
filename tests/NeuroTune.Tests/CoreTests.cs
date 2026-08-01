@@ -10,7 +10,7 @@ public sealed class CoreTests
     {
         var catalog = new OptimizationCatalog();
         var json = """
-            {"summary":"Sistema valido","findings":[],"recommendations":[{"actionId":"gaming.game-mode","reason":"Riduce attività concorrenti"}]}
+            {"summary":"Sistema valido","findings":[],"recommendations":[{"id":"game-mode","kind":"executableAction","title":"Game Mode","actionId":"gaming.game-mode","evidenceIds":[],"reason":"Riduce attività concorrenti"}],"consentQuestion":"Apply selected actions?"}
             """;
 
         var result = LlmClient.ParseDiagnosis(json, catalog);
@@ -22,7 +22,7 @@ public sealed class CoreTests
     public void Diagnosis_rejects_unknown_actions()
     {
         var json = """
-            {"summary":"Sistema valido","findings":[],"recommendations":[{"actionId":"run.powershell","reason":"Esegui script"}]}
+            {"summary":"Sistema valido","findings":[],"recommendations":[{"id":"bad","kind":"executableAction","title":"Bad","actionId":"run.powershell","evidenceIds":[],"reason":"Esegui script"}],"consentQuestion":"Apply selected actions?"}
             """;
 
         Assert.ThrowsExactly<InvalidOperationException>(() =>
@@ -34,10 +34,10 @@ public sealed class CoreTests
     {
         var facts = new Dictionary<string, string> { ["gaming:Game Mode"] = "1" };
         var valid = """
-            {"summary":"Checked","findings":[{"title":"Game Mode","evidenceId":"gaming:Game Mode","currentValue":"1","assessment":"Enabled"}],"recommendations":[{"actionId":"gaming.game-mode","evidenceId":"gaming:Game Mode","reason":"Matches the goal"}]}
+            {"summary":"Checked","findings":[{"title":"Game Mode","evidenceId":"gaming:Game Mode","currentValue":"1","assessment":"Enabled"}],"recommendations":[{"id":"game-mode","kind":"executableAction","title":"Game Mode","actionId":"gaming.game-mode","evidenceIds":["gaming:Game Mode"],"reason":"Matches the goal"}],"consentQuestion":"Apply selected actions?"}
             """;
         var fabricated = valid.Replace("\"currentValue\":\"1\"", "\"currentValue\":\"0\"");
-        var unsupportedRecommendation = valid.Replace("\"evidenceId\":\"gaming:Game Mode\",\"reason\"", "\"evidenceId\":\"missing\",\"reason\"");
+        var unsupportedRecommendation = valid.Replace("\"evidenceIds\":[\"gaming:Game Mode\"]", "\"evidenceIds\":[\"missing\"]");
 
         Assert.AreEqual("Game Mode", LlmClient.ParseDiagnosis(valid, new OptimizationCatalog(), facts).Findings.Single().Title);
         Assert.ThrowsExactly<InvalidOperationException>(() =>
@@ -210,6 +210,68 @@ public sealed class CoreTests
 
         CollectionAssert.AreEqual(new[] { "Valorant" }, goals.Games);
         goals.Notes = new string('x', 1_001);
+        Assert.ThrowsExactly<InvalidOperationException>(goals.Validate);
+    }
+
+    [TestMethod]
+    public void Dynamic_plan_accepts_all_review_kinds_but_only_registered_execution()
+    {
+        var facts = new Dictionary<string, string> { ["system:cpu"] = "CPU" };
+        var json = """
+            {"summary":"Checked","findings":[],"recommendations":[
+              {"id":"action","kind":"executableAction","title":"Game Mode","evidenceIds":["system:cpu"],"reason":"Relevant","actionId":"gaming.game-mode"},
+              {"id":"manual","kind":"manualGuidance","title":"Check settings","evidenceIds":["system:cpu"],"reason":"User review"},
+              {"id":"script","kind":"scriptArtifact","title":"Review script","evidenceIds":["system:cpu"],"reason":"Optional manual aid","scriptLanguage":"powershell","script":"Get-Process"},
+              {"id":"resource","kind":"externalResource","title":"Known config","evidenceIds":["system:cpu"],"reason":"Verified artifact","resourceId":"cfg.known"},
+              {"id":"update","kind":"updateNotice","title":"Driver update","evidenceIds":["system:cpu"],"reason":"Official notice","updateId":"driver.known"}
+            ],"consentQuestion":"Apply selected registered actions?"}
+            """;
+
+        var result = LlmClient.ParseDiagnosis(json, new OptimizationCatalog(), facts,
+            new HashSet<string> { "cfg.known" }, new HashSet<string> { "driver.known" });
+
+        Assert.HasCount(5, result.Recommendations);
+        Assert.AreEqual(PlanRecommendationKind.ScriptArtifact, result.Recommendations[2].Kind);
+        StringAssert.Contains(result.Recommendations[2].ReviewWarnings[0], "cannot execute");
+    }
+
+    [TestMethod]
+    public void Script_review_flags_sensitive_commands_without_executing_them()
+    {
+        var warnings = ScriptReviewService.Analyze("powershell", "Set-MpPreference -DisableRealtimeMonitoring $true");
+
+        Assert.IsGreaterThanOrEqualTo(2, warnings.Count);
+        Assert.IsTrue(warnings.Any(warning => warning.Contains("Defender", StringComparison.Ordinal)));
+    }
+
+    [TestMethod]
+    public void Risk_profiles_preselect_registered_actions_deterministically()
+    {
+        var catalog = new OptimizationCatalog();
+        var low = new PlanRecommendation { Kind = PlanRecommendationKind.ExecutableAction, ActionId = "gaming.game-mode" };
+        var high = new PlanRecommendation { Kind = PlanRecommendationKind.ExecutableAction, ActionId = "graphics.tdr-default" };
+        var script = new PlanRecommendation { Kind = PlanRecommendationKind.ScriptArtifact };
+
+        Assert.IsTrue(PlanSelectionPolicy.Evaluate(low, RiskProfile.Safe, catalog).Preselected);
+        Assert.IsFalse(PlanSelectionPolicy.Evaluate(high, RiskProfile.Balanced, catalog).Preselected);
+        Assert.IsTrue(PlanSelectionPolicy.Evaluate(high, RiskProfile.Aggressive, catalog).RequiresSeparateConfirmation);
+        Assert.AreEqual(PolicyDisposition.ManualOnly,
+            PlanSelectionPolicy.Evaluate(script, RiskProfile.Aggressive, catalog).Disposition);
+    }
+
+    [TestMethod]
+    public void User_measurements_are_bounded_and_always_labelled_user_provided()
+    {
+        var goals = new TuningGoals
+        {
+            GameContext = new GameContext { Game = "Fortnite", Width = 2560, Height = 1440, RefreshRateHz = 360 },
+            PerformanceInput = new UserPerformanceInput { UserProvided = false, AverageFps = 240, PacketLossPercent = 0.5 }
+        };
+
+        goals.Validate();
+
+        Assert.IsTrue(goals.PerformanceInput.UserProvided);
+        goals.PerformanceInput.PacketLossPercent = 101;
         Assert.ThrowsExactly<InvalidOperationException>(goals.Validate);
     }
 

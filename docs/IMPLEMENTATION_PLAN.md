@@ -11,7 +11,7 @@ or validation report.
 |---|---|
 | Target | `v0.6.0-alpha.1` |
 | Branch | `codex/dynamic-planner-foundation` |
-| Current milestone | M1 — dynamic plan foundation |
+| Current milestone | M2 — capability registry |
 | Last verified baseline | `64d74bb` / PR #4 |
 | Distribution | unsigned NSIS plus portable ZIP, GitHub/Discord |
 | License | MIT, copyright PrimeBuild |
@@ -45,7 +45,7 @@ or validation report.
 | ID | Milestone | Status | Acceptance evidence |
 |---|---|---|---|
 | M0 | Close legacy backlog, add MIT, consolidate planning | Completed | Issues #1–#3 closed 2026-08-02; MIT and this living plan added in the M0 commit |
-| M1 | Structured dynamic-plan contract and goal/measurement context | In progress | Parser, validation, policy, serialization, and compatibility tests |
+| M1 | Structured dynamic-plan contract and goal/measurement context | Completed | M1 commit (this milestone commit): 21 .NET tests; 7 Vitest tests; UI typecheck, lint, and production build |
 | M2 | Extensible reversible capability registry and first expansion | Planned | Existing 12 actions regress cleanly; new actions pass unit and VM checks |
 | M3 | Verified artifact catalog and deterministic update advisor | Planned | Host/hash/path/version fixtures and no arbitrary URL/file execution |
 | M4 | Plan-focused accessible UI and script/resource review | Planned | Vitest, typecheck, lint, keyboard/announcement checks |
