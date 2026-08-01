@@ -6,6 +6,9 @@
     <AssemblyName>NeuroTune.Core</AssemblyName>
     <RootNamespace>NeuroTune</RootNamespace>
     <Version>0.5.0-alpha.2</Version>
+    <Authors>PrimeBuild</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/PrimeBuild-pc/NeuroTune</RepositoryUrl>
   </PropertyGroup>
   <ItemGroup>
     <EmbeddedResource Include="Data\component-baselines.v1.json" />

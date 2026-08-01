@@ -7,6 +7,9 @@
     <AssemblyName>NeuroTune.Agent</AssemblyName>
     <RootNamespace>NeuroTune.Agent</RootNamespace>
     <Version>0.5.0-alpha.2</Version>
+    <Authors>PrimeBuild</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/PrimeBuild-pc/NeuroTune</RepositoryUrl>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\NeuroTune.Core\NeuroTune.Core.csproj" />
