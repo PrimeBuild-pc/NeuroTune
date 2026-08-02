@@ -88,6 +88,7 @@ async Task<object> Scan(OptimizationCatalog actionCatalog, SettingsService setti
     await Task.WhenAll(profileTask, snapshotTask);
     var profile = await profileTask;
     var evidence = LlmClient.BuildEvidenceFacts(profile);
+    var updateNotices = new OfficialUpdateAdvisor().Analyze(profile);
     var payloadReport = LlmClient.MeasureEvidence(evidence);
     new PayloadMetricsService().Record(payloadReport, settingsService.Load(), "local-scan-completed");
     return new
@@ -95,6 +96,7 @@ async Task<object> Scan(OptimizationCatalog actionCatalog, SettingsService setti
         profile,
         sanitizedProfile = JsonSerializer.Serialize(evidence, new JsonSerializerOptions { WriteIndented = true }),
         payloadReport,
+        updateNotices,
         snapshot = await snapshotTask,
         actions = Actions(actionCatalog)
     };

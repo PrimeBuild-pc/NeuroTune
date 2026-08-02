@@ -1,4 +1,6 @@
 using Microsoft.Win32;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace NeuroTune.Tests;
 
@@ -227,12 +229,20 @@ public sealed class CoreTests
             ],"consentQuestion":"Apply selected registered actions?"}
             """;
 
+        var resource = new ExternalArtifactDefinition("cfg.known", ExternalArtifactKind.Cfg, RiskLevel.Medium, false,
+            "https://example.com/game.cfg", new string('a', 64), "text/plain", 4, ["Game"], ["1.0"],
+            ArtifactDestinationMode.AppResolved, ".cfg", "Copy current file", "Compare SHA-256");
+        var update = new UpdateNoticeDefinition("driver.known", UpdateComponentKind.GpuDriver, "NVIDIA", "GPU",
+            "1.0", "2.0", "https://www.nvidia.com/en-us/drivers/", UpdateComparisonStatus.UpdateAvailable, "Newer");
         var result = LlmClient.ParseDiagnosis(json, new OptimizationCatalog(), facts,
-            new HashSet<string> { "cfg.known" }, new HashSet<string> { "driver.known" });
+            new Dictionary<string, ExternalArtifactDefinition> { [resource.Id] = resource },
+            new Dictionary<string, UpdateNoticeDefinition> { [update.Id] = update });
 
         Assert.HasCount(5, result.Recommendations);
         Assert.AreEqual(PlanRecommendationKind.ScriptArtifact, result.Recommendations[2].Kind);
         StringAssert.Contains(result.Recommendations[2].ReviewWarnings[0], "cannot execute");
+        Assert.AreEqual(resource.SourceUrl, result.Recommendations[3].SourceReferences.Single().Url);
+        Assert.AreEqual(update.OfficialUrl, result.Recommendations[4].SourceReferences.Single().Url);
     }
 
     [TestMethod]
@@ -322,6 +332,98 @@ public sealed class CoreTests
         }) Assert.Contains(id, ids);
         Assert.IsFalse(ids.Any(id => new[] { "defender", "firewall", "uac", "hpet" }
             .Any(forbidden => id.Contains(forbidden, StringComparison.OrdinalIgnoreCase))));
+    }
+
+    [TestMethod]
+    public void External_artifacts_require_exact_source_hash_type_and_bounded_destination()
+    {
+        var payload = Encoding.UTF8.GetBytes("safe=true\n");
+        var source = new Uri("https://downloads.example.org/game.cfg");
+        var definition = new ExternalArtifactDefinition("cfg.verified", ExternalArtifactKind.Cfg,
+            RiskLevel.Medium, false, source.AbsoluteUri, Convert.ToHexString(SHA256.HashData(payload)),
+            "text/plain", payload.Length, ["Example Game"], ["1.2"], ArtifactDestinationMode.AppResolved,
+            ".cfg", "Copy the previous file", "Compare the installed SHA-256");
+        var root = Path.Combine(Path.GetTempPath(), "neurotune-artifact-root");
+        var destination = Path.Combine(root, "game.cfg");
+
+        Assert.AreEqual(Path.GetFullPath(destination), ExternalArtifactValidator.Validate(
+            definition, source, "text/plain; charset=utf-8", payload, root, destination));
+        Assert.ThrowsExactly<InvalidOperationException>(() => ExternalArtifactValidator.Validate(
+            definition, new Uri("https://mirror.example.org/game.cfg"), "text/plain", payload, root, destination));
+        Assert.ThrowsExactly<InvalidOperationException>(() => ExternalArtifactValidator.Validate(
+            definition, source, "text/plain", Encoding.UTF8.GetBytes("changed"), root, destination));
+        Assert.ThrowsExactly<InvalidOperationException>(() => ExternalArtifactValidator.Validate(
+            definition, source, "application/x-msdownload", payload, root, destination));
+        Assert.ThrowsExactly<InvalidOperationException>(() => ExternalArtifactValidator.Validate(
+            definition, source, "text/plain", payload, root, Path.Combine(root, "..", "escape.cfg")));
+    }
+
+    [TestMethod]
+    public void External_catalogs_are_empty_until_primebuild_approves_each_entry()
+    {
+        Assert.IsEmpty(new ExternalArtifactCatalog().All);
+        Assert.IsEmpty(new ExternalApplicationCatalog().All);
+    }
+
+    [TestMethod]
+    public void Verified_text_artifact_applies_and_rolls_back_the_exact_previous_file()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"neurotune-artifact-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        try
+        {
+            var destination = Path.Combine(root, "game.cfg");
+            File.WriteAllText(destination, "old=true\n");
+            var payload = Encoding.UTF8.GetBytes("new=true\n");
+            var source = new Uri("https://downloads.example.org/game.cfg");
+            var definition = new ExternalArtifactDefinition("cfg.transaction", ExternalArtifactKind.Cfg,
+                RiskLevel.Medium, false, source.AbsoluteUri, Convert.ToHexString(SHA256.HashData(payload)),
+                "text/plain", payload.Length, ["Example Game"], ["1.2"], ArtifactDestinationMode.AppResolved,
+                ".cfg", "Capture exact existing bytes", "Compare installed SHA-256");
+            var action = new VerifiedArtifactAction(definition, source, "text/plain", payload, root, destination);
+
+            var captured = action.Capture();
+            action.Apply();
+            Assert.IsTrue(action.Verify());
+            Assert.AreEqual("new=true\n", File.ReadAllText(destination));
+            action.Restore(captured);
+            Assert.AreEqual("old=true\n", File.ReadAllText(destination));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [TestMethod]
+    public void Update_advisor_claims_updates_only_for_exact_official_numeric_records()
+    {
+        var advisor = new OfficialUpdateAdvisor([new OfficialUpdateRecord(
+            UpdateComponentKind.GpuDriver, "NVIDIA", "Example GPU", "2.1.0",
+            "https://www.nvidia.com/en-us/drivers/")]);
+
+        var exact = advisor.AnalyzeComponents([
+            new(UpdateComponentKind.GpuDriver, "NVIDIA", "Example GPU", "2.0.0")]).Single();
+        var unknown = advisor.AnalyzeComponents([
+            new(UpdateComponentKind.GpuDriver, "NVIDIA", "Different GPU", "1.0")]).Single();
+        var bios = advisor.AnalyzeComponents([
+            new(UpdateComponentKind.Bios, "MSI", "Board", "E7C37AMS.1Q0")]).Single();
+
+        Assert.AreEqual(UpdateComparisonStatus.UpdateAvailable, exact.Status);
+        Assert.AreEqual("2.1.0", exact.LatestVersion);
+        Assert.AreEqual(UpdateComparisonStatus.ComparisonUnavailable, unknown.Status);
+        Assert.AreEqual("", unknown.LatestVersion);
+        Assert.AreEqual(UpdateComparisonStatus.ComparisonUnavailable, bios.Status);
+        Assert.IsTrue(new Uri(exact.OfficialUrl).Host.EndsWith("nvidia.com", StringComparison.OrdinalIgnoreCase));
+        Assert.ThrowsExactly<InvalidOperationException>(() => new OfficialUpdateAdvisor([new OfficialUpdateRecord(
+            UpdateComponentKind.GpuDriver, "NVIDIA", "Example GPU", "3.0", "https://evil.example/driver")]));
+    }
+
+    [TestMethod]
+    public void Update_version_comparison_is_deterministic_and_rejects_ambiguous_vendor_formats()
+    {
+        Assert.IsTrue(OfficialUpdateAdvisor.TryCompareVersions("31.0.15.5200", "31.0.15.6000", out var older));
+        Assert.IsLessThan(0, older);
+        Assert.IsTrue(OfficialUpdateAdvisor.TryCompareVersions("2.1", "2.1.0", out var equal));
+        Assert.AreEqual(0, equal);
+        Assert.IsFalse(OfficialUpdateAdvisor.TryCompareVersions("E7C37AMS.1Q0", "E7C37AMS.1R0", out _));
     }
 
     [TestMethod]

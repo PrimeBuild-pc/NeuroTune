@@ -187,8 +187,21 @@ export interface ScanResult {
   profile: SystemProfile;
   sanitizedProfile: string;
   payloadReport: EvidencePayloadReport;
+  updateNotices: UpdateNoticeDefinition[];
   snapshot: PerformanceSnapshot;
   actions: OptimizationAction[];
+}
+
+export interface UpdateNoticeDefinition {
+  id: string;
+  kind: 'gpuDriver' | 'chipsetDriver' | 'bios';
+  vendor: string;
+  model: string;
+  installedVersion: string;
+  latestVersion: string;
+  officialUrl: string;
+  status: 'updateAvailable' | 'current' | 'comparisonUnavailable';
+  reason: string;
 }
 
 export interface ActionRecord {
