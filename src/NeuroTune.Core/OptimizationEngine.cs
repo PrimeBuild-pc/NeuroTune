@@ -13,10 +13,12 @@ public sealed class OptimizationEngine
         _performance = performance ?? new PerformanceSnapshotService();
     }
 
-    public Task<OperationManifest> ApplyAsync(IEnumerable<string> actionIds) => Task.Run(() =>
+    public Task<OperationManifest> ApplyAsync(IEnumerable<string> actionIds, bool highRiskConfirmed = false) => Task.Run(() =>
     {
         var actions = actionIds.Distinct(StringComparer.OrdinalIgnoreCase).Select(_catalog.Get).ToList();
         if (actions.Count == 0) throw new InvalidOperationException("Select at least one optimization.");
+        if (actions.Any(action => action.Risk == RiskLevel.High) && !highRiskConfirmed)
+            throw new InvalidOperationException("High-risk capabilities require a separate explicit confirmation.");
 
         var blocked = actions.Select(x => (Action: x, Availability: x.Inspect()))
             .Where(x => !x.Availability.CanApply).ToList();

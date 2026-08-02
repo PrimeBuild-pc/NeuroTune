@@ -48,8 +48,11 @@ describe('dynamic plan helpers', () => {
   });
 
   it('labels every item kind and creates inert text filenames', () => {
+    expect(planKindLabel('executableAction')).toBe('NeuroTune action');
+    expect(planKindLabel('manualGuidance')).toBe('Manual guidance');
     expect(planKindLabel('scriptArtifact')).toBe('Unverified script');
     expect(planKindLabel('externalResource')).toBe('Verified resource');
+    expect(planKindLabel('updateNotice')).toBe('Official update notice');
     expect(scriptArtifactFilename('../../unsafe.ps1')).toBe('______unsafe_ps1.txt');
   });
 });
