@@ -36,6 +36,9 @@ jobs:
         run: ./scripts/test-release-metadata.ps1
       - run: npm ci
         working-directory: ui
+      - name: Publish Tauri agent resources
+        run: npm run agent:publish
+        working-directory: ui
       - run: npm test
         working-directory: ui
       - run: npm run typecheck
