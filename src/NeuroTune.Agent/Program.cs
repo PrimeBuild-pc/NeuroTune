@@ -27,7 +27,7 @@ try
         "analyze-local" => AnalyzeLocal(Read<DiagnoseRequest>(input)),
         "diagnose" => await Diagnose(Read<DiagnoseRequest>(input), settingsService, catalog),
         "actions" => Actions(catalog),
-        "apply" => await new OptimizationEngine(catalog, backup).ApplyAsync(Read<ApplyRequest>(input).ActionIds),
+        "apply" => await Apply(Read<ApplyRequest>(input), catalog, backup),
         "history" => backup.LoadHistory(),
         "rollback" => await Rollback(Read<RollbackRequest>(input), catalog, backup),
         _ => throw new InvalidOperationException($"Unknown agent command: {command}")
@@ -141,6 +141,9 @@ object Actions(OptimizationCatalog actionCatalog) => actionCatalog.All.Select(ac
     availability = action.Inspect()
 }).ToList();
 
+Task<OperationManifest> Apply(ApplyRequest request, OptimizationCatalog actionCatalog, BackupService backupService) =>
+    new OptimizationEngine(actionCatalog, backupService).ApplyAsync(request.ActionIds, request.HighRiskConfirmed);
+
 async Task<object?> Rollback(RollbackRequest request, OptimizationCatalog actionCatalog, BackupService backupService)
 {
     var manifest = backupService.LoadHistory().FirstOrDefault(x => x.Id == request.OperationId)
@@ -152,6 +155,6 @@ async Task<object?> Rollback(RollbackRequest request, OptimizationCatalog action
 sealed record AgentResponse(bool Ok, object? Data, string? Error);
 sealed record SaveProviderRequest(UserSettings Settings, string? ApiKey);
 sealed record DiagnoseRequest(SystemProfile? Profile, TuningGoals? Goals);
-sealed record ApplyRequest(List<string> ActionIds);
+sealed record ApplyRequest(List<string> ActionIds, bool HighRiskConfirmed = false);
 sealed record RollbackRequest(Guid OperationId);
 sealed record ScanRequest(bool OptionalTelemetryConsent);

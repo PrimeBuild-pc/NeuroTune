@@ -316,6 +316,17 @@ public sealed class CoreTests
     }
 
     [TestMethod]
+    public async Task Engine_rejects_high_risk_actions_without_the_separate_confirmation_flag()
+    {
+        var engine = new OptimizationEngine(new OptimizationCatalog(), new BackupService());
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            engine.ApplyAsync(["graphics.tdr-default"]));
+
+        StringAssert.Contains(exception.Message, "separate explicit confirmation");
+    }
+
+    [TestMethod]
     public void Capability_state_families_are_registered_without_forbidden_performance_targets()
     {
         var ids = new OptimizationCatalog().Definitions.Select(item => item.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);

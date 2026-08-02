@@ -272,7 +272,9 @@ button.ghost { border: 1px solid transparent; background: transparent; color: va
 .plan-item-section { display: grid; gap: 15px; }
 .plan-item-list { display: grid; gap: 10px; }
 .plan-item { padding: 14px; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 10px; background: var(--surface-raised); }
+.plan-item.manualGuidance { border-left-color: var(--accent); }
 .plan-item.scriptArtifact { border-left-color: var(--warning); }
+.plan-item.externalResource { border-left-color: var(--focus); }
 .plan-item.updateNotice { border-left-color: var(--success); }
 .plan-item-heading { display: grid; grid-template-columns: auto 1fr auto; align-items: start; gap: 10px; }
 .plan-item-heading svg { color: var(--accent-text); }
@@ -286,6 +288,7 @@ button.ghost { border: 1px solid transparent; background: transparent; color: va
 .source-list { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
 .source-list a { color: var(--accent-text); font-size: 10px; }
 .update-notices .plan-item > a { display: inline-block; margin-top: 10px; color: var(--accent-text); font-size: 12px; font-weight: 700; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
 @media print {
   .sidebar, .topbar, .notice, .busy-bar, .recovery-banner, .page-actions, .sticky-apply, .consent-card, .plan-tabs, .high-risk-warning { display: none !important; }

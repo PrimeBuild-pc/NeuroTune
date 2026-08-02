@@ -11,7 +11,7 @@ or validation report.
 |---|---|
 | Target | `v0.6.0-alpha.1` |
 | Branch | `codex/dynamic-planner-foundation` |
-| Current milestone | M3 — external intelligence |
+| Current milestone | M5 — release assets and CI |
 | Last verified baseline | `64d74bb` / PR #4 |
 | Distribution | unsigned NSIS plus portable ZIP, GitHub/Discord |
 | License | MIT, copyright PrimeBuild |
@@ -48,7 +48,7 @@ or validation report.
 | M1 | Structured dynamic-plan contract and goal/measurement context | Completed | M1 commit (this milestone commit): 21 .NET tests; 7 Vitest tests; UI typecheck, lint, and production build |
 | M2 | Extensible reversible capability registry and first expansion | In progress | M2 foundation commit (this milestone commit): 25 actions, 24 .NET tests, exact round-trip on Windows builds 19045 and 26200 |
 | M3 | Verified artifact catalog and deterministic update advisor | In progress | M3 foundation commit (this milestone commit): empty-by-default catalogs, exact text artifact transaction, official vendor advisor, 29 .NET tests |
-| M4 | Plan-focused accessible UI and script/resource review | Planned | Vitest, typecheck, lint, keyboard/announcement checks |
+| M4 | Plan-focused accessible UI and script/resource review | In progress | Five labelled item types, inert script copy/save, server-enforced high-risk confirmation; 30 .NET, 7 UI and 2 Rust tests pass; scaling/Narrator manual checks remain |
 | M5 | NSIS, portable ZIP, checksums, release documentation | Planned | Release build and asset-layout/checksum verification |
 | M6 | Full-history secret/privacy audit and public repository | Planned | Audit report contains no unresolved secret or personal-data finding |
 | M7 | Optional imported benchmark evidence and researched sources | Planned | Deferred until the planner and advisor are stable |
