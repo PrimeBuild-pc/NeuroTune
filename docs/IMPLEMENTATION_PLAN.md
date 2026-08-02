@@ -11,7 +11,7 @@ or validation report.
 |---|---|
 | Target | `v0.6.0-alpha.1` |
 | Branch | `codex/dynamic-planner-foundation` |
-| Current milestone | M2 — capability registry |
+| Current milestone | M3 — external intelligence |
 | Last verified baseline | `64d74bb` / PR #4 |
 | Distribution | unsigned NSIS plus portable ZIP, GitHub/Discord |
 | License | MIT, copyright PrimeBuild |
@@ -47,7 +47,7 @@ or validation report.
 | M0 | Close legacy backlog, add MIT, consolidate planning | Completed | Issues #1–#3 closed 2026-08-02; MIT and this living plan added in the M0 commit |
 | M1 | Structured dynamic-plan contract and goal/measurement context | Completed | M1 commit (this milestone commit): 21 .NET tests; 7 Vitest tests; UI typecheck, lint, and production build |
 | M2 | Extensible reversible capability registry and first expansion | In progress | M2 foundation commit (this milestone commit): 25 actions, 24 .NET tests, exact round-trip on Windows builds 19045 and 26200 |
-| M3 | Verified artifact catalog and deterministic update advisor | Planned | Host/hash/path/version fixtures and no arbitrary URL/file execution |
+| M3 | Verified artifact catalog and deterministic update advisor | In progress | M3 foundation commit (this milestone commit): empty-by-default catalogs, exact text artifact transaction, official vendor advisor, 29 .NET tests |
 | M4 | Plan-focused accessible UI and script/resource review | Planned | Vitest, typecheck, lint, keyboard/announcement checks |
 | M5 | NSIS, portable ZIP, checksums, release documentation | Planned | Release build and asset-layout/checksum verification |
 | M6 | Full-history secret/privacy audit and public repository | Planned | Audit report contains no unresolved secret or personal-data finding |
@@ -95,6 +95,16 @@ or validation report.
 - Add exact vendor adapters for NVIDIA/AMD/Intel GPU drivers, AMD/Intel chipset,
   and MSI/ASUS/Gigabyte/ASRock motherboard support. If an exact comparison is
   unavailable, provide only the official support link and say so.
+- Implemented the catalog and transaction guardrails: canonical HTTPS URL,
+  exact content type/size/SHA-256, strict UTF-8, `.cfg`/`.txt`/`.patch` only,
+  bounded destination/reparse checks, atomic replacement, exact backup, verify,
+  and restore. Both artifact and external-application catalogs remain empty.
+- Implemented deterministic vendor recognition and official support links for
+  NVIDIA, AMD, Intel, MSI, ASUS, Gigabyte, and ASRock. `UpdateAvailable` is
+  emitted only for an exact model plus a pinned numeric version record;
+  otherwise the UI explicitly reports `ComparisonUnavailable`.
+- Remaining before M3 completion: reviewed version-feed adapters and fixtures
+  for changed pages/offline behavior, plus the first user-approved artifact.
 
 ## M4–M7 — product and release
 

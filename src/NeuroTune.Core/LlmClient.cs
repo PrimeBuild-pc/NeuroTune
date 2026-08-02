@@ -16,8 +16,16 @@ public sealed class LlmClient
         Timeout = TimeSpan.FromMinutes(8)
     };
     private readonly OptimizationCatalog _catalog;
+    private readonly ExternalArtifactCatalog _artifactCatalog;
+    private readonly OfficialUpdateAdvisor _updateAdvisor;
 
-    public LlmClient(OptimizationCatalog catalog) => _catalog = catalog;
+    public LlmClient(OptimizationCatalog catalog, ExternalArtifactCatalog? artifactCatalog = null,
+        OfficialUpdateAdvisor? updateAdvisor = null)
+    {
+        _catalog = catalog;
+        _artifactCatalog = artifactCatalog ?? new ExternalArtifactCatalog();
+        _updateAdvisor = updateAdvisor ?? new OfficialUpdateAdvisor();
+    }
 
     public static UserSettings Defaults(LlmProvider provider) => provider switch
     {
@@ -60,6 +68,8 @@ public sealed class LlmClient
         if (!MeasureEvidence(evidenceFacts).FitsSinglePass)
             throw new InvalidOperationException("The evidence bundle exceeds NeuroTune's local single-pass safety limit. Review the payload and use a smaller scan; unvalidated character slicing is not allowed.");
         var localConflicts = ConflictAnalyzer.Analyze(profile, goals);
+        var resources = _artifactCatalog.All.ToDictionary(item => item.Id, StringComparer.OrdinalIgnoreCase);
+        var updateNotices = _updateAdvisor.Analyze(profile).ToDictionary(item => item.Id, StringComparer.OrdinalIgnoreCase);
         var catalogJson = JsonSerializer.Serialize(_catalog.All.Select(x => (Action: x, Availability: x.Inspect()))
             .Where(x => x.Availability.CanApply)
             .Select(x => new
@@ -83,7 +93,7 @@ public sealed class LlmClient
             Every finding must use an exact evidenceId and currentValue pair from EVIDENCE FACTS. Clearly distinguish a confirmed conflict, a trade-off, and unavailable evidence.
             Treat conflict:* evidence facts as locally detected facts, but explain their relevance to the user's goal. Do not infer game-engine behavior from a game name.
             ExecutableAction may use only actionId values present in the catalog. ManualGuidance may explain a user-performed step. ScriptArtifact is allowed only as a clearly labelled review-only artifact; it is never executed by NeuroTune. Do not place commands, Registry paths/values, URLs, or file paths inside an ExecutableAction.
-            No verified externalResource or updateNotice IDs are supplied in this request, so do not emit those kinds. Never invent a resource ID, update ID, vendor version, or official link.
+            ExternalResource and UpdateNotice may use only exact IDs supplied below. Never invent a resource ID, update ID, vendor version, URL, or flashing command. Updates are manual notices only.
             Prefer no recommendation over an unsupported or speculative optimization. Do not describe a missing Registry value as wrong when Windows safely manages its default.
             Do not promise FPS, latency, or network gains that this one profile cannot prove.
             USER PERFORMANCE INPUT is unverified information entered by the user. Use it as context, never as measured proof.
@@ -99,6 +109,12 @@ public sealed class LlmClient
 
             ALLOWLISTED AND COMPATIBLE ACTIONS:
             {{catalogJson}}
+
+            PRIMEBUILD-VERIFIED EXTERNAL RESOURCES:
+            {{JsonSerializer.Serialize(resources.Values)}}
+
+            DETERMINISTIC OFFICIAL UPDATE NOTICES:
+            {{JsonSerializer.Serialize(updateNotices.Values)}}
             """;
 
         using var request = settings.Protocol == ApiProtocol.Anthropic
@@ -109,7 +125,8 @@ public sealed class LlmClient
             throw new InvalidOperationException($"The provider returned HTTP {(int)response.StatusCode} ({response.ReasonPhrase}).");
 
         var body = await ReadLimitedAsync(response, cancellationToken);
-        var diagnosis = ParseDiagnosis(ExtractContent(settings.Protocol, body), _catalog, evidenceFacts);
+        var diagnosis = ParseDiagnosis(ExtractContent(settings.Protocol, body), _catalog, evidenceFacts,
+            resources, updateNotices);
         diagnosis.Conflicts = localConflicts;
         return diagnosis;
     }
@@ -133,8 +150,8 @@ public sealed class LlmClient
 
     public static DiagnosisResult ParseDiagnosis(string content, OptimizationCatalog catalog,
         IReadOnlyDictionary<string, string>? evidenceFacts = null,
-        IReadOnlySet<string>? knownResourceIds = null,
-        IReadOnlySet<string>? knownUpdateIds = null)
+        IReadOnlyDictionary<string, ExternalArtifactDefinition>? knownResources = null,
+        IReadOnlyDictionary<string, UpdateNoticeDefinition>? knownUpdates = null)
     {
         content = content.Trim();
         if (content.Length > MaxResponseCharacters) throw new InvalidOperationException("The model response was too large.");
@@ -217,15 +234,32 @@ public sealed class LlmClient
                     recommendation.ReviewWarnings = ScriptReviewService.Analyze(recommendation.ScriptLanguage, recommendation.Script);
                     break;
                 case PlanRecommendationKind.ExternalResource:
-                    if (knownResourceIds is null || !knownResourceIds.Contains(recommendation.ResourceId))
+                    if (knownResources is null || !knownResources.TryGetValue(recommendation.ResourceId, out var resource))
                         throw new InvalidOperationException("The model proposed an unknown external resource.");
                     recommendation.ActionId = recommendation.UpdateId = recommendation.ScriptLanguage = recommendation.Script = "";
+                    recommendation.Risk = resource.Risk;
+                    recommendation.RequiresRestart = resource.RequiresRestart;
+                    recommendation.SourceReferences = [new SourceReference
+                    {
+                        Title = "PrimeBuild-reviewed artifact source",
+                        Url = resource.SourceUrl,
+                        Grade = "PrimeBuild verified (URL and SHA-256 pinned)"
+                    }];
                     recommendation.ReviewWarnings = [];
                     break;
                 case PlanRecommendationKind.UpdateNotice:
-                    if (knownUpdateIds is null || !knownUpdateIds.Contains(recommendation.UpdateId))
+                    if (knownUpdates is null || !knownUpdates.TryGetValue(recommendation.UpdateId, out var update))
                         throw new InvalidOperationException("The model proposed an unknown update notice.");
                     recommendation.ActionId = recommendation.ResourceId = recommendation.ScriptLanguage = recommendation.Script = "";
+                    recommendation.Title = $"{update.Vendor} {update.Kind}: {update.Model}";
+                    recommendation.Risk = RiskLevel.Low;
+                    recommendation.RequiresRestart = false;
+                    recommendation.SourceReferences = [new SourceReference
+                    {
+                        Title = $"Official {update.Vendor} support",
+                        Url = update.OfficialUrl,
+                        Grade = "Official vendor"
+                    }];
                     recommendation.ReviewWarnings = [];
                     break;
                 default:

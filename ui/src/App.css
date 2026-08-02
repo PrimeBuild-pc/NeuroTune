@@ -285,6 +285,7 @@ button.ghost { border: 1px solid transparent; background: transparent; color: va
 .script-warnings { display: grid; gap: 4px; margin-top: 10px; padding: 10px; border: 1px solid var(--warning-border); border-radius: 8px; background: var(--warning-soft); color: var(--warning-text); font-size: 10px; }
 .source-list { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
 .source-list a { color: var(--accent-text); font-size: 10px; }
+.update-notices .plan-item > a { display: inline-block; margin-top: 10px; color: var(--accent-text); font-size: 12px; font-weight: 700; }
 
 @media print {
   .sidebar, .topbar, .notice, .busy-bar, .recovery-banner, .page-actions, .sticky-apply, .consent-card, .plan-tabs, .high-risk-warning { display: none !important; }
