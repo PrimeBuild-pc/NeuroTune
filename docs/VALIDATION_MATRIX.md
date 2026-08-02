@@ -8,7 +8,7 @@
 | Memory Integrity | enabled and recorded | recorded when available | required before driver experiments |
 | NSIS per-machine install, launch, version, Defender, uninstall | passed | passed after clean reinstall | release smoke test |
 | Scan cancellation / no orphan process tree | Rust fake-agent test plus VM checklist | same | optional |
-| All 12 actions: Inspect, Apply, Verify, exact rollback | passed | passed | repeat before stable release |
+| All 25 registered actions: Inspect, Capture, Apply, Verify, exact Restore | passed on build 26200 | passed on build 19045 | repeat before stable release |
 | Crash while Applying and Rolling back | passed with deterministic VM-only delay hook, kill, history recovery, rollback | passed with the same harness | not required |
 | 100%, 150%, 200% scaling | 100% passed; 150%/200% blocked by Enhanced Session | manual visual pass | manual |
 | Keyboard-only, focus visibility, reduced motion, forced colors | manual plus CSS/semantic checks | manual plus CSS/semantic checks | manual |
@@ -22,6 +22,17 @@ Windows 11 25H2 is used because it is the current ISO available in the lab; this
 The original disposable `NeuroTune-W10` disk/checkpoint chain became unbootable and was replaced with a clean Windows 10 Pro 22H2 installation. After Windows Update and restoring the Hyper-V PowerShell Direct service, the full matrix passed against checkpoint `Clean-NeuroTune-W10-Reinstalled`. The original checkpoints were not overwritten.
 
 The detailed Windows 11 integrity harness then exercised every action separately with deliberately mixed original Registry states (DWORD, QWORD, string, and absent values). All 12 passed Inspect, Apply, Verify, raw read-back, Registry export, apply/rollback restore points, exact value-and-kind rollback, and final manifest validation. The harness restored `Clean-NeuroTune-Alpha2` after completion.
+
+On 2026-08-02 the M2 capability probe repeated the exact-state round trip for
+all 25 registered actions, including the new Balanced plan, BCD timer/resource
+repair, and complementary
+default/on/off states for Game Mode, HAGS, Game DVR, app capture, and visual
+effects. Windows 10 Pro 22H2 build 19045 and Windows 11 build 26200 both passed
+all 25 cases. A proposed Windows-managed-pagefile writer passed on Windows 10
+but failed on Windows 11 build 26200 and was therefore removed from the public
+catalog. The Windows 11 VM was temporarily started with 4 GB because the
+host disk could not allocate its 8 GB runtime-state file; the runner then shut
+it down and verified that its original 8 GB startup setting was restored.
 
 ## Manual accessibility acceptance
 

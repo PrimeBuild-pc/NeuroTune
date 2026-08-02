@@ -64,18 +64,7 @@ public static class PlanSelectionPolicy
             return new(PolicyDisposition.Blocked, false, false,
                 "The action is not present in the local capability registry.");
 
-        var action = catalog.Get(recommendation.ActionId);
-        var preselected = profile switch
-        {
-            RiskProfile.Safe => action.Risk == RiskLevel.Low,
-            RiskProfile.Balanced => action.Risk is RiskLevel.Low or RiskLevel.Medium,
-            _ => true
-        };
-        var high = action.Risk == RiskLevel.High;
-        return new(high ? PolicyDisposition.ConfirmationRequired : PolicyDisposition.Allowed,
-            preselected, high, high
-                ? "High-risk capabilities require a separate confirmation."
-                : $"Selected by the {profile} risk policy.");
+        return ActionPolicy.Evaluate(catalog.Get(recommendation.ActionId).Definition, profile);
     }
 }
 
