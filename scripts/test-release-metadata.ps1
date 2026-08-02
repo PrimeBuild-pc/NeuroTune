@@ -14,7 +14,7 @@ if ($license -notmatch 'MIT License' -or $license -notmatch 'Copyright \(c\) 202
     throw 'LICENSE is not the approved PrimeBuild MIT license.'
 }
 if ($package.license -ne 'MIT') { throw 'ui/package.json must declare MIT.' }
-if ($cargo -notmatch '(?m)^license = "MIT"$') { throw 'Cargo.toml must declare MIT.' }
+if ($cargo -notmatch '(?m)^license[ \t]*=[ \t]*"MIT"[ \t]*\r?$') { throw 'Cargo.toml must declare MIT.' }
 if ($tauriConfig.bundle.windows.nsis.installMode -ne 'perMachine') {
     throw 'The NSIS install mode must remain perMachine.'
 }
@@ -22,7 +22,7 @@ if ($tauriConfig.bundle.windows.nsis.installMode -ne 'perMachine') {
 $versions = [ordered]@{
     npm = [string]$package.version
     tauri = [string]$tauriConfig.version
-    cargo = [regex]::Match($cargo, '(?m)^version = "([^"]+)"$').Groups[1].Value
+    cargo = [regex]::Match($cargo, '(?m)^version[ \t]*=[ \t]*"([^"]+)"[ \t]*\r?$').Groups[1].Value
 }
 
 Get-ChildItem -LiteralPath (Join-Path $root 'src') -Filter '*.csproj' -Recurse | ForEach-Object {
