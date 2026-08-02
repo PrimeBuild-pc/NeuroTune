@@ -23,11 +23,21 @@ jobs:
           cache: npm
           cache-dependency-path: ui/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
 
       - run: dotnet restore
+      - run: dotnet format NeuroTune.sln --verify-no-changes --no-restore
       - run: dotnet build --configuration Release --no-restore
       - run: dotnet test --configuration Release --no-build
+      - run: dotnet list NeuroTune.sln package --vulnerable --include-transitive
+      - name: Verify MIT and release metadata
+        shell: pwsh
+        run: ./scripts/test-release-metadata.ps1
       - run: npm ci
+        working-directory: ui
+      - name: Publish Tauri agent resources
+        run: npm run agent:publish
         working-directory: ui
       - run: npm test
         working-directory: ui
@@ -35,18 +45,27 @@ jobs:
         working-directory: ui
       - run: npm run lint
         working-directory: ui
+      - run: npm audit --audit-level=high
+        working-directory: ui
+      - run: cargo fmt --check
+        working-directory: ui/src-tauri
+      - run: cargo clippy -- -D warnings
+        working-directory: ui/src-tauri
+      - run: cargo test
+        working-directory: ui/src-tauri
+      - name: Install Rust dependency auditor
+        run: cargo install cargo-audit --locked
+      - run: cargo audit
+        working-directory: ui/src-tauri
       - name: Build Tauri installer
         working-directory: ui
         run: npm run tauri -- build --bundles nsis
 
-      - name: Create checksum
+      - name: Create installer, portable ZIP, and checksums
         shell: pwsh
-        run: |
-          $installer = Get-ChildItem ui/src-tauri/target/release/bundle/nsis/*.exe | Select-Object -First 1
-          (Get-FileHash $installer.FullName -Algorithm SHA256).Hash | Set-Content "$($installer.FullName).sha256"
+        run: ./scripts/package-release.ps1
       - uses: actions/upload-artifact@v7
         with:
           name: NeuroTune-win-x64
-          path: |
-            ui/src-tauri/target/release/bundle/nsis/*.exe
-            ui/src-tauri/target/release/bundle/nsis/*.sha256
+          if-no-files-found: error
+          path: artifacts/release/*

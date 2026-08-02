@@ -55,24 +55,25 @@ NeuroTune is developed safety-first: a feature is not considered complete merely
 - [x] Expose a read-only low-level telemetry support matrix without installing or loading a driver
 - [ ] Add a reviewed optional PawnIO/LibreHardwareMonitor telemetry adapter without silent driver installation ([#3](../../issues/3))
 
-## v0.6 — Distribution Beta
+## v0.6 — Dynamic Plan Alpha
 
-- [ ] Signed MSIX or installer with clean uninstall behavior
-- [ ] Code-signed binaries and documented checksum verification
-- [ ] Opt-in update checks with signed release metadata
-- [ ] First-run onboarding and System Protection readiness checks
-- [ ] Crash reporting that is local by default and exportable by the user
-- [ ] Public beta feedback template and compatibility issue workflow
+- [x] Structured AI plans containing executable actions, manual guidance, script artifacts, verified resources, and update notices
+- [x] Safe, Balanced, and Aggressive risk policies over one contextual plan
+- [ ] Extensible typed capability registry with expanded reversible action coverage
+- [x] Optional user-provided game context and performance observations
+- [x] Official-source GPU, chipset, and motherboard update advisor foundation
+- [x] Unsigned NSIS and portable ZIP assets with SHA-256 checksums
+- [ ] MIT-licensed public repository after full-history privacy and secret review
 
 ## v1.0 — Release Criteria
 
 - [ ] Supported actions pass apply/verify/rollback tests across the support matrix
 - [ ] No unresolved critical or high-severity security findings
-- [ ] Installer, executable, and update metadata are signed
+- [ ] Installer and portable artifacts have documented checksums and reproducible provenance
 - [ ] Recovery documentation is validated by users unfamiliar with the project
 - [ ] Performance claims are backed by reproducible measurements
 - [ ] Accessibility and privacy reviews are complete
 
 ## Deliberate Non-Goals
 
-NeuroTune will not execute LLM-generated scripts, download remote tweak catalogs, delete user files for “cleanup,” disable security controls for performance, or apply undocumented generic network tweaks.
+NeuroTune will not execute LLM-generated scripts, accept model-supplied download or write paths, download remote tweak catalogs, delete user files for “cleanup,” disable Defender or Firewall for performance, force HPET/platform timers, or apply undocumented generic network tweaks. Generated scripts may be reviewed and saved for manual use; verified text artifacts require a locally reviewed, hash-pinned definition.

@@ -137,7 +137,7 @@ $results = foreach ($vmName in $VmNames) {
             Write-Host 'stage: apply verify rollback'
             $before = Invoke-Agent actions
             $restoreBefore = @(Get-ComputerRestorePoint).Count
-            $applied = Invoke-Agent apply @{ actionIds = $using:actionIds }
+            $applied = Invoke-Agent apply @{ actionIds = $using:actionIds; highRiskConfirmed = $true }
             if ($applied.status -ne 'Completed' -or @($applied.actions).Count -ne 12 -or @($applied.actions | Where-Object { -not $_.applied }).Count) {
                 throw 'All-action Apply/Verify did not complete.'
             }
@@ -160,7 +160,7 @@ $results = foreach ($vmName in $VmNames) {
 
             Set-KnownInitialState
             Write-Host 'stage: crash apply recovery'
-            $crashApply = Start-AgentForCrash apply @{ actionIds = $using:actionIds }
+            $crashApply = Start-AgentForCrash apply @{ actionIds = $using:actionIds; highRiskConfirmed = $true }
             $operations = Join-Path $env:LOCALAPPDATA 'NeuroTune\operations'
             $deadline = (Get-Date).AddSeconds(20)
             do {
@@ -177,7 +177,7 @@ $results = foreach ($vmName in $VmNames) {
 
             Set-KnownInitialState
             Write-Host 'stage: crash rollback recovery'
-            $forRollback = Invoke-Agent apply @{ actionIds = $using:actionIds }
+            $forRollback = Invoke-Agent apply @{ actionIds = $using:actionIds; highRiskConfirmed = $true }
             $crashRollback = Start-AgentForCrash rollback @{ operationId = $forRollback.id }
             $deadline = (Get-Date).AddSeconds(20)
             do {

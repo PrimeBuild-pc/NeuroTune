@@ -39,8 +39,8 @@
   </thead>
   <tbody>
     <tr>
-      <td>Closed action catalog</td>
-      <td>The LLM can select known <code>ActionId</code> values; it cannot execute generated commands or scripts.</td>
+      <td>Typed capability registry</td>
+      <td>The LLM can select known <code>ActionId</code> values. Generated scripts remain reviewable artifacts and have no execution path inside NeuroTune.</td>
     </tr>
     <tr>
       <td>Verified diagnosis evidence</td>
@@ -118,7 +118,7 @@ npm run tauri dev</code></pre>
 npm ci
 npm run tauri -- build --bundles nsis</code></pre>
 
-<p>The GitHub Actions workflow also produces a <code>NeuroTune-win-x64</code> artifact and SHA-256 checksum after every successful push to <code>main</code>.</p>
+<p>The GitHub Actions workflow produces a <code>NeuroTune-win-x64</code> artifact containing the unsigned per-machine NSIS installer, a no-install portable ZIP with both self-contained agents, and <code>SHA256SUMS</code>.</p>
 
 <h2>Local Data</h2>
 
@@ -131,10 +131,10 @@ npm run tauri -- build --bundles nsis</code></pre>
 <h2>Project Status</h2>
 
 <p>
-  NeuroTune is currently an <strong>alpha</strong> intended for controlled testing. The project now produces an
-  unsigned NSIS installer; code signing and automatic updates remain blocked until a trusted distribution
-  certificate and update channel are available. Destructive cleanup, arbitrary Registry tweaks, generic network
-  “optimizations,” and LLM-generated scripts remain intentionally excluded.
+  NeuroTune v0.6.0-alpha.1 is an <strong>unsigned alpha</strong> intended for controlled testing. The project is MIT-licensed and
+  produces an unsigned NSIS installer, a no-install portable ZIP, and SHA-256 checksums.
+  Generated scripts may be reviewed or saved, but NeuroTune executes only typed, locally registered, reversible
+  capabilities. Destructive cleanup and arbitrary model-generated writes remain excluded.
 </p>
 
 <h2>Documentation</h2>
@@ -142,12 +142,13 @@ npm run tauri -- build --bundles nsis</code></pre>
 <ul>
   <li><a href="ROADMAP.md">Product roadmap and release criteria</a></li>
   <li><a href="docs/IMPLEMENTATION_PLAN.md">Implementation plan</a></li>
-  <li><a href="docs/ISSUE_3_IMPLEMENTATION_PLAN.md">Issue #3 continuation hand-off</a></li>
   <li><a href="docs/DESIGN_SYSTEM.md">Design system and theme contract</a></li>
   <li><a href="docs/PROVIDERS.md">Cloud, custom, OAuth, and local provider guide</a></li>
   <li><a href="docs/TESTING.md">Alpha test guide</a></li>
   <li><a href="docs/VALIDATION_MATRIX.md">VM, accessibility, scaling, and hardware validation matrix</a></li>
   <li><a href="docs/PAWNIO_TRUST_REVIEW.md">PawnIO / LibreHardwareMonitor trust decision</a></li>
-  <li><a href=".claude/PROJECT_SPECIFICATION.md">Project specification</a></li>
+  <li><a href="docs/SECURITY_AUDIT_2026-08-02.md">Pre-publication security and privacy audit</a></li>
+  <li><a href="RELEASE_NOTES.md">v0.6.0-alpha.1 release notes</a></li>
+  <li><a href="LICENSE">MIT license</a></li>
   <li><a href="SECURITY.md">Security policy</a></li>
 </ul>
