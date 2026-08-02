@@ -6,7 +6,9 @@
 |---|---|---|---|
 | Gen 2, UEFI, Secure Boot, vTPM | required | required | n/a |
 | Memory Integrity | enabled and recorded | recorded when available | required before driver experiments |
-| NSIS per-machine install, launch, version, Defender, uninstall | passed | passed after clean reinstall | release smoke test |
+| v0.6.0-alpha.1 NSIS per-machine install, launch, version, Defender, uninstall | passed on build 26200 | passed on build 19045 after clean reinstall | installer SHA-256 `8E449C97A327E4C5700D602FDCA61102C8A562F72493D59918318D831D142076` |
+| v0.6.0-alpha.1 legacy 12-action apply/verify/rollback and crash recovery | passed | passed | high-risk confirmation supplied explicitly by the VM harness |
+| v0.6.0-alpha.1 portable ZIP layout, agent response, and UI launch | passed on physical build 26200 | not repeated | complete ZIP contains UI, Agent, Telemetry, license, README, and release notes |
 | Scan cancellation / no orphan process tree | Rust fake-agent test plus VM checklist | same | optional |
 | All 25 registered actions: Inspect, Capture, Apply, Verify, exact Restore | passed on build 26200 | passed on build 19045 | repeat before stable release |
 | Crash while Applying and Rolling back | passed with deterministic VM-only delay hook, kill, history recovery, rollback | passed with the same harness | not required |

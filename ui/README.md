@@ -16,4 +16,11 @@ Build the unsigned NSIS installer:
 npm run tauri -- build --bundles nsis
 ```
 
+After a release build, package the installer, complete portable ZIP, and
+checksums from the repository root:
+
+```powershell
+./scripts/package-release.ps1
+```
+
 See [`../docs/DESIGN_SYSTEM.md`](../docs/DESIGN_SYSTEM.md) for theme and contrast requirements.
