@@ -147,6 +147,7 @@ npm run tauri -- build --bundles nsis</code></pre>
   <li><a href="docs/TESTING.md">Alpha test guide</a></li>
   <li><a href="docs/VALIDATION_MATRIX.md">VM, accessibility, scaling, and hardware validation matrix</a></li>
   <li><a href="docs/PAWNIO_TRUST_REVIEW.md">PawnIO / LibreHardwareMonitor trust decision</a></li>
+  <li><a href="docs/SECURITY_AUDIT_2026-08-02.md">Pre-publication security and privacy audit</a></li>
   <li><a href="RELEASE_NOTES.md">v0.6.0-alpha.1 release notes</a></li>
   <li><a href="LICENSE">MIT license</a></li>
   <li><a href="SECURITY.md">Security policy</a></li>
