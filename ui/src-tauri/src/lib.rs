@@ -210,7 +210,7 @@ fn validate_request(request_id: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_cancellable, terminate_process_tree, validate_request};
+    use super::{is_cancellable, terminate_process_tree, validate_request, COMMANDS};
     #[cfg(target_os = "windows")]
     use std::os::windows::process::CommandExt;
     use std::{
@@ -225,6 +225,7 @@ mod tests {
         assert!(validate_request("").is_err());
         assert!(is_cancellable("scan"));
         assert!(!is_cancellable("apply"));
+        assert!(!COMMANDS.iter().any(|command| command.contains("script")));
     }
 
     #[cfg(target_os = "windows")]

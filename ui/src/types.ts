@@ -74,17 +74,70 @@ export interface OptimizationAction {
   availability: Availability;
 }
 
+export type PlanRecommendationKind = 'executableAction' | 'manualGuidance' | 'scriptArtifact' | 'externalResource' | 'updateNotice';
+export type RiskProfile = 'safe' | 'balanced' | 'aggressive';
+
+export interface SourceReference {
+  title: string;
+  url: string;
+  grade: string;
+}
+
 export interface Recommendation {
+  id: string;
+  kind: PlanRecommendationKind;
+  title: string;
   actionId: string;
-  evidenceId: string;
+  resourceId: string;
+  updateId: string;
+  evidenceIds: string[];
   reason: string;
+  risk: 'low' | 'medium' | 'high';
+  expectedImpact: string;
+  tradeoffs: string[];
+  prerequisites: string[];
+  requiresRestart: boolean;
+  sourceReferences: SourceReference[];
+  scriptLanguage: string;
+  script: string;
+  reviewWarnings: string[];
 }
 
 export type OptimizationPriority = 'balanced' | 'fps' | 'systemLatency' | 'networkLatency' | 'efficiency';
 
 export interface TuningGoals {
   priority: OptimizationPriority;
+  riskProfile: RiskProfile;
   games: string[];
+  gameContext: GameContext;
+  performanceInput: UserPerformanceInput;
+  notes: string;
+}
+
+export interface GameContext {
+  game: string;
+  version: string;
+  launcher: string;
+  graphicsApi: string;
+  width?: number;
+  height?: number;
+  refreshRateHz?: number;
+  displayMode: string;
+  vrr: string;
+  vSync: string;
+  frameCap?: number;
+  symptoms: string[];
+  preserve: string;
+}
+
+export interface UserPerformanceInput {
+  userProvided: true;
+  averageFps?: number;
+  onePercentLowFps?: number;
+  averageFrameTimeMs?: number;
+  inputLatencyMs?: number;
+  networkLatencyMs?: number;
+  packetLossPercent?: number;
   notes: string;
 }
 
@@ -134,8 +187,21 @@ export interface ScanResult {
   profile: SystemProfile;
   sanitizedProfile: string;
   payloadReport: EvidencePayloadReport;
+  updateNotices: UpdateNoticeDefinition[];
   snapshot: PerformanceSnapshot;
   actions: OptimizationAction[];
+}
+
+export interface UpdateNoticeDefinition {
+  id: string;
+  kind: 'gpuDriver' | 'chipsetDriver' | 'bios';
+  vendor: string;
+  model: string;
+  installedVersion: string;
+  latestVersion: string;
+  officialUrl: string;
+  status: 'updateAvailable' | 'current' | 'comparisonUnavailable';
+  reason: string;
 }
 
 export interface ActionRecord {

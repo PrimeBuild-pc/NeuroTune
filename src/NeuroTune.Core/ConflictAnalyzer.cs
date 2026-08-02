@@ -83,7 +83,7 @@ public static class ConflictAnalyzer
                 values[4] != "Unavailable" && values[5] != "Unavailable",
             "The active boot entry overrides one or more timer choices while Windows reports a high-resolution performance counter and a known CPUID vendor.",
             "Forcing HPET, platform ticks, dynamic-tick behavior, or TSC synchronization can replace Windows platform selection and increase latency or timing jitter.",
-            [OptimizationPriority.Fps, OptimizationPriority.SystemLatency, OptimizationPriority.Balanced], "High", []);
+            [OptimizationPriority.Fps, OptimizationPriority.SystemLatency, OptimizationPriority.Balanced], "High", ["system.bcd-timer-default"]);
 
         foreach (var setting in new[] { "numproc", "truncatememory", "removememory" })
         {
@@ -92,7 +92,7 @@ public static class ConflictAnalyzer
                 [id, "system:operating-system", "system:cpu"], values => values[0] != "Not configured" && values[0] != "Unavailable",
                 $"The active boot entry explicitly configures {setting}.",
                 "The override replaces Windows hardware detection and can reduce available CPU or memory resources.",
-                [OptimizationPriority.Fps, OptimizationPriority.SystemLatency, OptimizationPriority.Balanced], "High", []);
+                [OptimizationPriority.Fps, OptimizationPriority.SystemLatency, OptimizationPriority.Balanced], "High", ["system.bcd-resource-default"]);
         }
 
         Add("vbs-performance-tradeoff", "Virtualization security and maximum-performance objective", ConflictKind.Conditional,

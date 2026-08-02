@@ -1,4 +1,6 @@
 using Microsoft.Win32;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace NeuroTune.Tests;
 
@@ -10,7 +12,7 @@ public sealed class CoreTests
     {
         var catalog = new OptimizationCatalog();
         var json = """
-            {"summary":"Sistema valido","findings":[],"recommendations":[{"actionId":"gaming.game-mode","reason":"Riduce attività concorrenti"}]}
+            {"summary":"Sistema valido","findings":[],"recommendations":[{"id":"game-mode","kind":"executableAction","title":"Game Mode","actionId":"gaming.game-mode","evidenceIds":[],"reason":"Riduce attività concorrenti"}],"consentQuestion":"Apply selected actions?"}
             """;
 
         var result = LlmClient.ParseDiagnosis(json, catalog);
@@ -22,7 +24,7 @@ public sealed class CoreTests
     public void Diagnosis_rejects_unknown_actions()
     {
         var json = """
-            {"summary":"Sistema valido","findings":[],"recommendations":[{"actionId":"run.powershell","reason":"Esegui script"}]}
+            {"summary":"Sistema valido","findings":[],"recommendations":[{"id":"bad","kind":"executableAction","title":"Bad","actionId":"run.powershell","evidenceIds":[],"reason":"Esegui script"}],"consentQuestion":"Apply selected actions?"}
             """;
 
         Assert.ThrowsExactly<InvalidOperationException>(() =>
@@ -34,10 +36,10 @@ public sealed class CoreTests
     {
         var facts = new Dictionary<string, string> { ["gaming:Game Mode"] = "1" };
         var valid = """
-            {"summary":"Checked","findings":[{"title":"Game Mode","evidenceId":"gaming:Game Mode","currentValue":"1","assessment":"Enabled"}],"recommendations":[{"actionId":"gaming.game-mode","evidenceId":"gaming:Game Mode","reason":"Matches the goal"}]}
+            {"summary":"Checked","findings":[{"title":"Game Mode","evidenceId":"gaming:Game Mode","currentValue":"1","assessment":"Enabled"}],"recommendations":[{"id":"game-mode","kind":"executableAction","title":"Game Mode","actionId":"gaming.game-mode","evidenceIds":["gaming:Game Mode"],"reason":"Matches the goal"}],"consentQuestion":"Apply selected actions?"}
             """;
         var fabricated = valid.Replace("\"currentValue\":\"1\"", "\"currentValue\":\"0\"");
-        var unsupportedRecommendation = valid.Replace("\"evidenceId\":\"gaming:Game Mode\",\"reason\"", "\"evidenceId\":\"missing\",\"reason\"");
+        var unsupportedRecommendation = valid.Replace("\"evidenceIds\":[\"gaming:Game Mode\"]", "\"evidenceIds\":[\"missing\"]");
 
         Assert.AreEqual("Game Mode", LlmClient.ParseDiagnosis(valid, new OptimizationCatalog(), facts).Findings.Single().Title);
         Assert.ThrowsExactly<InvalidOperationException>(() =>
@@ -211,6 +213,228 @@ public sealed class CoreTests
         CollectionAssert.AreEqual(new[] { "Valorant" }, goals.Games);
         goals.Notes = new string('x', 1_001);
         Assert.ThrowsExactly<InvalidOperationException>(goals.Validate);
+    }
+
+    [TestMethod]
+    public void Dynamic_plan_accepts_all_review_kinds_but_only_registered_execution()
+    {
+        var facts = new Dictionary<string, string> { ["system:cpu"] = "CPU" };
+        var json = """
+            {"summary":"Checked","findings":[],"recommendations":[
+              {"id":"action","kind":"executableAction","title":"Game Mode","evidenceIds":["system:cpu"],"reason":"Relevant","actionId":"gaming.game-mode"},
+              {"id":"manual","kind":"manualGuidance","title":"Check settings","evidenceIds":["system:cpu"],"reason":"User review"},
+              {"id":"script","kind":"scriptArtifact","title":"Review script","evidenceIds":["system:cpu"],"reason":"Optional manual aid","scriptLanguage":"powershell","script":"Get-Process"},
+              {"id":"resource","kind":"externalResource","title":"Known config","evidenceIds":["system:cpu"],"reason":"Verified artifact","resourceId":"cfg.known"},
+              {"id":"update","kind":"updateNotice","title":"Driver update","evidenceIds":["system:cpu"],"reason":"Official notice","updateId":"driver.known"}
+            ],"consentQuestion":"Apply selected registered actions?"}
+            """;
+
+        var resource = new ExternalArtifactDefinition("cfg.known", ExternalArtifactKind.Cfg, RiskLevel.Medium, false,
+            "https://example.com/game.cfg", new string('a', 64), "text/plain", 4, ["Game"], ["1.0"],
+            ArtifactDestinationMode.AppResolved, ".cfg", "Copy current file", "Compare SHA-256");
+        var update = new UpdateNoticeDefinition("driver.known", UpdateComponentKind.GpuDriver, "NVIDIA", "GPU",
+            "1.0", "2.0", "https://www.nvidia.com/en-us/drivers/", UpdateComparisonStatus.UpdateAvailable, "Newer");
+        var result = LlmClient.ParseDiagnosis(json, new OptimizationCatalog(), facts,
+            new Dictionary<string, ExternalArtifactDefinition> { [resource.Id] = resource },
+            new Dictionary<string, UpdateNoticeDefinition> { [update.Id] = update });
+
+        Assert.HasCount(5, result.Recommendations);
+        Assert.AreEqual(PlanRecommendationKind.ScriptArtifact, result.Recommendations[2].Kind);
+        StringAssert.Contains(result.Recommendations[2].ReviewWarnings[0], "cannot execute");
+        Assert.AreEqual(resource.SourceUrl, result.Recommendations[3].SourceReferences.Single().Url);
+        Assert.AreEqual(update.OfficialUrl, result.Recommendations[4].SourceReferences.Single().Url);
+    }
+
+    [TestMethod]
+    public void Script_review_flags_sensitive_commands_without_executing_them()
+    {
+        var warnings = ScriptReviewService.Analyze("powershell", "Set-MpPreference -DisableRealtimeMonitoring $true");
+
+        Assert.IsGreaterThanOrEqualTo(2, warnings.Count);
+        Assert.IsTrue(warnings.Any(warning => warning.Contains("Defender", StringComparison.Ordinal)));
+    }
+
+    [TestMethod]
+    public void Risk_profiles_preselect_registered_actions_deterministically()
+    {
+        var catalog = new OptimizationCatalog();
+        var low = new PlanRecommendation { Kind = PlanRecommendationKind.ExecutableAction, ActionId = "gaming.game-mode" };
+        var high = new PlanRecommendation { Kind = PlanRecommendationKind.ExecutableAction, ActionId = "graphics.tdr-default" };
+        var script = new PlanRecommendation { Kind = PlanRecommendationKind.ScriptArtifact };
+
+        Assert.IsTrue(PlanSelectionPolicy.Evaluate(low, RiskProfile.Safe, catalog).Preselected);
+        Assert.IsFalse(PlanSelectionPolicy.Evaluate(high, RiskProfile.Balanced, catalog).Preselected);
+        Assert.IsTrue(PlanSelectionPolicy.Evaluate(high, RiskProfile.Aggressive, catalog).RequiresSeparateConfirmation);
+        Assert.AreEqual(PolicyDisposition.ManualOnly,
+            PlanSelectionPolicy.Evaluate(script, RiskProfile.Aggressive, catalog).Disposition);
+    }
+
+    [TestMethod]
+    public void User_measurements_are_bounded_and_always_labelled_user_provided()
+    {
+        var goals = new TuningGoals
+        {
+            GameContext = new GameContext { Game = "Fortnite", Width = 2560, Height = 1440, RefreshRateHz = 360 },
+            PerformanceInput = new UserPerformanceInput { UserProvided = false, AverageFps = 240, PacketLossPercent = 0.5 }
+        };
+
+        goals.Validate();
+
+        Assert.IsTrue(goals.PerformanceInput.UserProvided);
+        goals.PerformanceInput.PacketLossPercent = 101;
+        Assert.ThrowsExactly<InvalidOperationException>(goals.Validate);
+    }
+
+    [TestMethod]
+    public void Capability_registry_separates_complete_metadata_from_reversible_execution()
+    {
+        var catalog = new OptimizationCatalog();
+
+        Assert.HasCount(25, catalog.All);
+        Assert.HasCount(25, catalog.Definitions.Select(item => item.Id).Distinct(StringComparer.OrdinalIgnoreCase));
+        Assert.IsTrue(catalog.All.All(action => action is IReversibleAction));
+        Assert.IsTrue(catalog.Definitions.All(definition =>
+        {
+            definition.Validate();
+            return definition.SchemaVersion == 1 && definition.SupportedWindowsBuilds.Count > 0 &&
+                definition.SupportedHardware.Count > 0 && definition.EvidenceRequirements.Count > 0 &&
+                definition.Sources.Count > 0 && definition.SideEffects.Count > 0;
+        }));
+    }
+
+    [TestMethod]
+    public void Capability_policy_blocks_forbidden_targets_and_confirms_high_risk_actions()
+    {
+        var catalog = new OptimizationCatalog();
+        var high = ActionPolicy.Evaluate(catalog.Get("graphics.tdr-default").Definition, RiskProfile.Aggressive);
+        var forbidden = catalog.Get("gaming.game-mode").Definition with { Id = "gaming.hpet-force" };
+
+        Assert.AreEqual(PolicyDisposition.ConfirmationRequired, high.Disposition);
+        Assert.IsTrue(high.Preselected);
+        Assert.IsTrue(high.RequiresSeparateConfirmation);
+        Assert.AreEqual(PolicyDisposition.Blocked, ActionPolicy.Evaluate(forbidden, RiskProfile.Aggressive).Disposition);
+    }
+
+    [TestMethod]
+    public async Task Engine_rejects_high_risk_actions_without_the_separate_confirmation_flag()
+    {
+        var engine = new OptimizationEngine(new OptimizationCatalog(), new BackupService());
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            engine.ApplyAsync(["graphics.tdr-default"]));
+
+        StringAssert.Contains(exception.Message, "separate explicit confirmation");
+    }
+
+    [TestMethod]
+    public void Capability_state_families_are_registered_without_forbidden_performance_targets()
+    {
+        var ids = new OptimizationCatalog().Definitions.Select(item => item.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var id in new[]
+        {
+            "system.high-performance", "system.balanced",
+            "gaming.game-mode", "gaming.game-mode-off", "gaming.game-mode-default",
+            "gaming.hags", "gaming.hags-off", "gaming.hags-default",
+            "gaming.game-dvr-on", "gaming.game-dvr-off", "gaming.game-dvr-default",
+            "gaming.app-capture-on", "gaming.app-capture-off", "gaming.app-capture-default",
+            "system.visual-effects", "system.visual-effects-default", "system.visual-effects-appearance",
+            "system.bcd-timer-default", "system.bcd-resource-default"
+        }) Assert.Contains(id, ids);
+        Assert.IsFalse(ids.Any(id => new[] { "defender", "firewall", "uac", "hpet" }
+            .Any(forbidden => id.Contains(forbidden, StringComparison.OrdinalIgnoreCase))));
+    }
+
+    [TestMethod]
+    public void External_artifacts_require_exact_source_hash_type_and_bounded_destination()
+    {
+        var payload = Encoding.UTF8.GetBytes("safe=true\n");
+        var source = new Uri("https://downloads.example.org/game.cfg");
+        var definition = new ExternalArtifactDefinition("cfg.verified", ExternalArtifactKind.Cfg,
+            RiskLevel.Medium, false, source.AbsoluteUri, Convert.ToHexString(SHA256.HashData(payload)),
+            "text/plain", payload.Length, ["Example Game"], ["1.2"], ArtifactDestinationMode.AppResolved,
+            ".cfg", "Copy the previous file", "Compare the installed SHA-256");
+        var root = Path.Combine(Path.GetTempPath(), "neurotune-artifact-root");
+        var destination = Path.Combine(root, "game.cfg");
+
+        Assert.AreEqual(Path.GetFullPath(destination), ExternalArtifactValidator.Validate(
+            definition, source, "text/plain; charset=utf-8", payload, root, destination));
+        Assert.ThrowsExactly<InvalidOperationException>(() => ExternalArtifactValidator.Validate(
+            definition, new Uri("https://mirror.example.org/game.cfg"), "text/plain", payload, root, destination));
+        Assert.ThrowsExactly<InvalidOperationException>(() => ExternalArtifactValidator.Validate(
+            definition, source, "text/plain", Encoding.UTF8.GetBytes("changed"), root, destination));
+        Assert.ThrowsExactly<InvalidOperationException>(() => ExternalArtifactValidator.Validate(
+            definition, source, "application/x-msdownload", payload, root, destination));
+        Assert.ThrowsExactly<InvalidOperationException>(() => ExternalArtifactValidator.Validate(
+            definition, source, "text/plain", payload, root, Path.Combine(root, "..", "escape.cfg")));
+    }
+
+    [TestMethod]
+    public void External_catalogs_are_empty_until_primebuild_approves_each_entry()
+    {
+        Assert.IsEmpty(new ExternalArtifactCatalog().All);
+        Assert.IsEmpty(new ExternalApplicationCatalog().All);
+    }
+
+    [TestMethod]
+    public void Verified_text_artifact_applies_and_rolls_back_the_exact_previous_file()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"neurotune-artifact-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        try
+        {
+            var destination = Path.Combine(root, "game.cfg");
+            File.WriteAllText(destination, "old=true\n");
+            var payload = Encoding.UTF8.GetBytes("new=true\n");
+            var source = new Uri("https://downloads.example.org/game.cfg");
+            var definition = new ExternalArtifactDefinition("cfg.transaction", ExternalArtifactKind.Cfg,
+                RiskLevel.Medium, false, source.AbsoluteUri, Convert.ToHexString(SHA256.HashData(payload)),
+                "text/plain", payload.Length, ["Example Game"], ["1.2"], ArtifactDestinationMode.AppResolved,
+                ".cfg", "Capture exact existing bytes", "Compare installed SHA-256");
+            var action = new VerifiedArtifactAction(definition, source, "text/plain", payload, root, destination);
+
+            var captured = action.Capture();
+            action.Apply();
+            Assert.IsTrue(action.Verify());
+            Assert.AreEqual("new=true\n", File.ReadAllText(destination));
+            action.Restore(captured);
+            Assert.AreEqual("old=true\n", File.ReadAllText(destination));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [TestMethod]
+    public void Update_advisor_claims_updates_only_for_exact_official_numeric_records()
+    {
+        var advisor = new OfficialUpdateAdvisor([new OfficialUpdateRecord(
+            UpdateComponentKind.GpuDriver, "NVIDIA", "Example GPU", "2.1.0",
+            "https://www.nvidia.com/en-us/drivers/")]);
+
+        var exact = advisor.AnalyzeComponents([
+            new(UpdateComponentKind.GpuDriver, "NVIDIA", "Example GPU", "2.0.0")]).Single();
+        var unknown = advisor.AnalyzeComponents([
+            new(UpdateComponentKind.GpuDriver, "NVIDIA", "Different GPU", "1.0")]).Single();
+        var bios = advisor.AnalyzeComponents([
+            new(UpdateComponentKind.Bios, "MSI", "Board", "E7C37AMS.1Q0")]).Single();
+
+        Assert.AreEqual(UpdateComparisonStatus.UpdateAvailable, exact.Status);
+        Assert.AreEqual("2.1.0", exact.LatestVersion);
+        Assert.AreEqual(UpdateComparisonStatus.ComparisonUnavailable, unknown.Status);
+        Assert.AreEqual("", unknown.LatestVersion);
+        Assert.AreEqual(UpdateComparisonStatus.ComparisonUnavailable, bios.Status);
+        Assert.IsTrue(new Uri(exact.OfficialUrl).Host.EndsWith("nvidia.com", StringComparison.OrdinalIgnoreCase));
+        Assert.ThrowsExactly<InvalidOperationException>(() => new OfficialUpdateAdvisor([new OfficialUpdateRecord(
+            UpdateComponentKind.GpuDriver, "NVIDIA", "Example GPU", "3.0", "https://evil.example/driver")]));
+    }
+
+    [TestMethod]
+    public void Update_version_comparison_is_deterministic_and_rejects_ambiguous_vendor_formats()
+    {
+        Assert.IsTrue(OfficialUpdateAdvisor.TryCompareVersions("31.0.15.5200", "31.0.15.6000", out var older));
+        Assert.IsLessThan(0, older);
+        Assert.IsTrue(OfficialUpdateAdvisor.TryCompareVersions("2.1", "2.1.0", out var equal));
+        Assert.AreEqual(0, equal);
+        Assert.IsFalse(OfficialUpdateAdvisor.TryCompareVersions("E7C37AMS.1Q0", "E7C37AMS.1R0", out _));
     }
 
     [TestMethod]
