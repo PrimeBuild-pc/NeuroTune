@@ -44,13 +44,13 @@ or validation report.
 
 | ID | Milestone | Status | Acceptance evidence |
 |---|---|---|---|
-| M0 | Close legacy backlog, add MIT, consolidate planning | Completed | Issues #1–#3 closed 2026-08-02; MIT and this living plan added in the M0 commit |
-| M1 | Structured dynamic-plan contract and goal/measurement context | Completed | M1 commit (this milestone commit): 21 .NET tests; 7 Vitest tests; UI typecheck, lint, and production build |
-| M2 | Extensible reversible capability registry and first expansion | In progress | M2 foundation commit (this milestone commit): 25 actions, 24 .NET tests, exact round-trip on Windows builds 19045 and 26200 |
-| M3 | Verified artifact catalog and deterministic update advisor | In progress | M3 foundation commit (this milestone commit): empty-by-default catalogs, exact text artifact transaction, official vendor advisor, 29 .NET tests |
-| M4 | Plan-focused accessible UI and script/resource review | In progress | Five labelled item types, inert script copy/save, server-enforced high-risk confirmation; 30 .NET, 7 UI and 2 Rust tests pass; scaling/Narrator manual checks remain |
-| M5 | NSIS, portable ZIP, checksums, release documentation | Completed | v0.6.0-alpha.1 NSIS and 64,196,039-byte portable ZIP built; SHA256SUMS verified; portable smoke plus installer/apply/rollback/crash/uninstall matrix passed on builds 19045 and 26200 |
-| M6 | Full-history secret/privacy audit and public repository | Blocked | `docs/SECURITY_AUDIT_2026-08-02.md`: no secrets; reachable personal Gmail author metadata requires PrimeBuild accept/rewrite/private decision |
+| M0 | Close legacy backlog, add MIT, consolidate planning | Completed | `73ad228`; issues #1–#3 closed 2026-08-02; PR #5 |
+| M1 | Structured dynamic-plan contract and goal/measurement context | Completed | `9ec9332`; 21 .NET tests, 7 Vitest tests, UI typecheck/lint/build; PR #5 |
+| M2 | Extensible reversible capability registry and first expansion | In progress | `c0acdb2`; 25 actions, 24 .NET tests, exact round-trip on builds 19045/26200; PR #5 |
+| M3 | Verified artifact catalog and deterministic update advisor | In progress | `a7fa9a6`; empty-by-default catalogs, exact text transaction, official vendor advisor, 29 .NET tests; PR #5 |
+| M4 | Plan-focused accessible UI and script/resource review | In progress | `b1d7d11`; five labelled types, inert script copy/save, enforced high-risk confirmation; 30 .NET, 7 UI, 2 Rust tests; manual scaling/Narrator remain; PR #5 |
+| M5 | NSIS, portable ZIP, checksums, release documentation | Completed | `8416b69`; NSIS and 64,196,039-byte ZIP, checksums and smoke/matrix on builds 19045/26200; PR #5 |
+| M6 | Full-history secret/privacy audit and public repository | Blocked | `32fd2aa`; no secrets; reachable personal Gmail author metadata requires PrimeBuild accept/rewrite/private decision; PR #5 |
 | M7 | Optional imported benchmark evidence and researched sources | Planned | Deferred until the planner and advisor are stable |
 
 ## M1 — dynamic plan foundation
