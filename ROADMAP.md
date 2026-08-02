@@ -57,12 +57,12 @@ NeuroTune is developed safety-first: a feature is not considered complete merely
 
 ## v0.6 — Dynamic Plan Alpha
 
-- [ ] Structured AI plans containing executable actions, manual guidance, script artifacts, verified resources, and update notices
-- [ ] Safe, Balanced, and Aggressive risk policies over one contextual plan
+- [x] Structured AI plans containing executable actions, manual guidance, script artifacts, verified resources, and update notices
+- [x] Safe, Balanced, and Aggressive risk policies over one contextual plan
 - [ ] Extensible typed capability registry with expanded reversible action coverage
-- [ ] Optional user-provided game context and performance observations
-- [ ] Official-source GPU, chipset, and motherboard update advisor
-- [ ] Unsigned NSIS and portable ZIP assets with SHA-256 checksums
+- [x] Optional user-provided game context and performance observations
+- [x] Official-source GPU, chipset, and motherboard update advisor foundation
+- [x] Unsigned NSIS and portable ZIP assets with SHA-256 checksums
 - [ ] MIT-licensed public repository after full-history privacy and secret review
 
 ## v1.0 — Release Criteria

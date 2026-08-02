@@ -118,7 +118,7 @@ npm run tauri dev</code></pre>
 npm ci
 npm run tauri -- build --bundles nsis</code></pre>
 
-<p>The GitHub Actions workflow also produces a <code>NeuroTune-win-x64</code> artifact and SHA-256 checksum after every successful push to <code>main</code>.</p>
+<p>The GitHub Actions workflow produces a <code>NeuroTune-win-x64</code> artifact containing the unsigned per-machine NSIS installer, a no-install portable ZIP with both self-contained agents, and <code>SHA256SUMS</code>.</p>
 
 <h2>Local Data</h2>
 
@@ -131,8 +131,8 @@ npm run tauri -- build --bundles nsis</code></pre>
 <h2>Project Status</h2>
 
 <p>
-  NeuroTune is currently an <strong>alpha</strong> intended for controlled testing. The project is MIT-licensed and
-  produces an unsigned NSIS installer. Public releases will also include a portable ZIP and SHA-256 checksums.
+  NeuroTune v0.6.0-alpha.1 is an <strong>unsigned alpha</strong> intended for controlled testing. The project is MIT-licensed and
+  produces an unsigned NSIS installer, a no-install portable ZIP, and SHA-256 checksums.
   Generated scripts may be reviewed or saved, but NeuroTune executes only typed, locally registered, reversible
   capabilities. Destructive cleanup and arbitrary model-generated writes remain excluded.
 </p>
@@ -147,6 +147,7 @@ npm run tauri -- build --bundles nsis</code></pre>
   <li><a href="docs/TESTING.md">Alpha test guide</a></li>
   <li><a href="docs/VALIDATION_MATRIX.md">VM, accessibility, scaling, and hardware validation matrix</a></li>
   <li><a href="docs/PAWNIO_TRUST_REVIEW.md">PawnIO / LibreHardwareMonitor trust decision</a></li>
+  <li><a href="RELEASE_NOTES.md">v0.6.0-alpha.1 release notes</a></li>
   <li><a href="LICENSE">MIT license</a></li>
   <li><a href="SECURITY.md">Security policy</a></li>
 </ul>

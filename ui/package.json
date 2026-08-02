@@ -2,7 +2,7 @@
   "name": "neurotune-ui",
   "private": true,
   "license": "MIT",
-  "version": "0.5.0-alpha.2",
+  "version": "0.6.0-alpha.1",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -248,7 +248,7 @@ function App() {
         </nav>
         <div className="sidebar-foot">
           <div className="security-chip"><ShieldCheck size={16}/><span>Allowlisted actions</span></div>
-          <small>v0.5.0-alpha.2</small>
+          <small>v0.6.0-alpha.1</small>
         </div>
       </aside>
 
