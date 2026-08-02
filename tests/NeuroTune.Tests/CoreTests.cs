@@ -276,6 +276,55 @@ public sealed class CoreTests
     }
 
     [TestMethod]
+    public void Capability_registry_separates_complete_metadata_from_reversible_execution()
+    {
+        var catalog = new OptimizationCatalog();
+
+        Assert.HasCount(25, catalog.All);
+        Assert.HasCount(25, catalog.Definitions.Select(item => item.Id).Distinct(StringComparer.OrdinalIgnoreCase));
+        Assert.IsTrue(catalog.All.All(action => action is IReversibleAction));
+        Assert.IsTrue(catalog.Definitions.All(definition =>
+        {
+            definition.Validate();
+            return definition.SchemaVersion == 1 && definition.SupportedWindowsBuilds.Count > 0 &&
+                definition.SupportedHardware.Count > 0 && definition.EvidenceRequirements.Count > 0 &&
+                definition.Sources.Count > 0 && definition.SideEffects.Count > 0;
+        }));
+    }
+
+    [TestMethod]
+    public void Capability_policy_blocks_forbidden_targets_and_confirms_high_risk_actions()
+    {
+        var catalog = new OptimizationCatalog();
+        var high = ActionPolicy.Evaluate(catalog.Get("graphics.tdr-default").Definition, RiskProfile.Aggressive);
+        var forbidden = catalog.Get("gaming.game-mode").Definition with { Id = "gaming.hpet-force" };
+
+        Assert.AreEqual(PolicyDisposition.ConfirmationRequired, high.Disposition);
+        Assert.IsTrue(high.Preselected);
+        Assert.IsTrue(high.RequiresSeparateConfirmation);
+        Assert.AreEqual(PolicyDisposition.Blocked, ActionPolicy.Evaluate(forbidden, RiskProfile.Aggressive).Disposition);
+    }
+
+    [TestMethod]
+    public void Capability_state_families_are_registered_without_forbidden_performance_targets()
+    {
+        var ids = new OptimizationCatalog().Definitions.Select(item => item.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var id in new[]
+        {
+            "system.high-performance", "system.balanced",
+            "gaming.game-mode", "gaming.game-mode-off", "gaming.game-mode-default",
+            "gaming.hags", "gaming.hags-off", "gaming.hags-default",
+            "gaming.game-dvr-on", "gaming.game-dvr-off", "gaming.game-dvr-default",
+            "gaming.app-capture-on", "gaming.app-capture-off", "gaming.app-capture-default",
+            "system.visual-effects", "system.visual-effects-default", "system.visual-effects-appearance",
+            "system.bcd-timer-default", "system.bcd-resource-default"
+        }) Assert.Contains(id, ids);
+        Assert.IsFalse(ids.Any(id => new[] { "defender", "firewall", "uac", "hpet" }
+            .Any(forbidden => id.Contains(forbidden, StringComparison.OrdinalIgnoreCase))));
+    }
+
+    [TestMethod]
     public void Empty_consent_question_is_rejected()
     {
         var json = """

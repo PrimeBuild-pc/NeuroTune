@@ -6,46 +6,109 @@ using System.Text.RegularExpressions;
 
 namespace NeuroTune;
 
-public sealed record OptimizationAction(
-    string Id,
-    string Name,
-    string Description,
-    string Category,
-    RiskLevel Risk,
-    bool RequiresRestart,
-    string? RegistryExportPath,
-    Func<ActionAvailability> Inspect,
-    Func<string> Capture,
-    Action Apply,
-    Action<string> Restore,
-    Func<bool> Verify);
+public sealed class OptimizationAction : IReversibleAction
+{
+    private readonly Func<ActionAvailability> _inspect;
+    private readonly Func<string> _capture;
+    private readonly Action _apply;
+    private readonly Action<string> _restore;
+    private readonly Func<bool> _verify;
+
+    public OptimizationAction(string id, string name, string description, string category, RiskLevel risk,
+        bool requiresRestart, string? registryExportPath, Func<ActionAvailability> inspect, Func<string> capture,
+        Action apply, Action<string> restore, Func<bool> verify, IReadOnlyList<string>? supportedWindowsBuilds = null,
+        IReadOnlyList<string>? supportedHardware = null, IReadOnlyList<string>? evidenceRequirements = null,
+        IReadOnlyList<string>? sources = null, IReadOnlyList<string>? sideEffects = null)
+    {
+        Definition = new(id, name, description, category, risk, requiresRestart, registryExportPath,
+            supportedWindowsBuilds ?? ["Windows 10 22H2", "Windows 11"],
+            supportedHardware ?? ["Any hardware supported by the installed Windows build"],
+            evidenceRequirements ?? [registryExportPath is null ? "Exact active power-scheme identifier" : $"Exact local state at {registryExportPath}"],
+            sources ?? ["Microsoft Windows platform behavior plus exact local state inspection"],
+            sideEffects ?? [requiresRestart ? "Takes effect after a Windows restart" : "May change the current Windows preference"]);
+        Definition.Validate();
+        _inspect = inspect;
+        _capture = capture;
+        _apply = apply;
+        _restore = restore;
+        _verify = verify;
+    }
+
+    public ActionDefinition Definition { get; }
+    public string Id => Definition.Id;
+    public string Name => Definition.Name;
+    public string Description => Definition.Description;
+    public string Category => Definition.Category;
+    public RiskLevel Risk => Definition.Risk;
+    public bool RequiresRestart => Definition.RequiresRestart;
+    public string? RegistryExportPath => Definition.RegistryExportPath;
+    public ActionAvailability Inspect() => _inspect();
+    public string Capture() => _capture();
+    public void Apply() => _apply();
+    public void Restore(string capturedState) => _restore(capturedState);
+    public bool Verify() => _verify();
+}
 
 public sealed class OptimizationCatalog
 {
     private const string HighPerformanceGuid = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
+    private const string BalancedGuid = "381b4222-f694-41f0-9685-ff5bb260df2e";
     private readonly Dictionary<string, OptimizationAction> _actions;
 
     public OptimizationCatalog()
     {
         var actions = new[]
         {
-            PowerPlan(),
+            PowerPlan("system.high-performance", "Use the High Performance power plan",
+                "Reduces power-saving delays at the cost of higher energy use.", HighPerformanceGuid, "SCHEME_MIN", "High performance"),
+            PowerPlan("system.balanced", "Use the Balanced power plan",
+                "Returns the active scheme to the standard Windows balance of performance and energy use.", BalancedGuid, "SCHEME_BALANCED", "Balanced"),
             RegistryDword("gaming.game-mode", "Enable Game Mode",
                 "Lets Windows prioritize gaming workloads while a game is running.", "Gaming", RiskLevel.Low, false,
                 RegistryHive.CurrentUser, @"Software\Microsoft\GameBar", "AutoGameModeEnabled", 1,
                 stateLabel: OnOffState),
+            RegistryDword("gaming.game-mode-off", "Disable Game Mode",
+                "Turns off the user Game Mode preference for workloads where it is counterproductive.", "Gaming", RiskLevel.Low, false,
+                RegistryHive.CurrentUser, @"Software\Microsoft\GameBar", "AutoGameModeEnabled", 0,
+                stateLabel: OnOffState),
+            RegistryDeleteDword("gaming.game-mode-default", "Restore the default Game Mode preference",
+                "Removes the explicit per-user Game Mode override and lets Windows manage its default.", "Gaming", RiskLevel.Low, false,
+                RegistryHive.CurrentUser, @"Software\Microsoft\GameBar", "AutoGameModeEnabled"),
             RegistryDword("gaming.hags", "Enable hardware GPU scheduling",
                 "Moves supported GPU scheduling work to dedicated hardware.", "Gaming", RiskLevel.Medium, true,
                 RegistryHive.LocalMachine, @"SYSTEM\CurrentControlSet\Control\GraphicsDrivers", "HwSchMode", 2,
                 () => OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041) ? null : "Requires Windows 10 version 2004 or newer",
                 stateLabel: value => value switch { 2 => "Enabled", 1 => "Disabled", _ => "Not configured" }),
+            RegistryDword("gaming.hags-off", "Disable hardware GPU scheduling",
+                "Explicitly disables hardware GPU scheduling for compatibility diagnosis.", "Gaming", RiskLevel.Medium, true,
+                RegistryHive.LocalMachine, @"SYSTEM\CurrentControlSet\Control\GraphicsDrivers", "HwSchMode", 1,
+                () => OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041) ? null : "Requires Windows 10 version 2004 or newer",
+                stateLabel: value => value switch { 2 => "Enabled", 1 => "Disabled", _ => "Not configured" }),
+            RegistryDeleteDword("gaming.hags-default", "Restore the default GPU scheduling policy",
+                "Removes the explicit HAGS override and returns scheduling policy to Windows and the graphics driver.", "Gaming", RiskLevel.Medium, true,
+                RegistryHive.LocalMachine, @"SYSTEM\CurrentControlSet\Control\GraphicsDrivers", "HwSchMode"),
             RegistryDword("gaming.game-dvr-off", "Disable background Game DVR",
                 "Stops Xbox Game Bar from recording gameplay in the background.", "Gaming", RiskLevel.Medium, false,
                 RegistryHive.CurrentUser, @"System\GameConfigStore", "GameDVR_Enabled", 0,
                 stateLabel: OnOffState),
+            RegistryDword("gaming.game-dvr-on", "Enable background Game DVR",
+                "Restores the user Game DVR recording preference when capture must be preserved.", "Gaming", RiskLevel.Medium, false,
+                RegistryHive.CurrentUser, @"System\GameConfigStore", "GameDVR_Enabled", 1,
+                stateLabel: OnOffState),
+            RegistryDeleteDword("gaming.game-dvr-default", "Restore the default Game DVR preference",
+                "Removes the explicit Game DVR preference and lets Windows manage its default.", "Gaming", RiskLevel.Medium, false,
+                RegistryHive.CurrentUser, @"System\GameConfigStore", "GameDVR_Enabled"),
             RegistryDword("system.visual-effects", "Prefer performance visual effects",
                 "Reduces Windows animations and visual effects.", "System", RiskLevel.Low, false,
                 RegistryHive.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects", "VisualFXSetting", 2,
+                stateLabel: value => value switch { 1 => "Best appearance", 2 => "Best performance", 3 => "Custom", _ => "Automatic" }),
+            RegistryDword("system.visual-effects-default", "Let Windows choose visual effects",
+                "Returns the global visual-effects preference to Windows automatic selection.", "System", RiskLevel.Low, false,
+                RegistryHive.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects", "VisualFXSetting", 0,
+                stateLabel: value => value switch { 1 => "Best appearance", 2 => "Best performance", 3 => "Custom", _ => "Automatic" }),
+            RegistryDword("system.visual-effects-appearance", "Prefer appearance visual effects",
+                "Preserves Windows animations and visual effects when image quality is a stated constraint.", "System", RiskLevel.Low, false,
+                RegistryHive.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects", "VisualFXSetting", 1,
                 stateLabel: value => value switch { 1 => "Best appearance", 2 => "Best performance", 3 => "Custom", _ => "Automatic" }),
             RegistryDword("system.large-cache-default", "Restore the Windows client cache policy",
                 "Disables the server-oriented LargeSystemCache override.", "System", RiskLevel.Medium, true,
@@ -62,6 +125,13 @@ public sealed class OptimizationCatalog
                 "Disables the second Windows game-capture preference used by Game Bar.", "Gaming", RiskLevel.Medium, false,
                 RegistryHive.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\GameDVR", "AppCaptureEnabled", 0,
                 stateLabel: OnOffState),
+            RegistryDword("gaming.app-capture-on", "Enable Windows app capture",
+                "Restores the user app-capture preference when recording must be preserved.", "Gaming", RiskLevel.Medium, false,
+                RegistryHive.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\GameDVR", "AppCaptureEnabled", 1,
+                stateLabel: OnOffState),
+            RegistryDeleteDword("gaming.app-capture-default", "Restore the default app-capture preference",
+                "Removes the explicit app-capture preference and lets Windows manage its default.", "Gaming", RiskLevel.Medium, false,
+                RegistryHive.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\GameDVR", "AppCaptureEnabled"),
             RegistryDeleteDwords("graphics.tdr-default", "Restore default GPU timeout recovery",
                 "Removes manual TDR delay and debug overrides so Windows can recover a stalled graphics driver normally.",
                 "Graphics", RiskLevel.High, true, RegistryHive.LocalMachine,
@@ -74,12 +144,22 @@ public sealed class OptimizationCatalog
             RegistryDeleteDwords("system.power-throttling-default", "Restore Windows power throttling policy",
                 "Removes the system-wide PowerThrottlingOff override and returns scheduling decisions to Windows.",
                 "Power", RiskLevel.Medium, true, RegistryHive.LocalMachine,
-                @"SYSTEM\CurrentControlSet\Control\Power\PowerThrottling", ["PowerThrottlingOff"])
+                @"SYSTEM\CurrentControlSet\Control\Power\PowerThrottling", ["PowerThrottlingOff"]),
+            BcdDeleteValues("system.bcd-timer-default", "Remove manual boot timer overrides",
+                "Removes forced platform clock/tick and TSC synchronization choices so Windows can select its timer policy.",
+                ["useplatformclock", "useplatformtick", "disabledynamictick", "tscsyncpolicy"]),
+            BcdDeleteValues("system.bcd-resource-default", "Remove manual boot resource limits",
+                "Removes CPU-count and memory-limit overrides from the active Windows boot entry.",
+                ["numproc", "truncatememory", "removememory"])
         };
+        if (actions.Select(action => action.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count() != actions.Length)
+            throw new InvalidOperationException("The capability registry contains duplicate action IDs.");
+        foreach (var action in actions) action.Definition.Validate();
         _actions = actions.ToDictionary(x => x.Id, StringComparer.OrdinalIgnoreCase);
     }
 
     public IReadOnlyCollection<OptimizationAction> All => _actions.Values;
+    public IReadOnlyCollection<ActionDefinition> Definitions => _actions.Values.Select(action => action.Definition).ToList();
 
     public OptimizationAction Get(string id) => _actions.TryGetValue(id, out var action)
         ? action
@@ -87,7 +167,8 @@ public sealed class OptimizationCatalog
 
     public bool Contains(string id) => _actions.ContainsKey(id);
 
-    private static OptimizationAction PowerPlan()
+    private static OptimizationAction PowerPlan(string id, string name, string description, string targetGuid,
+        string targetAlias, string targetLabel)
     {
         string Capture()
         {
@@ -102,23 +183,25 @@ public sealed class OptimizationCatalog
             try
             {
                 var current = Capture();
-                if (current.Equals(HighPerformanceGuid, StringComparison.OrdinalIgnoreCase))
-                    return ActionAvailability.Applied("High performance");
+                if (current.Equals(targetGuid, StringComparison.OrdinalIgnoreCase))
+                    return ActionAvailability.Applied(targetLabel);
                 var plans = RunPowerCfg("/list");
-                return plans.Contains(HighPerformanceGuid, StringComparison.OrdinalIgnoreCase)
+                return plans.Contains(targetGuid, StringComparison.OrdinalIgnoreCase)
                     ? ActionAvailability.Ready(current)
-                    : ActionAvailability.Unavailable("High Performance power plan is not available", current);
+                    : ActionAvailability.Unavailable($"{targetLabel} power plan is not available", current);
             }
             catch (Exception exception) { return ActionAvailability.Unavailable(exception.Message); }
         }
 
-        void Apply() => RunPowerCfg("/setactive", "SCHEME_MIN");
+        void Apply() => RunPowerCfg("/setactive", targetAlias);
         void Restore(string guid) => RunPowerCfg("/setactive", guid);
-        bool Verify() => Capture().Equals(HighPerformanceGuid, StringComparison.OrdinalIgnoreCase);
+        bool Verify() => Capture().Equals(targetGuid, StringComparison.OrdinalIgnoreCase);
 
-        return new("system.high-performance", "Use the High Performance power plan",
-            "Reduces power-saving delays at the cost of higher energy use.", "System", RiskLevel.Medium, false,
-            null, Inspect, Capture, Apply, Restore, Verify);
+        return new(id, name, description, "System", RiskLevel.Medium, false,
+            null, Inspect, Capture, Apply, Restore, Verify,
+            evidenceRequirements: ["Exact active and available power-scheme identifiers"],
+            sources: ["Microsoft powercfg command contract and exact local scheme inventory"],
+            sideEffects: ["Changes the active system power policy and may affect energy use"]);
     }
 
     private static OptimizationAction RegistryDword(string id, string name, string description, string category,
@@ -199,8 +282,8 @@ public sealed class OptimizationCatalog
 
         void Apply()
         {
-            using var key = RegistryKey.OpenBaseKey(hive, RegistryView.Registry64).OpenSubKey(path, true)
-                ?? throw new InvalidOperationException($"Cannot open {exportPath}.");
+            using var key = RegistryKey.OpenBaseKey(hive, RegistryView.Registry64).OpenSubKey(path, true);
+            if (key is null) return;
             foreach (var valueName in valueNames) key.DeleteValue(valueName, false);
         }
 
@@ -243,8 +326,8 @@ public sealed class OptimizationCatalog
 
         void Apply()
         {
-            using var key = RegistryKey.OpenBaseKey(hive, RegistryView.Registry64).OpenSubKey(path, true)
-                ?? throw new InvalidOperationException($"Cannot open {exportPath}.");
+            using var key = RegistryKey.OpenBaseKey(hive, RegistryView.Registry64).OpenSubKey(path, true);
+            if (key is null) return;
             key.DeleteValue(valueName, false);
         }
 
@@ -252,6 +335,63 @@ public sealed class OptimizationCatalog
 
         return new(id, name, description, category, risk, restart, exportPath,
             Inspect, Capture, Apply, Restore, () => ReadCurrent() is null);
+    }
+
+    private static OptimizationAction BcdDeleteValues(string id, string name, string description, string[] valueNames)
+    {
+        Dictionary<string, string?> ReadCurrent()
+        {
+            var output = RunExecutable("bcdedit.exe", "/enum", "{current}");
+            return valueNames.ToDictionary(valueName => valueName, valueName => output
+                .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+                .Select(line => line.Trim())
+                .Where(line => line.StartsWith(valueName, StringComparison.OrdinalIgnoreCase))
+                .Select(line => line[valueName.Length..].Trim())
+                .FirstOrDefault(), StringComparer.OrdinalIgnoreCase);
+        }
+
+        ActionAvailability Inspect()
+        {
+            try
+            {
+                var configured = ReadCurrent().Where(item => item.Value is not null).ToList();
+                return configured.Count == 0
+                    ? ActionAvailability.Applied("No manual overrides")
+                    : ActionAvailability.Ready(string.Join(", ", configured.Select(item => $"{item.Key}={item.Value}")));
+            }
+            catch (Exception exception) { return ActionAvailability.Unavailable(exception.Message); }
+        }
+
+        string Capture() => JsonSerializer.Serialize(ReadCurrent());
+
+        void Apply()
+        {
+            foreach (var valueName in ReadCurrent().Where(item => item.Value is not null).Select(item => item.Key))
+                RunExecutable("bcdedit.exe", "/deletevalue", "{current}", valueName);
+        }
+
+        void Restore(string state)
+        {
+            var snapshot = JsonSerializer.Deserialize<Dictionary<string, string?>>(state)
+                ?? throw new InvalidOperationException("The BCD snapshot is invalid.");
+            foreach (var (valueName, value) in snapshot)
+            {
+                var current = ReadCurrent()[valueName];
+                if (value is null)
+                {
+                    if (current is not null) RunExecutable("bcdedit.exe", "/deletevalue", "{current}", valueName);
+                }
+                else RunExecutable("bcdedit.exe", "/set", "{current}", valueName, value);
+            }
+        }
+
+        bool Verify() => ReadCurrent().Values.All(value => value is null);
+
+        return new(id, name, description, "Boot", RiskLevel.High, true, null,
+            Inspect, Capture, Apply, Restore, Verify,
+            evidenceRequirements: ["Exact values from the active BCD entry"],
+            sources: ["Microsoft BCDEdit command contract and exact local active-entry inspection"],
+            sideEffects: ["Changes boot policy after restart; malformed overrides are removed, never forced"]);
     }
 
     private static RegistryValueSnapshot CaptureRegistryValue(RegistryHive hive, string path, string valueName)
@@ -323,8 +463,11 @@ public sealed class OptimizationCatalog
     };
 
     private static string RunPowerCfg(params string[] arguments)
+        => RunExecutable("powercfg.exe", arguments);
+
+    private static string RunExecutable(string executable, params string[] arguments)
     {
-        var start = new ProcessStartInfo("powercfg.exe")
+        var start = new ProcessStartInfo(executable)
         {
             UseShellExecute = false,
             RedirectStandardError = true,
@@ -332,12 +475,12 @@ public sealed class OptimizationCatalog
             CreateNoWindow = true
         };
         foreach (var argument in arguments) start.ArgumentList.Add(argument);
-        using var process = Process.Start(start) ?? throw new InvalidOperationException("Cannot start powercfg.exe.");
+        using var process = Process.Start(start) ?? throw new InvalidOperationException($"Cannot start {executable}.");
         var output = process.StandardOutput.ReadToEnd();
         var error = process.StandardError.ReadToEnd();
         process.WaitForExit();
         if (process.ExitCode != 0)
-            throw new InvalidOperationException(string.IsNullOrWhiteSpace(error) ? "powercfg.exe failed." : error.Trim());
+            throw new InvalidOperationException(string.IsNullOrWhiteSpace(error) ? $"{executable} failed." : error.Trim());
         return output;
     }
 

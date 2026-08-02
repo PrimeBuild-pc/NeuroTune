@@ -46,7 +46,7 @@ or validation report.
 |---|---|---|---|
 | M0 | Close legacy backlog, add MIT, consolidate planning | Completed | Issues #1–#3 closed 2026-08-02; MIT and this living plan added in the M0 commit |
 | M1 | Structured dynamic-plan contract and goal/measurement context | Completed | M1 commit (this milestone commit): 21 .NET tests; 7 Vitest tests; UI typecheck, lint, and production build |
-| M2 | Extensible reversible capability registry and first expansion | Planned | Existing 12 actions regress cleanly; new actions pass unit and VM checks |
+| M2 | Extensible reversible capability registry and first expansion | In progress | M2 foundation commit (this milestone commit): 25 actions, 24 .NET tests, exact round-trip on Windows builds 19045 and 26200 |
 | M3 | Verified artifact catalog and deterministic update advisor | Planned | Host/hash/path/version fixtures and no arbitrary URL/file execution |
 | M4 | Plan-focused accessible UI and script/resource review | Planned | Vitest, typecheck, lint, keyboard/announcement checks |
 | M5 | NSIS, portable ZIP, checksums, release documentation | Planned | Release build and asset-layout/checksum verification |
@@ -79,6 +79,12 @@ or validation report.
   documented core-parking/power settings. Do not force HPET.
 - Keep VBS/HVCI disabled from the public registry until its dedicated VM and
   physical-host rollback matrix exists.
+- Implemented first validated batch: the original 12 actions, Balanced power,
+  default/on/off state families for gaming/capture/visual settings, and BCD
+  timer/resource-limit repair. All 25 pass the disposable Windows 10/11 probe.
+- Remaining before M2 completion: typed per-app GPU targets, a cross-version
+  page-file backend, and platform-qualified core-parking/power definitions.
+  The first WMI page-file writer was removed after Windows 11 rejected it.
 
 ## M3 — external intelligence
 

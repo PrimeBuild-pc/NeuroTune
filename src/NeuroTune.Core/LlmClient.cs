@@ -69,7 +69,12 @@ public sealed class LlmClient
                 x.Action.Description,
                 x.Action.Category,
                 risk = x.Action.Risk.ToString(),
-                x.Action.RequiresRestart
+                x.Action.RequiresRestart,
+                x.Action.Definition.SupportedWindowsBuilds,
+                x.Action.Definition.SupportedHardware,
+                x.Action.Definition.EvidenceRequirements,
+                x.Action.Definition.SideEffects,
+                x.Action.Definition.Sources
             }));
         var prompt = $$"""
             Analyze this Windows profile against the user's explicit goals. Return valid JSON only, without Markdown, using this exact shape:
