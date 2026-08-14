@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<WindowsPerformanceRecorder Version="1.0" Author="PrimeBuild" Company="PrimeBuild">
+  <Profiles>
+    <SystemCollector Id="SystemCollector_NeuroTune" Name="NT Kernel Logger">
+      <BufferSize Value="1024" />
+      <Buffers Value="256" />
+    </SystemCollector>
+    <SystemProvider Id="SystemProvider_NeuroTune">
+      <Keywords>
+        <Keyword Value="CpuConfig" />
+        <Keyword Value="ProcessThread" />
+        <Keyword Value="Loader" />
+        <Keyword Value="CSwitch" />
+        <Keyword Value="ReadyThread" />
+        <Keyword Value="DPC" />
+        <Keyword Value="Interrupt" />
+      </Keywords>
+    </SystemProvider>
+    <Profile Id="NeuroTuneLatency.Light.Memory" Name="NeuroTuneLatency" Description="NeuroTune scheduling and interrupt measurement" LoggingMode="Memory" DetailLevel="Light">
+      <Collectors>
+        <SystemCollectorId Value="SystemCollector_NeuroTune">
+          <SystemProviderId Value="SystemProvider_NeuroTune" />
+        </SystemCollectorId>
+      </Collectors>
+    </Profile>
+  </Profiles>
+</WindowsPerformanceRecorder>

@@ -10,8 +10,8 @@ or validation report.
 | Field | Value |
 |---|---|
 | Target | `v0.6.0-alpha.1` |
-| Branch | `codex/dynamic-planner-foundation` |
-| Current milestone | M2 — remaining typed capability families |
+| Branch | `main` |
+| Current milestone | M8 — ETW Measurement Alpha validation |
 | Last verified baseline | `64d74bb` / PR #4 |
 | Distribution | unsigned NSIS plus portable ZIP, GitHub/Discord |
 | License | MIT, copyright PrimeBuild |
@@ -39,6 +39,15 @@ or validation report.
   Aggressive only after dedicated capture, rollback, and validation.
 - Automated game benchmarking is deferred. Measurements supplied by the user
   are explicitly labelled unverified input.
+- ETW measurement follows Baseline → trace → local analysis → comparison →
+  hypothesis. Raw ETL never reaches a provider and is deleted after successful
+  analysis unless the user explicitly keeps it.
+- The first measurement release is read-only. GPU IRQ affinity and every later
+  device writer remain gated on repeated physical-host validation and exact
+  rollback evidence.
+- TraceProcessing 1.12.10 was not selected because its redistribution terms add
+  obligations beyond the repository's MIT grant. The stable application
+  contracts use the MIT-licensed TraceEvent 3.2.5 fallback.
 
 ## Milestones
 
@@ -52,6 +61,26 @@ or validation report.
 | M5 | NSIS, portable ZIP, checksums, release documentation | Completed | `8416b69`; NSIS and 64,196,039-byte ZIP, checksums and smoke/matrix on builds 19045/26200; PR #5 |
 | M6 | Full-history secret/privacy audit and public repository | Blocked | `32fd2aa`; no secrets; reachable personal Gmail author metadata requires PrimeBuild accept/rewrite/private decision; PR #5 |
 | M7 | Optional imported benchmark evidence and researched sources | Planned | Deferred until the planner and advisor are stable |
+| M8 | ETW Measurement Alpha | In validation | Named minimal WPR profile, versioned local sessions, watchdog, TraceEvent analyzer, quality gate, normalized optional-AI evidence, Measurements UI, and deterministic comparison implemented; Windows 10/11 and physical GPU matrix remain |
+
+## M8 — ETW Measurement Alpha
+
+- Select an already-running process and record for 30–600 seconds (180 by
+  default) using one named, globally serialized WPR session.
+- Capture only process/thread, loader, CSwitch, ReadyThread, ISR/DPC, and CPU
+  metadata in memory mode. Do not enable stack walk or sampled profiling.
+- Persist session state atomically under
+  `%LocalAppData%\NeuroTune\measurements\<session-id>` and let an internal,
+  non-UI-callable watchdog stop the recording at its deadline.
+- Analyze locally with nearest-rank percentiles and an interval sweep. Unknown
+  module/thread identities stay `Unknown`; reports make no causal claim.
+- Reject comparisons across executables, hardware/configuration fingerprints,
+  durations outside ±10%, invalid quality gates, or lost critical events.
+- Keep `PerformanceSnapshotService` as general observation only; its WMI CPU,
+  RAM, process count, ping, and power-plan values are not benchmark proof.
+- After analyzer validation, open a separate milestone for supervised GPU IRQ
+  affinity. No MSI, RWEverything, PCI writes, secret executables, or imported
+  DEVICE-TWEAKER backend code enters M8.
 
 ## M1 — dynamic plan foundation
 

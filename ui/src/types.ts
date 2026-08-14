@@ -221,3 +221,59 @@ export interface OperationManifest {
   after?: PerformanceSnapshot;
   error?: string;
 }
+
+export type MeasurementLabel = 'baseline' | 'candidate';
+export type MeasurementState = 'prepared' | 'recording' | 'captured' | 'analyzing' | 'completed' | 'cancelled' | 'failed';
+
+export interface MeasurementWorkload {
+  processId: number;
+  name: string;
+  startTimeUtc: string;
+  description: string;
+}
+
+export interface DistributionMetrics {
+  count: number;
+  eventsPerSecond: number;
+  totalMicroseconds: number;
+  p50Microseconds: number;
+  p95Microseconds: number;
+  p99Microseconds: number;
+  maxMicroseconds: number;
+}
+
+export interface TraceReport {
+  sessionId: string;
+  generatedAtUtc: string;
+  targetExecutable: string;
+  quality: { durationMilliseconds: number; etlBytes: number; eventsLost: number; missingProviders: string[]; targetPresencePercent: number; isValid: boolean };
+  interrupts: Array<{ kind: string; module: string; logicalProcessor: number; distribution: DistributionMetrics }>;
+  processors: Array<{ logicalProcessor: number; interruptSharePercent: number; targetRunningMilliseconds: number; readyOverlapMicroseconds: number }>;
+  threads: Array<{ threadKey: string; runningMilliseconds: number; readyTime: DistributionMetrics; migrations: number; residencyMilliseconds: Record<string, number> }>;
+  observations: Array<{ title: string; category: string; evidenceIds: string[]; observedMetric: string; explanation: string; verifiableHypothesis: string; confidence: string }>;
+}
+
+export interface MeasurementSession {
+  id: string;
+  processId: number;
+  processName: string;
+  processStartTimeUtc: string;
+  label: MeasurementLabel;
+  durationSeconds: number;
+  keepRawTrace: boolean;
+  state: MeasurementState;
+  createdAtUtc: string;
+  recordingStartedAtUtc?: string;
+  capturedAtUtc?: string;
+  report?: TraceReport;
+  error?: string;
+}
+
+export interface MeasurementComparison {
+  id: string;
+  level: 'exploratory' | 'repeated';
+  baselineSessionIds: string[];
+  candidateSessionIds: string[];
+  metrics: Array<{ evidenceId: string; baselineMedian: number; candidateMedian: number; deltaPercent: number; outcome: 'improvement' | 'regression' | 'inconclusive' }>;
+  rejectionReasons: string[];
+}

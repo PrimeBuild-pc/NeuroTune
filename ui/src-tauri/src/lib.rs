@@ -23,6 +23,14 @@ const COMMANDS: &[&str] = &[
     "apply",
     "history",
     "rollback",
+    "measurement-workloads",
+    "measurement-start",
+    "measurement-stop",
+    "measurement-cancel",
+    "measurement-analyze",
+    "measurement-list",
+    "measurement-compare",
+    "measurement-delete",
 ];
 
 #[derive(Default)]
@@ -67,7 +75,7 @@ async fn cancel_agent(app: AppHandle, request_id: String) -> Result<bool, String
             return Ok(false);
         };
         if !agent.cancellable {
-            return Err("Only a NeuroTune scan can be cancelled".into());
+            return Err("Only a NeuroTune scan or measurement analysis can be cancelled".into());
         }
         agent.cancelled = true;
         agent.process_id
@@ -193,7 +201,7 @@ fn run_agent(
 }
 
 fn is_cancellable(command: &str) -> bool {
-    command == "scan"
+    matches!(command, "scan" | "measurement-analyze")
 }
 
 fn validate_request(request_id: &str) -> Result<(), String> {
@@ -224,7 +232,9 @@ mod tests {
         assert!(validate_request("../other-process").is_err());
         assert!(validate_request("").is_err());
         assert!(is_cancellable("scan"));
+        assert!(is_cancellable("measurement-analyze"));
         assert!(!is_cancellable("apply"));
+        assert!(!COMMANDS.contains(&"measurement-watchdog"));
         assert!(!COMMANDS.iter().any(|command| command.contains("script")));
     }
 
