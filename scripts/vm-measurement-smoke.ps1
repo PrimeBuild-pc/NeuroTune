@@ -4,10 +4,13 @@ param(
     [Parameter(Mandatory)]
     [string]$AgentDirectory,
     [string[]]$VmNames = @('NeuroTune-W11', 'NeuroTune-W10'),
-    [string]$ReportPath = (Join-Path $PSScriptRoot '..\artifacts\vm-measurement-smoke.json')
+    [string]$ReportPath
 )
 
 $ErrorActionPreference = 'Stop'
+if ([string]::IsNullOrWhiteSpace($ReportPath)) {
+    $ReportPath = Join-Path $PSScriptRoot '..\artifacts\vm-measurement-smoke.json'
+}
 $resolvedAgentDirectory = [IO.Path]::GetFullPath($AgentDirectory)
 $agentPath = Join-Path $resolvedAgentDirectory 'NeuroTune.Agent.exe'
 $profilePath = Join-Path $resolvedAgentDirectory 'NeuroTuneLatency.wprp'
