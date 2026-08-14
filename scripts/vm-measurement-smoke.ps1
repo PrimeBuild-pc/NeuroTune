@@ -18,6 +18,10 @@ if (-not (Test-Path -LiteralPath $agentPath -PathType Leaf)) { throw "Agent not 
 if (-not (Test-Path -LiteralPath $profilePath -PathType Leaf)) { throw "WPR profile not found: $profilePath" }
 
 function Get-CredentialPath([string]$VmName) {
+    $labCredential = 'C:\VmLab\Secrets\guest-credential.xml'
+    if ($VmName -eq 'NeuroTune-W11' -and (Test-Path -LiteralPath $labCredential -PathType Leaf)) {
+        return $labCredential
+    }
     $file = if ($VmName -match 'W11') { 'w11-credential.xml' } else { 'w10-credential.xml' }
     Join-Path $env:USERPROFILE ".neurotune-vm\$file"
 }
@@ -30,6 +34,7 @@ function Wait-PowerShellDirect([string]$VmName, [PSCredential]$Credential) {
             return
         }
         catch {
+            if ($_.Exception.Message -like '*credential is invalid*') { throw }
             Start-Sleep -Seconds 3
         }
     } until ((Get-Date) -gt $deadline)
