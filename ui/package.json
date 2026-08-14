@@ -12,7 +12,7 @@
     "lint": "oxlint src",
     "preview": "vite preview",
     "agent:build": "dotnet build ../src/NeuroTune.Agent/NeuroTune.Agent.csproj -c Release && dotnet build ../src/NeuroTune.Telemetry/NeuroTune.Telemetry.csproj -c Release",
-    "agent:publish": "dotnet publish ../src/NeuroTune.Agent/NeuroTune.Agent.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o src-tauri/agent && dotnet publish ../src/NeuroTune.Telemetry/NeuroTune.Telemetry.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o src-tauri/agent",
+    "agent:publish": "dotnet publish ../src/NeuroTune.Agent/NeuroTune.Agent.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o src-tauri/agent && dotnet publish ../src/NeuroTune.Telemetry/NeuroTune.Telemetry.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o src-tauri/agent && node -e \"require('fs').copyFileSync('../src/NeuroTune.Agent/NeuroTuneLatency.wprp','src-tauri/agent/NeuroTuneLatency.wprp')\"",
     "tauri": "tauri"
   },
   "dependencies": {
