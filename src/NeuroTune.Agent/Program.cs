@@ -46,6 +46,7 @@ try
         "measurement-compare" => new MeasurementService().Compare(Read<MeasurementCompareRequest>(input)),
         "measurement-topology" => new MeasurementService().Topology(),
         "measurement-gpu-candidates" => new MeasurementService().GpuAffinityCandidates(Read<GpuCandidateRequest>(input)),
+        "measurement-gpu-affinity-inspect" => new MeasurementService().GpuAffinityPolicy(Read<GpuAffinityInspectRequest>(input)),
         "measurement-delete" => DeleteMeasurement(Read<MeasurementIdRequest>(input)),
         _ => throw new InvalidOperationException($"Unknown agent command: {command}")
     };
