@@ -98,6 +98,21 @@ powershell -ExecutionPolicy Bypass -File .\scripts\vm-measurement-smoke.ps1 -Age
 
 This records and analyzes three 30-second Baselines, exercises the independent watchdog, validates trace quality and read-only GPU previews, then deletes its sessions and temporary guest files. It does not restore checkpoints or change VM power state. The redacted result is written to `artifacts/vm-measurement-smoke.json`.
 
+For a physical AMD/NVIDIA DirectX pass, close the NeuroTune UI, start the game,
+and keep a repeatable scene running. From an elevated PowerShell use its
+current PID:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\physical-gpu-measurement.ps1 -AgentDirectory .\ui\src-tauri\agent -ProcessId (Get-Process RDR2).Id -GraphicsApi DirectX12
+```
+
+The harness records three Baselines, rejects lost or incomplete traces,
+inspects the current GPU IRQ policy, verifies candidates remain read-only,
+deletes all created sessions, and writes a redacted report to
+`artifacts/physical-gpu-measurement.json`. Use `-GpuName` when the host exposes
+more than one physical AMD/NVIDIA adapter. A successful run validates only
+that exact GPU, driver, game, tester-declared graphics API, and Windows build.
+
 For the slower per-action Registry integrity pass, run scripts/vm-action-integrity.ps1 with InstallerPath set to the same final installer. It creates real restore points, validates mixed Registry value kinds and absent values, and restores the selected clean Hyper-V checkpoint in a finally block.
 
 Provisioning refuses to overwrite an existing VM or VM directory. Validation restores Clean-NeuroTune-Alpha2, so use it only with the disposable NeuroTune-W11 guest created for this project.

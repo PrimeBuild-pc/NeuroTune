@@ -24,6 +24,8 @@ should be tested first in a disposable VM.
 - Read-only GPU IRQ candidates can be previewed from three valid baselines,
   and the current policy can be inspected for exact rollback compatibility;
   no device policy is writable in this release.
+- A physical DirectX validation harness records three quality-gated Baselines
+  and emits a redacted report without retaining ETL or enabling apply.
 
 ## Distribution and verification
 
