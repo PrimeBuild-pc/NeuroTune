@@ -246,7 +246,9 @@ $results = foreach ($vmName in $VmNames) {
 $report = [pscustomobject]@{
     generatedAt = [DateTimeOffset]::UtcNow.ToString('o')
     agentSha256 = (Get-FileHash -LiteralPath $agentPath -Algorithm SHA256).Hash
-    results = @($results)
+    results = @($results | Select-Object windows, build, agentVersion, sessionCount, validSessionCount,
+        maximumEventsLost, maximumEtlBytes, minimumTargetPresencePercent, logicalProcessorCount,
+        gpuCount, gpuPreviewCandidateCount, rawTraceRetention, wprOrphanCheck)
 }
 $resolvedReport = [IO.Path]::GetFullPath($ReportPath)
 New-Item -ItemType Directory -Force -Path ([IO.Path]::GetDirectoryName($resolvedReport)) | Out-Null
