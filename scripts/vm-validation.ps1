@@ -3,12 +3,16 @@
 param(
     [Parameter(Mandatory)]
     [string]$InstallerPath,
-    [string[]]$VmNames = @('NeuroTune-W11', 'NeuroTune-W10'),
+    [ValidateSet('NeuroTune-W11')]
+    [string[]]$VmNames = @('NeuroTune-W11'),
     [string]$CheckpointName = 'Clean-NeuroTune-Alpha2',
-    [string]$ReportPath = (Join-Path $PSScriptRoot '..\artifacts\vm-validation.json')
+    [string]$ReportPath
 )
 
 $ErrorActionPreference = 'Stop'
+if ([string]::IsNullOrWhiteSpace($ReportPath)) {
+    $ReportPath = Join-Path $PSScriptRoot '..\artifacts\vm-validation.json'
+}
 $actionIds = @(
     'system.high-performance',
     'gaming.game-mode',
@@ -26,8 +30,7 @@ $actionIds = @(
 if (-not (Test-Path -LiteralPath $InstallerPath)) { throw "Installer not found: $InstallerPath" }
 
 function Get-CredentialPath([string]$VmName) {
-    $file = if ($VmName -match 'W11') { 'w11-credential.xml' } else { 'w10-credential.xml' }
-    Join-Path $env:USERPROFILE ".neurotune-vm\$file"
+    Join-Path $env:USERPROFILE '.neurotune-vm\w11-credential.xml'
 }
 
 $results = foreach ($vmName in $VmNames) {

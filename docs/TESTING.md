@@ -4,7 +4,7 @@ Use a disposable Windows virtual machine. Do not use a primary PC for the first 
 
 ## Prerequisites
 
-- Windows 10 22H2 or a currently supported Windows 11 build, x64
+- A currently supported Windows 11 build, x64
 - A VM checkpoint created outside the guest operating system
 - System Protection enabled on the Windows drive
 - Administrator access
@@ -74,7 +74,7 @@ In a disposable VM only, terminate NeuroTune while an operation is marked **Appl
 7. Opt one completed report into the next AI diagnosis. Inspect the provider
    payload and verify it contains only `measurement:*` IDs with numeric/boolean
    values—never ETL bytes, PID, command line, username, or full path.
-8. Repeat the smoke test on Windows 10 build 19045 and Windows 11 build 26200.
+8. Repeat the smoke test on supported Windows 11 builds used for release.
    Record WPR orphan checks and lost-event counts. Physical DirectX validation
    on AMD and NVIDIA hosts is mandatory before enabling any GPU action.
 9. Select at least three valid Baselines and generate the GPU IRQ preview.
@@ -90,16 +90,16 @@ Include the Windows build, hardware/VM configuration, provider, selected action 
 
 From an elevated host PowerShell run scripts/vm-provision.ps1, then run scripts/vm-validation.ps1 with InstallerPath set to the generated NSIS installer.
 
-For the read-only ETW pass, publish the agent and run the following from an elevated host PowerShell while both disposable VMs are already running:
+For the read-only ETW pass, publish the agent and run the following from an elevated host PowerShell while the disposable Windows 11 VM is already running:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\vm-measurement-smoke.ps1 -AgentDirectory .\ui\src-tauri\agent
 ```
 
-This records and analyzes three 30-second Baselines per VM, exercises the independent watchdog, validates trace quality and read-only GPU previews, then deletes its sessions and temporary guest files. It does not restore checkpoints or change VM power state. The redacted result is written to `artifacts/vm-measurement-smoke.json`.
+This records and analyzes three 30-second Baselines, exercises the independent watchdog, validates trace quality and read-only GPU previews, then deletes its sessions and temporary guest files. It does not restore checkpoints or change VM power state. The redacted result is written to `artifacts/vm-measurement-smoke.json`.
 
 For the slower per-action Registry integrity pass, run scripts/vm-action-integrity.ps1 with InstallerPath set to the same final installer. It creates real restore points, validates mixed Registry value kinds and absent values, and restores the selected clean Hyper-V checkpoint in a finally block.
 
-Provisioning refuses to overwrite an existing VM or VM directory. Validation restores Clean-NeuroTune-Alpha2, so use it only with the disposable NeuroTune-W11 and NeuroTune-W10 guests created for this project.
+Provisioning refuses to overwrite an existing VM or VM directory. Validation restores Clean-NeuroTune-Alpha2, so use it only with the disposable NeuroTune-W11 guest created for this project.
 
 The automated validation report covers installation, the 12-action apply/verify/rollback cycle, interrupted Apply and Rollback recovery, orphan-process checks, Defender, PawnIO absence, and clean uninstall. Scaling, keyboard navigation, forced-colors, physical sensors, SPD/XMP/EXPO, and real-GPU HAGS remain manual or physical-hardware checks.

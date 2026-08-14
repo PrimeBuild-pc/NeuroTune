@@ -9,6 +9,9 @@ $tauriConfig = Get-Content -LiteralPath (Join-Path $root 'ui/src-tauri/tauri.con
 $package = Get-Content -LiteralPath (Join-Path $root 'ui/package.json') -Raw | ConvertFrom-Json
 $cargo = Get-Content -LiteralPath (Join-Path $root 'ui/src-tauri/Cargo.toml') -Raw
 $license = Get-Content -LiteralPath (Join-Path $root 'LICENSE') -Raw
+$readme = Get-Content -LiteralPath (Join-Path $root 'README.md') -Raw
+$releaseNotes = Get-Content -LiteralPath (Join-Path $root 'RELEASE_NOTES.md') -Raw
+$app = Get-Content -LiteralPath (Join-Path $root 'ui/src/App.tsx') -Raw
 
 if ($license -notmatch 'MIT License' -or $license -notmatch 'Copyright \(c\) 2026 PrimeBuild') {
     throw 'LICENSE is not the approved PrimeBuild MIT license.'
@@ -36,6 +39,14 @@ $expectedVersion = $versions.npm
 $mismatches = $versions.GetEnumerator() | Where-Object Value -ne $expectedVersion
 if ($mismatches) {
     throw "Release versions are inconsistent: $($versions | ConvertTo-Json -Compress)"
+}
+if ($readme -notmatch [regex]::Escape("NeuroTune v$expectedVersion") -or
+    $releaseNotes -notmatch [regex]::Escape("# NeuroTune v$expectedVersion") -or
+    $app -notmatch [regex]::Escape("v$expectedVersion")) {
+    throw "README, release notes, or UI version does not match v$expectedVersion."
+}
+if ($readme -match 'Windows 10 or Windows 11' -or $app -match 'Windows 10/11') {
+    throw 'Active product requirements must remain Windows 11-only.'
 }
 
 Write-Host "Release metadata verified: v$expectedVersion, MIT, unsigned NSIS perMachine."

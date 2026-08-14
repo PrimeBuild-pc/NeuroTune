@@ -13,7 +13,7 @@ NeuroTune is developed safety-first: a feature is not considered complete merely
 - [x] Verified reverse-order rollback
 - [x] Before/after observational telemetry
 - [x] English product UI and clearer safety messaging
-- [ ] End-to-end validation on clean Windows 10 and Windows 11 virtual machines ([#2](../../issues/2))
+- [x] End-to-end validation on a clean Windows 11 virtual machine
 - [ ] Accessibility pass with keyboard-only and screen-reader testing ([#1](../../issues/1))
 
 ## v0.3 — Native Web UI and Open Providers
@@ -34,7 +34,7 @@ NeuroTune is developed safety-first: a feature is not considered complete merely
 - [x] Show only diagnosis-backed actions with Select all, Select safe only, explicit approval, and printable reports
 - [x] Require model findings to cite observed profile values and keep execution on the compiled allowlist
 - [ ] Publish a support matrix by Windows build, GPU family, and driver capability
-- [ ] Add repeatable pre/post workload measurements instead of synthetic “health scores”
+- [x] Add repeatable pre/post workload measurements instead of synthetic “health scores”
 - [ ] Require an evidence note and rollback test for every new optimization
 - [ ] Add exportable operation reports with privacy review
 - [ ] Improve offline behavior and provider-specific error guidance
@@ -72,7 +72,7 @@ NeuroTune is developed safety-first: a feature is not considered complete merely
 - [x] Persist versioned sessions atomically and delete raw ETL after successful analysis unless the user opts in
 - [x] Add trace quality gates, deterministic observations, and 1+1 exploratory / 3+3 repeated comparisons
 - [x] Keep ETL, PID, command lines, and full paths out of optional AI evidence
-- [ ] Complete WPR/analyzer smoke validation on Windows 10 build 19045 and Windows 11 build 26200
+- [x] Complete WPR/analyzer smoke validation on Windows 11 build 26200
 - [ ] Validate repeatability with DirectX workloads on physical AMD and NVIDIA GPU hosts
 - [x] Add read-only CPU/PnP topology and opaque GPU IRQ candidate previews from 3+ valid baselines
 - [ ] Gate the first supervised GPU IRQ-affinity experiment on those physical validation reports

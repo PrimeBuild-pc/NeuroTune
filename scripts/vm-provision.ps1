@@ -2,11 +2,8 @@
 [CmdletBinding()]
 param(
     [string]$Windows11Iso = (Join-Path $env:USERPROFILE 'Desktop\ISO Original\Win11_25H2_EnglishInternational_x64_v2.iso'),
-    [string]$Windows10Iso = (Join-Path $env:USERPROFILE 'Desktop\ISO Original\Windows 10.iso'),
     [string]$VmRoot = 'C:\VmLab',
-    [string]$CheckpointName = 'Clean-NeuroTune-Alpha2',
-    [ValidateSet('NeuroTune-W11','NeuroTune-W10')]
-    [string[]]$VmNames = @('NeuroTune-W11','NeuroTune-W10')
+    [string]$CheckpointName = 'Clean-NeuroTune-Alpha2'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -29,7 +26,7 @@ function Get-InstallImage {
     ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
     if (-not $install) { Dismount-DiskImage -ImagePath $IsoPath; throw "No install.wim or install.esd in $IsoPath" }
     $edition = Get-WindowsImage -ImagePath $install |
-        Where-Object { $_.ImageName -match 'Windows (10|11) Pro$' } |
+        Where-Object { $_.ImageName -match 'Windows 11 Pro$' } |
         Select-Object -First 1
     if (-not $edition) { Dismount-DiskImage -ImagePath $IsoPath; throw "Windows Pro image not found in $IsoPath" }
     [pscustomobject]@{ DiskImage = $image; InstallPath = $install; ImageIndex = $edition.ImageIndex }
@@ -155,9 +152,4 @@ function New-NeuroTuneVm {
     Start-VM -Name $Name | Out-Null
 }
 
-if ($VmNames -contains 'NeuroTune-W11') {
-    New-NeuroTuneVm -Name 'NeuroTune-W11' -IsoPath $Windows11Iso -CredentialFile (Join-Path $credentialRoot 'w11-credential.xml') -Locale 'en-GB' -EnableHvci $true
-}
-if ($VmNames -contains 'NeuroTune-W10') {
-    New-NeuroTuneVm -Name 'NeuroTune-W10' -IsoPath $Windows10Iso -CredentialFile (Join-Path $credentialRoot 'w10-credential.xml') -Locale 'it-IT' -EnableHvci $false
-}
+New-NeuroTuneVm -Name 'NeuroTune-W11' -IsoPath $Windows11Iso -CredentialFile (Join-Path $credentialRoot 'w11-credential.xml') -Locale 'en-GB' -EnableHvci $true

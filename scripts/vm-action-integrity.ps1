@@ -3,14 +3,17 @@
 param(
     [Parameter(Mandatory)]
     [string]$InstallerPath,
+    [ValidateSet('NeuroTune-W11')]
     [string]$VmName = 'NeuroTune-W11',
     [string]$CheckpointName = 'Clean-NeuroTune-Alpha2',
-    [string]$ReportPath = (Join-Path $PSScriptRoot '..\artifacts\vm-action-integrity-w11.json')
+    [string]$ReportPath
 )
 
 $ErrorActionPreference = 'Stop'
-$credentialFile = if ($VmName -match 'W11') { 'w11-credential.xml' } else { 'w10-credential.xml' }
-$credentialPath = Join-Path $env:USERPROFILE ".neurotune-vm\$credentialFile"
+if ([string]::IsNullOrWhiteSpace($ReportPath)) {
+    $ReportPath = Join-Path $PSScriptRoot '..\artifacts\vm-action-integrity-w11.json'
+}
+$credentialPath = Join-Path $env:USERPROFILE '.neurotune-vm\w11-credential.xml'
 $resolvedReport = [IO.Path]::GetFullPath($ReportPath)
 $report = [ordered]@{
     generatedAt = [DateTimeOffset]::UtcNow.ToString('o')
