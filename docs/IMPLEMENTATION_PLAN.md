@@ -65,7 +65,7 @@ or validation report.
 | M6 | Full-history secret/privacy audit and public repository | Blocked | `32fd2aa`; no secrets; reachable personal Gmail author metadata requires PrimeBuild accept/rewrite/private decision; PR #5 |
 | M7 | Optional imported benchmark evidence and researched sources | Planned | Deferred until the planner and advisor are stable |
 | M8 | ETW Measurement Alpha | In validation | `1bf387c`, `8810ab5`; three of three valid watchdog captures on Windows 11 build 26200, zero lost events, no raw ETL or WPR orphan; physical DirectX matrix remains |
-| M9 | GPU IRQ closed-loop | In progress | Read-only CPU-set/PnP topology and opaque three-candidate preview implemented; writer, restart, Keep/Rollback, driver matrix, and AI candidate selection remain gated |
+| M9 | GPU IRQ closed-loop | In progress | Read-only CPU-set/PnP topology, exact current-policy snapshot, and opaque three-candidate preview implemented; writer, restart, Keep/Rollback, driver matrix, and AI candidate selection remain gated |
 
 ## M8 — ETW Measurement Alpha
 
@@ -98,6 +98,10 @@ or validation report.
   physical cores by median interrupt share, target residency, and Ready/IRQ
   overlap. Expose opaque `candidateId` values and validated masks as a
   read-only preview.
+- Inspect `AssignmentSetOverride` and `DevicePolicy` through the 64-bit local
+  Registry view. For the expected Binary/DWord types, preserve existence,
+  type, byte length, and hex value locally; reject unexpected types as
+  non-restorable and never include the snapshot in provider evidence.
 - Keep every candidate `ApplyEnabled=false` until AMD/NVIDIA driver fixtures,
   exact capture/verify/restore, restart handling, and the physical-host matrix
   pass. Only then add the supervised writer and AI selection by candidate ID.

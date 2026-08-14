@@ -1,4 +1,5 @@
 using System.Management;
+using Microsoft.Win32;
 using System.Runtime.InteropServices;
 
 namespace NeuroTune;
@@ -73,6 +74,23 @@ public sealed class HardwareTopologyService
         return new(fingerprint, request.BaselineSessionIds, candidates);
     }
 
+    public GpuAffinityPolicySnapshot InspectGpuAffinity(string deviceKey, MachineTopology? topology = null)
+    {
+        topology ??= Collect();
+        var gpu = topology.Gpus.SingleOrDefault(item => item.DeviceKey == deviceKey)
+            ?? throw new InvalidOperationException("The selected GPU is unavailable or unsupported.");
+        using var hklm = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
+        using var key = hklm.OpenSubKey(gpu.AffinityRegistryPath, writable: false);
+        var assignment = ReadValue(key, "AssignmentSetOverride");
+        var policy = ReadValue(key, "DevicePolicy");
+        var state = PolicyState(assignment, policy);
+        var restorable = state != "unsupported";
+        return new(gpu.DeviceKey, gpu.Name, state, assignment, policy, restorable, false,
+            restorable
+                ? "Read-only snapshot captured. Apply remains gated on AMD/NVIDIA physical-host validation and exact rollback tests."
+                : "The current Registry value types cannot be restored safely; apply remains disabled.");
+    }
+
     internal static IReadOnlyList<RankedProcessor> RankProcessors(IReadOnlyList<CpuTopologyEntry> topology, IReadOnlyList<MeasurementSession> sessions) =>
         // ponytail: AssignmentSetOverride preview is group 0 only; add group-aware policy after >64-LP hardware validation.
         topology.Where(cpu => cpu.ProcessorGroup == 0 && cpu.LogicalProcessor < 64)
@@ -90,6 +108,27 @@ public sealed class HardwareTopologyService
                 .ThenBy(item => item.TargetRunningMilliseconds).ThenBy(item => item.ReadyOverlapMicroseconds).First())
             .OrderBy(item => item.InterruptSharePercent).ThenBy(item => item.TargetRunningMilliseconds)
             .ThenBy(item => item.ReadyOverlapMicroseconds).ToList();
+
+    internal static string PolicyState(RegistryValueSnapshot assignment, RegistryValueSnapshot policy)
+    {
+        if (!assignment.Exists && !policy.Exists) return "windowsDefault";
+        if (assignment.Exists && (assignment.Kind != nameof(RegistryValueKind.Binary) || assignment.ByteLength is < 1 or > 8)) return "unsupported";
+        if (policy.Exists && (policy.Kind != nameof(RegistryValueKind.DWord) || policy.ByteLength != 4)) return "unsupported";
+        return "configured";
+    }
+
+    private static RegistryValueSnapshot ReadValue(RegistryKey? key, string name)
+    {
+        if (key?.GetValue(name, null, RegistryValueOptions.DoNotExpandEnvironmentNames) is not { } value)
+            return new(false, "None", "", 0);
+        var kind = key.GetValueKind(name);
+        return kind switch
+        {
+            RegistryValueKind.Binary when value is byte[] bytes => new(true, nameof(RegistryValueKind.Binary), Convert.ToHexString(bytes), bytes.Length),
+            RegistryValueKind.DWord when value is int number => new(true, nameof(RegistryValueKind.DWord), $"{unchecked((uint)number):X8}", sizeof(uint)),
+            _ => new(true, kind.ToString(), "", 0)
+        };
+    }
 
     private static IReadOnlyList<CpuTopologyEntry> ReadProcessors()
     {

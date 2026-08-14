@@ -211,6 +211,9 @@ public sealed class MeasurementService
         return new HardwareTopologyService().Generate(request, sessions);
     }
 
+    public GpuAffinityPolicySnapshot GpuAffinityPolicy(GpuAffinityInspectRequest request) =>
+        new HardwareTopologyService().InspectGpuAffinity(request.DeviceKey);
+
     public void Watchdog(Guid id, CancellationToken cancellationToken = default)
     {
         var session = TryLoad(id);
