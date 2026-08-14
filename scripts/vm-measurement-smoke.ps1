@@ -4,6 +4,7 @@ param(
     [Parameter(Mandatory)]
     [string]$AgentDirectory,
     [string[]]$VmNames = @('NeuroTune-W11', 'NeuroTune-W10'),
+    [switch]$PromptCredential,
     [string]$ReportPath
 )
 
@@ -18,6 +19,11 @@ if (-not (Test-Path -LiteralPath $agentPath -PathType Leaf)) { throw "Agent not 
 if (-not (Test-Path -LiteralPath $profilePath -PathType Leaf)) { throw "WPR profile not found: $profilePath" }
 
 function Get-VmCredential([string]$VmName) {
+    if ($PromptCredential) {
+        $credential = Get-Credential -UserName "$VmName\NeuroTuneTest" -Message "Credenziali amministratore per $VmName"
+        if (-not $credential) { throw 'Credential entry was cancelled.' }
+        return $credential
+    }
     $unattendPath = 'C:\VmLab\NeuroTune-W11-diagnostics\unattend.xml'
     if ($VmName -eq 'NeuroTune-W11' -and (Test-Path -LiteralPath $unattendPath -PathType Leaf)) {
         [xml]$unattend = Get-Content -Raw -LiteralPath $unattendPath
