@@ -105,6 +105,9 @@ or validation report.
 - Keep every candidate `ApplyEnabled=false` until AMD/NVIDIA driver fixtures,
   exact capture/verify/restore, restart handling, and the physical-host matrix
   pass. Only then add the supervised writer and AI selection by candidate ID.
+- Run `scripts/physical-gpu-measurement.ps1` against a repeatable DirectX scene
+  to collect three quality-gated Baselines and a redacted read-only candidate
+  report for each validated GPU/driver combination.
 
 ## M1 — dynamic plan foundation
 
