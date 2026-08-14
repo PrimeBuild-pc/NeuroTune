@@ -16,7 +16,7 @@
 | Keyboard-only, focus visibility, reduced motion, forced colors | manual plus CSS/semantic checks | manual plus CSS/semantic checks | manual |
 | SPD/XMP/EXPO, motherboard sensors, temperatures, real HAGS | unavailable | unavailable | required |
 | PawnIO install/HVCI/uninstall | deliberately excluded | deliberately excluded | disposable dedicated PC only after approval |
-| v0.7.0-alpha.1 ETW watchdog, analysis, quality, cleanup | 3/3 valid on build 26200; 0 lost events; no ETL or WPR orphan | not required | physical DirectX AMD/NVIDIA pending |
+| v0.7.0-alpha.1 ETW watchdog, analysis, quality, cleanup | 3/3 valid on build 26200; 0 lost events; no ETL or WPR orphan | not required | redacted physical DirectX harness available; AMD/NVIDIA runs pending |
 
 scripts/vm-provision.ps1 creates clean Hyper-V guests and DPAPI-protected credential files. scripts/vm-validation.ps1 restores the clean checkpoint, copies the installer with PowerShell Direct, runs the automated matrix, and writes a redacted JSON report. Neither script prints or commits guest passwords.
 

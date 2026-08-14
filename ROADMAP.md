@@ -76,6 +76,7 @@ NeuroTune is developed safety-first: a feature is not considered complete merely
 - [ ] Validate repeatability with DirectX workloads on physical AMD and NVIDIA GPU hosts
 - [x] Add read-only CPU/PnP topology and opaque GPU IRQ candidate previews from 3+ valid baselines
 - [x] Inspect and classify the current GPU IRQ Registry policy without exposing it to AI or enabling writes
+- [x] Add a redacted read-only physical DirectX validation harness for three quality-gated Baselines
 - [ ] Gate the first supervised GPU IRQ-affinity experiment on those physical validation reports
 
 ## v1.0 — Release Criteria
