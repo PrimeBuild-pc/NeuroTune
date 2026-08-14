@@ -3,7 +3,8 @@
 param(
     [Parameter(Mandatory)]
     [string]$AgentDirectory,
-    [string[]]$VmNames = @('NeuroTune-W11', 'NeuroTune-W10'),
+    [ValidateSet('NeuroTune-W11')]
+    [string[]]$VmNames = @('NeuroTune-W11'),
     [switch]$PromptCredential,
     [string]$ReportPath
 )
@@ -32,8 +33,7 @@ function Get-VmCredential([string]$VmName) {
         if ([string]::IsNullOrWhiteSpace($value)) { throw 'The W11 lab credential is unavailable.' }
         return [pscredential]::new("$VmName\NeuroTuneTest", ($value | ConvertTo-SecureString -AsPlainText -Force))
     }
-    $file = if ($VmName -match 'W11') { 'w11-credential.xml' } else { 'w10-credential.xml' }
-    $path = Join-Path $env:USERPROFILE ".neurotune-vm\$file"
+    $path = Join-Path $env:USERPROFILE '.neurotune-vm\w11-credential.xml'
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Credential file not found for $VmName." }
     Import-Clixml -LiteralPath $path
 }

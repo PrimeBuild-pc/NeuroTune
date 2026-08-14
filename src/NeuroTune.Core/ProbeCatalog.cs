@@ -15,7 +15,7 @@ public sealed record ProbeDefinition(
 {
     public ProbeSource Source => ProbeSource.Registry;
     public EvidencePrivacy Privacy => EvidencePrivacy.SystemConfiguration;
-    public string SupportedSystems => "Windows 10 and Windows 11";
+    public string SupportedSystems => "Windows 11";
     public string AbsenceSemantics => "Not configured; Windows or the owning application controls the default.";
     public string SourceNote => "Read-only local Registry query.";
     public string ProfileKey => StableEvidenceId["registry:".Length..];

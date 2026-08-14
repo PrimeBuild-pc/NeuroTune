@@ -9,7 +9,7 @@
     <a href="https://github.com/PrimeBuild-pc/NeuroTune/actions/workflows/build.yml"><img alt="Build" src="https://github.com/PrimeBuild-pc/NeuroTune/actions/workflows/build.yml/badge.svg"></a>
     <img alt="Tauri 2" src="https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white">
     <img alt="React" src="https://img.shields.io/badge/React-19-087EA4?logo=react&logoColor=white">
-    <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?logo=windows&logoColor=white">
+    <img alt="Windows 11" src="https://img.shields.io/badge/Windows-11-0078D4?logo=windows&logoColor=white">
     <img alt="Status: Alpha" src="https://img.shields.io/badge/status-Alpha-orange">
   </p>
 </div>
@@ -84,6 +84,7 @@
   <li><strong>Exact local baselines:</strong> versioned CPU and memory references match exact component identifiers; unknown hardware reports <code>baseline unavailable</code>.</li>
   <li><strong>User-controlled plans:</strong> switch between AI recommendations, conflict fixes, and every supported reversible action; risk changes warnings, not visibility.</li>
   <li><strong>Current allowlisted actions:</strong> power, gaming, graphics, visual, memory, GPU-timeout, and legacy TCP repairs with local capture, verification, and rollback.</li>
+  <li><strong>Local ETW measurements:</strong> bounded WPR captures for an already-running workload, deterministic ISR/DPC and scheduler analysis, repeated comparisons, and raw-trace deletion by default.</li>
   <li><strong>Local operation history:</strong> Per-action state snapshots and rollback from the desktop interface.</li>
   <li><strong>Honest telemetry boundary:</strong> low-level capabilities remain read-only and unavailable or driver-not-approved until a separate adapter and driver trust review is complete.</li>
 </ul>
@@ -91,7 +92,7 @@
 <h2>Requirements</h2>
 
 <ul>
-  <li>Windows 10 or Windows 11, x64</li>
+  <li>A Microsoft-supported Windows 11 build, x64</li>
   <li>Administrator privileges</li>
   <li>System Protection enabled on the Windows drive</li>
   <li>A supported API credential, OpenRouter browser account, or local OpenAI-compatible model server</li>
@@ -131,7 +132,7 @@ npm run tauri -- build --bundles nsis</code></pre>
 <h2>Project Status</h2>
 
 <p>
-  NeuroTune v0.6.0-alpha.1 is an <strong>unsigned alpha</strong> intended for controlled testing. The project is MIT-licensed and
+  NeuroTune v0.7.0-alpha.1 is an <strong>unsigned alpha</strong> intended for controlled testing. The project is MIT-licensed and
   produces an unsigned NSIS installer, a no-install portable ZIP, and SHA-256 checksums.
   Generated scripts may be reviewed or saved, but NeuroTune executes only typed, locally registered, reversible
   capabilities. Destructive cleanup and arbitrary model-generated writes remain excluded.
@@ -148,7 +149,7 @@ npm run tauri -- build --bundles nsis</code></pre>
   <li><a href="docs/VALIDATION_MATRIX.md">VM, accessibility, scaling, and hardware validation matrix</a></li>
   <li><a href="docs/PAWNIO_TRUST_REVIEW.md">PawnIO / LibreHardwareMonitor trust decision</a></li>
   <li><a href="docs/SECURITY_AUDIT_2026-08-02.md">Pre-publication security and privacy audit</a></li>
-  <li><a href="RELEASE_NOTES.md">v0.6.0-alpha.1 release notes</a></li>
+  <li><a href="RELEASE_NOTES.md">v0.7.0-alpha.1 release notes</a></li>
   <li><a href="LICENSE">MIT license</a></li>
   <li><a href="SECURITY.md">Security policy</a></li>
 </ul>

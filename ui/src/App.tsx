@@ -251,7 +251,7 @@ function App() {
         </nav>
         <div className="sidebar-foot">
           <div className="security-chip"><ShieldCheck size={16}/><span>Allowlisted actions</span></div>
-          <small>v0.6.0-alpha.1</small>
+          <small>v0.7.0-alpha.1</small>
         </div>
       </aside>
 
@@ -466,7 +466,7 @@ function MeasurementsPage({ evidenceIds, onEvidenceIds }: { evidenceIds: Set<str
     {busy && <div className="busy-bar" role="status"><LoaderCircle size={16} className="spin"/><span>{busy}</span>{analysisRequest.current && <button className="ghost" onClick={() => void cancelAgent(analysisRequest.current!)}><X size={14}/>Cancel analysis</button>}</div>}
     <section className="section-card measurement-setup">
       <div className="section-heading"><div><span className="eyebrow">1 · Prerequisites and workload</span><h3>Select an already-running process</h3></div><span className="status-pill good">WPR · local only</span></div>
-      <p className="muted-copy">Requires Windows 10/11 x64 and administrator privileges. NeuroTune does not launch or attach to the workload.</p>
+      <p className="muted-copy">Requires a supported Windows 11 x64 build and administrator privileges. NeuroTune does not launch or attach to the workload.</p>
       <div className="form-grid">
         <label className="wide"><span>Active process</span><select value={selectedProcessId} disabled={Boolean(active)} onChange={event => setSelectedProcessId(event.target.value)}>{workloads.map(item => <option key={`${item.processId}-${item.startTimeUtc}`} value={item.processId}>{item.name} · {item.description} · PID {item.processId}</option>)}</select></label>
         <label><span>Side</span><select value={label} disabled={Boolean(active)} onChange={event => setLabel(event.target.value as MeasurementLabel)}><option value="baseline">Baseline</option><option value="candidate">Candidate</option></select></label>
