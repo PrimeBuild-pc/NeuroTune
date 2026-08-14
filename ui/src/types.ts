@@ -277,3 +277,33 @@ export interface MeasurementComparison {
   metrics: Array<{ evidenceId: string; baselineMedian: number; candidateMedian: number; deltaPercent: number; outcome: 'improvement' | 'regression' | 'inconclusive' }>;
   rejectionReasons: string[];
 }
+
+export interface MachineTopology {
+  processors: Array<{ processorGroup: number; logicalProcessor: number; physicalCore: number; smtIndex: number; efficiencyClass: number; cacheCluster: number }>;
+  gpus: Array<{ deviceKey: string; name: string; vendor: string; driverVersion: string; deviceInstanceId: string; affinityRegistryPath: string; physicalHost: boolean }>;
+}
+
+export interface GpuCandidateSet {
+  hardwareFingerprint: string;
+  baselineSessionIds: string[];
+  candidates: Array<{
+    candidateId: string;
+    action: 'gpuIrqAffinitySingleCore';
+    deviceKey: string;
+    deviceName: string;
+    processorGroup: number;
+    logicalProcessor: number;
+    physicalCore: number;
+    smtIndex: number;
+    efficiencyClass: number;
+    cacheCluster: number;
+    assignmentSetOverrideHex: string;
+    devicePolicy: number;
+    interruptSharePercent: number;
+    targetRunningMilliseconds: number;
+    readyOverlapMicroseconds: number;
+    evidenceIds: string[];
+    applyEnabled: false;
+    gateReason: string;
+  }>;
+}

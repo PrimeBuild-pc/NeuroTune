@@ -99,7 +99,6 @@ public sealed class TraceAnalyzer
                     OverlapMicroseconds(targetReady.Select(item => item.Interval), interruptIntervals, cpu));
             })
             .OrderByDescending(item => item.InterruptSharePercent)
-            .Take(10)
             .ToList();
 
         var threadIds = targetThreads.Order().ToList();

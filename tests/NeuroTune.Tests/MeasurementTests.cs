@@ -72,4 +72,44 @@ public sealed class MeasurementTests
         Assert.IsFalse(MeasurementStateMachine.CanTransition(MeasurementSessionState.Completed, MeasurementSessionState.Recording));
         Assert.IsFalse(MeasurementStateMachine.CanTransition(MeasurementSessionState.Cancelled, MeasurementSessionState.Analyzing));
     }
+
+    [TestMethod]
+    public void Gpu_candidate_preview_returns_three_distinct_physical_cores_without_enabling_apply()
+    {
+        var sessions = Enumerable.Range(0, 3).Select(index => Baseline(index)).ToList();
+        CpuTopologyEntry[] cpus =
+        [
+            new(0, 0, 0, 0, 0, 0), new(0, 1, 0, 1, 0, 0), new(0, 2, 1, 0, 0, 0),
+            new(0, 3, 2, 0, 0, 0), new(0, 4, 3, 0, 0, 0)
+        ];
+        var gpu = new GpuDeviceTopology("gpu-key", "Test GPU", "AMD", "1.2.3", @"PCI\VEN_1002", @"SYSTEM\gpu", true);
+
+        var result = new HardwareTopologyService().Generate(new("gpu-key", sessions.Select(item => item.Id).ToList()), sessions,
+            new MachineTopology(cpus, [gpu]));
+
+        Assert.HasCount(3, result.Candidates);
+        Assert.AreEqual(3, result.Candidates.Select(item => item.PhysicalCore).Distinct().Count());
+        Assert.IsTrue(result.Candidates.All(item => !item.ApplyEnabled && item.DevicePolicy == 4));
+        Assert.AreEqual((byte)1, result.Candidates[0].LogicalProcessor);
+
+        static MeasurementSession Baseline(int index) => new()
+        {
+            Id = Guid.NewGuid(),
+            ProcessName = "game",
+            Label = MeasurementLabel.Baseline,
+            DurationSeconds = 180,
+            HardwareFingerprint = "hardware",
+            ConfigurationFingerprint = "configuration",
+            State = MeasurementSessionState.Completed,
+            Report = new TraceReport
+            {
+                Quality = new(180_000, 1, 0, [], 100, true),
+                Processors =
+                [
+                    new(0, 20 + index, 20, 20), new(1, 1 + index, 2, 2), new(2, 5 + index, 5, 5),
+                    new(3, 2 + index, 3, 3), new(4, 9 + index, 9, 9)
+                ]
+            }
+        };
+    }
 }

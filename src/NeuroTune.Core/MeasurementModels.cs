@@ -114,6 +114,50 @@ public sealed record MeasurementStartRequest(
 public sealed record MeasurementIdRequest(Guid SessionId);
 public sealed record MeasurementCompareRequest(IReadOnlyList<Guid> BaselineSessionIds, IReadOnlyList<Guid> CandidateSessionIds);
 
+public sealed record CpuTopologyEntry(
+    ushort ProcessorGroup,
+    byte LogicalProcessor,
+    byte PhysicalCore,
+    byte SmtIndex,
+    byte EfficiencyClass,
+    byte CacheCluster);
+
+public sealed record GpuDeviceTopology(
+    string DeviceKey,
+    string Name,
+    string Vendor,
+    string DriverVersion,
+    string DeviceInstanceId,
+    string AffinityRegistryPath,
+    bool PhysicalHost);
+
+public sealed record MachineTopology(
+    IReadOnlyList<CpuTopologyEntry> Processors,
+    IReadOnlyList<GpuDeviceTopology> Gpus);
+
+public sealed record CandidateAction(
+    string CandidateId,
+    string Action,
+    string DeviceKey,
+    string DeviceName,
+    ushort ProcessorGroup,
+    byte LogicalProcessor,
+    byte PhysicalCore,
+    byte SmtIndex,
+    byte EfficiencyClass,
+    byte CacheCluster,
+    string AssignmentSetOverrideHex,
+    int DevicePolicy,
+    double InterruptSharePercent,
+    double TargetRunningMilliseconds,
+    double ReadyOverlapMicroseconds,
+    IReadOnlyList<string> EvidenceIds,
+    bool ApplyEnabled,
+    string GateReason);
+
+public sealed record GpuCandidateRequest(string DeviceKey, IReadOnlyList<Guid> BaselineSessionIds);
+public sealed record GpuCandidateSet(string HardwareFingerprint, IReadOnlyList<Guid> BaselineSessionIds, IReadOnlyList<CandidateAction> Candidates);
+
 internal readonly record struct TimeInterval(double StartMilliseconds, double EndMilliseconds, int LogicalProcessor);
 
 internal static class MeasurementStateMachine

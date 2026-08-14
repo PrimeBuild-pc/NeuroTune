@@ -11,7 +11,7 @@ import { planKindLabel, scriptArtifactFilename, selectActionIdsForProfile } from
 import { applyTheme, loadThemePreference } from './theme';
 import type {
   ConflictPattern, Diagnosis, OperationManifest, OptimizationAction, ProviderKind, ProviderSettings,
-  MeasurementComparison, MeasurementLabel, MeasurementSession, MeasurementWorkload, Recommendation,
+  GpuCandidateSet, MachineTopology, MeasurementComparison, MeasurementLabel, MeasurementSession, MeasurementWorkload, Recommendation,
   RiskProfile, ScanResult, ThemePreference, TuningGoals,
 } from './types';
 import './App.css';
@@ -387,6 +387,9 @@ function MeasurementsPage({ evidenceIds, onEvidenceIds }: { evidenceIds: Set<str
   const [focusedId, setFocusedId] = useState('');
   const [compareIds, setCompareIds] = useState<Set<string>>(new Set());
   const [comparison, setComparison] = useState<MeasurementComparison>();
+  const [topology, setTopology] = useState<MachineTopology>();
+  const [selectedGpu, setSelectedGpu] = useState('');
+  const [gpuCandidates, setGpuCandidates] = useState<GpuCandidateSet>();
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
   const [now, setNow] = useState(Date.now());
@@ -406,11 +409,14 @@ function MeasurementsPage({ evidenceIds, onEvidenceIds }: { evidenceIds: Set<str
     void Promise.all([
       agent<MeasurementWorkload[]>('measurement-workloads'),
       agent<MeasurementSession[]>('measurement-list'),
-    ]).then(([processes, history]) => {
+      agent<MachineTopology>('measurement-topology'),
+    ]).then(([processes, history, machine]) => {
       setWorkloads(processes);
       setSessions(history);
+      setTopology(machine);
       setSelectedProcessId(processes[0] ? String(processes[0].processId) : '');
       setFocusedId(history[0]?.id ?? '');
+      setSelectedGpu(machine.gpus[0]?.deviceKey ?? '');
     }).catch(error => setMessage(String(error)));
   }, []);
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
@@ -449,6 +455,10 @@ function MeasurementsPage({ evidenceIds, onEvidenceIds }: { evidenceIds: Set<str
       candidateSessionIds: chosen.filter(item => item.label === 'candidate').map(item => item.id),
     })));
   }
+  async function generateGpuCandidates() {
+    const baselineSessionIds = sessions.filter(item => compareIds.has(item.id) && item.label === 'baseline' && item.state === 'completed').map(item => item.id);
+    await execute('Ranking read-only GPU IRQ candidates…', async () => setGpuCandidates(await agent<GpuCandidateSet>('measurement-gpu-candidates', { deviceKey: selectedGpu, baselineSessionIds })));
+  }
 
   return <div className="stack-lg measurement-page">
     <div className="page-actions"><div><span className="eyebrow">Measurement-first alpha</span><h2>Capture facts before proposing changes</h2></div><button className="secondary" disabled={Boolean(busy)} onClick={() => void Promise.all([refreshWorkloads(), refreshSessions()])}><RefreshCw size={16}/>Refresh</button></div>
@@ -480,6 +490,7 @@ function MeasurementsPage({ evidenceIds, onEvidenceIds }: { evidenceIds: Set<str
 
     {focused?.report && <MeasurementReportView session={focused}/>}
     {comparison && <section className="section-card"><div className="section-heading"><div><span className="eyebrow">Comparison</span><h3>{comparison.level} result</h3></div><span className={`status-pill ${comparison.rejectionReasons.length ? '' : 'good'}`}>{comparison.rejectionReasons.length ? 'Rejected' : `${comparison.metrics.length} metrics`}</span></div>{comparison.rejectionReasons.length ? <ul className="muted-copy">{comparison.rejectionReasons.map(reason => <li key={reason}>{reason}</li>)}</ul> : <div className="measurement-table">{comparison.metrics.slice(0, 20).map(metric => <article key={metric.evidenceId}><code>{metric.evidenceId}</code><span>{metric.baselineMedian.toFixed(2)} → {metric.candidateMedian.toFixed(2)}</span><strong className={metric.outcome}>{metric.deltaPercent.toFixed(1)}% · {metric.outcome}</strong></article>)}</div>}</section>}
+    {topology && <section className="section-card"><div className="section-heading"><div><span className="eyebrow">Next closed-loop tranche</span><h3>GPU IRQ candidate preview</h3></div><span className="status-pill">Read-only</span></div><p className="muted-copy">Windows reports {topology.processors.length} logical processors, {new Set(topology.processors.map(item => `${item.processorGroup}:${item.physicalCore}`)).size} physical cores, and {new Set(topology.processors.map(item => `${item.processorGroup}:${item.cacheCluster}`)).size} cache clusters. Cache clusters are not labelled as CCDs.</p><div className="form-grid"><label className="wide"><span>Physical AMD/NVIDIA GPU</span><select value={selectedGpu} onChange={event => setSelectedGpu(event.target.value)}>{topology.gpus.map(gpu => <option key={gpu.deviceKey} value={gpu.deviceKey}>{gpu.vendor} · {gpu.name} · driver {gpu.driverVersion}</option>)}</select></label></div><div className="button-row"><button className="secondary" disabled={!selectedGpu || sessions.filter(item => compareIds.has(item.id) && item.label === 'baseline' && item.state === 'completed').length < 3} onClick={() => void generateGpuCandidates()}><Cpu size={16}/>Generate from 3+ selected baselines</button></div>{gpuCandidates && <div className="measurement-table">{gpuCandidates.candidates.map(candidate => <article key={candidate.candidateId}><strong>Group {candidate.processorGroup} · LP {candidate.logicalProcessor} · core {candidate.physicalCore} · SMT {candidate.smtIndex}</strong><span>IRQ {candidate.interruptSharePercent.toFixed(2)}% · target {candidate.targetRunningMilliseconds.toFixed(1)} ms · overlap {candidate.readyOverlapMicroseconds.toFixed(1)} µs</span><code>{candidate.candidateId} · cache cluster {candidate.cacheCluster} · efficiency {candidate.efficiencyClass}</code><small>{candidate.gateReason}</small></article>)}</div>}<p className="muted-copy">No Registry value is written and no candidate is executable. The provider AI does not receive device IDs, Registry paths, masks, or processor numbers.</p></section>}
   </div>;
 }
 
