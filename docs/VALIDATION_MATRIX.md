@@ -2,7 +2,7 @@
 
 ## Automated host and VM coverage
 
-| Area | Windows 11 25H2 VM | Windows 10 22H2 VM | Physical hardware |
+| Area | Supported Windows 11 VM | Historical Windows 10 result (unsupported) | Physical hardware |
 |---|---|---|---|
 | Gen 2, UEFI, Secure Boot, vTPM | required | required | n/a |
 | Memory Integrity | enabled and recorded | recorded when available | required before driver experiments |
@@ -16,12 +16,19 @@
 | Keyboard-only, focus visibility, reduced motion, forced colors | manual plus CSS/semantic checks | manual plus CSS/semantic checks | manual |
 | SPD/XMP/EXPO, motherboard sensors, temperatures, real HAGS | unavailable | unavailable | required |
 | PawnIO install/HVCI/uninstall | deliberately excluded | deliberately excluded | disposable dedicated PC only after approval |
+| v0.7.0-alpha.1 ETW watchdog, analysis, quality, cleanup | 3/3 valid on build 26200; 0 lost events; no ETL or WPR orphan | not required | physical DirectX AMD/NVIDIA pending |
 
 scripts/vm-provision.ps1 creates clean Hyper-V guests and DPAPI-protected credential files. scripts/vm-validation.ps1 restores the clean checkpoint, copies the installer with PowerShell Direct, runs the automated matrix, and writes a redacted JSON report. Neither script prints or commits guest passwords.
 
-Windows 11 25H2 is used because it is the current ISO available in the lab; this is a current replacement for the earlier 24H2 request. Windows 10 remains in the matrix while the README declares Windows 10 support.
+Windows 11 25H2 is used because it is the current ISO available in the lab. As
+of v0.7.0-alpha.1, NeuroTune supports only Microsoft-supported Windows 11 x64
+builds. Windows 10 entries below are preserved as historical evidence and do
+not represent a current support or release gate.
 
-The original disposable `NeuroTune-W10` disk/checkpoint chain became unbootable and was replaced with a clean Windows 10 Pro 22H2 installation. After Windows Update and restoring the Hyper-V PowerShell Direct service, the full matrix passed against checkpoint `Clean-NeuroTune-W10-Reinstalled`. The original checkpoints were not overwritten.
+The former disposable `NeuroTune-W10` disk/checkpoint chain became unbootable
+and was replaced during v0.6 validation with a clean Windows 10 Pro 22H2
+installation. Those results remain reproducibility history only; the VM and
+its checkpoint are no longer required or maintained.
 
 The detailed Windows 11 integrity harness then exercised every action separately with deliberately mixed original Registry states (DWORD, QWORD, string, and absent values). All 12 passed Inspect, Apply, Verify, raw read-back, Registry export, apply/rollback restore points, exact value-and-kind rollback, and final manifest validation. The harness restored `Clean-NeuroTune-Alpha2` after completion.
 
@@ -30,7 +37,7 @@ all 25 registered actions, including the new Balanced plan, BCD timer/resource
 repair, and complementary
 default/on/off states for Game Mode, HAGS, Game DVR, app capture, and visual
 effects. Windows 10 Pro 22H2 build 19045 and Windows 11 build 26200 both passed
-all 25 cases. A proposed Windows-managed-pagefile writer passed on Windows 10
+all 25 cases at that time. A proposed Windows-managed-pagefile writer passed on Windows 10
 but failed on Windows 11 build 26200 and was therefore removed from the public
 catalog. The Windows 11 VM was temporarily started with 4 GB because the
 host disk could not allocate its 8 GB runtime-state file; the runner then shut

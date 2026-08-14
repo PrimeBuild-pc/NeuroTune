@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "NeuroTune",
-  "version": "0.6.0-alpha.1",
+  "version": "0.7.0-alpha.1",
   "identifier": "com.primebuild.neurotune",
   "build": {
     "frontendDist": "../dist",
@@ -34,7 +34,7 @@
     "publisher": "PrimeBuild",
     "shortDescription": "AI-guided, reversible Windows optimization",
     "longDescription": "NeuroTune profiles Windows and applies only allowlisted, compatible, and reversible optimizations.",
-    "resources": ["agent/NeuroTune.Agent.exe", "agent/NeuroTune.Telemetry.exe"],
+    "resources": ["agent/NeuroTune.Agent.exe", "agent/NeuroTune.Telemetry.exe", "agent/NeuroTuneLatency.wprp"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

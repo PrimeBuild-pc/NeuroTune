@@ -4,7 +4,7 @@ Use a disposable Windows virtual machine. Do not use a primary PC for the first 
 
 ## Prerequisites
 
-- Windows 10 22H2 or a currently supported Windows 11 build, x64
+- A currently supported Windows 11 build, x64
 - A VM checkpoint created outside the guest operating system
 - System Protection enabled on the Windows drive
 - Administrator access
@@ -55,6 +55,33 @@ Use a disposable Windows virtual machine. Do not use a primary PC for the first 
 
 In a disposable VM only, terminate NeuroTune while an operation is marked **Applying**. Restart it and confirm that the recovery banner identifies the interrupted journal and allows rollback.
 
+## 6. ETW Measurements
+
+1. Open **Measurements**, start a workload yourself, refresh the process list,
+   and select that already-running process.
+2. Record a 30-second Baseline. Close the UI during a second capture and verify
+   that the internal watchdog still saves it at the deadline without leaving a
+   named WPR session active.
+3. Test Stop, Cancel, and analysis cancellation. Cancel must delete incomplete
+   capture data; analysis cancellation must leave the ETL retryable.
+4. Confirm the report separates ISR and DPC, shows Ready Time, running time,
+   migrations, per-core residency/interrupt share, and explicit trace quality.
+5. With **Keep raw ETL** off, confirm `capture.etl` disappears after successful
+   analysis. With it on, confirm the file stays local.
+6. Create one Baseline and one Candidate to confirm an Exploratory comparison;
+   then create 3+3 valid sessions to confirm median aggregation and the
+   Improvement/Regression/Inconclusive rule.
+7. Opt one completed report into the next AI diagnosis. Inspect the provider
+   payload and verify it contains only `measurement:*` IDs with numeric/boolean
+   values—never ETL bytes, PID, command line, username, or full path.
+8. Repeat the smoke test on supported Windows 11 builds used for release.
+   Record WPR orphan checks and lost-event counts. Physical DirectX validation
+   on AMD and NVIDIA hosts is mandatory before enabling any GPU action.
+9. Select at least three valid Baselines and generate the GPU IRQ preview.
+   Confirm it returns at most three distinct physical cores, uses the Windows
+   group/SMT/efficiency/cache-cluster labels verbatim, and exposes no Apply
+   control. Confirm WPR reports no active session before and after this step.
+
 ## Reporting
 
 Include the Windows build, hardware/VM configuration, provider, selected action IDs, operation status, and redacted log lines. Never include an API key or an unredacted system profile.
@@ -63,8 +90,16 @@ Include the Windows build, hardware/VM configuration, provider, selected action 
 
 From an elevated host PowerShell run scripts/vm-provision.ps1, then run scripts/vm-validation.ps1 with InstallerPath set to the generated NSIS installer.
 
+For the read-only ETW pass, publish the agent and run the following from an elevated host PowerShell while the disposable Windows 11 VM is already running:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\vm-measurement-smoke.ps1 -AgentDirectory .\ui\src-tauri\agent
+```
+
+This records and analyzes three 30-second Baselines, exercises the independent watchdog, validates trace quality and read-only GPU previews, then deletes its sessions and temporary guest files. It does not restore checkpoints or change VM power state. The redacted result is written to `artifacts/vm-measurement-smoke.json`.
+
 For the slower per-action Registry integrity pass, run scripts/vm-action-integrity.ps1 with InstallerPath set to the same final installer. It creates real restore points, validates mixed Registry value kinds and absent values, and restores the selected clean Hyper-V checkpoint in a finally block.
 
-Provisioning refuses to overwrite an existing VM or VM directory. Validation restores Clean-NeuroTune-Alpha2, so use it only with the disposable NeuroTune-W11 and NeuroTune-W10 guests created for this project.
+Provisioning refuses to overwrite an existing VM or VM directory. Validation restores Clean-NeuroTune-Alpha2, so use it only with the disposable NeuroTune-W11 guest created for this project.
 
 The automated validation report covers installation, the 12-action apply/verify/rollback cycle, interrupted Apply and Rollback recovery, orphan-process checks, Defender, PawnIO absence, and clean uninstall. Scaling, keyboard navigation, forced-colors, physical sensors, SPD/XMP/EXPO, and real-GPU HAGS remain manual or physical-hardware checks.

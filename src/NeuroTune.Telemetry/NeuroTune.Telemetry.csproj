@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <AssemblyName>NeuroTune.Telemetry</AssemblyName>
     <RootNamespace>NeuroTune.Telemetry</RootNamespace>
-    <Version>0.6.0-alpha.1</Version>
+    <Version>0.7.0-alpha.1</Version>
     <Authors>PrimeBuild</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/PrimeBuild-pc/NeuroTune</RepositoryUrl>

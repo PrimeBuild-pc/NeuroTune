@@ -21,7 +21,7 @@ public sealed class OptimizationAction : IReversibleAction
         IReadOnlyList<string>? sources = null, IReadOnlyList<string>? sideEffects = null)
     {
         Definition = new(id, name, description, category, risk, requiresRestart, registryExportPath,
-            supportedWindowsBuilds ?? ["Windows 10 22H2", "Windows 11"],
+            supportedWindowsBuilds ?? ["Windows 11"],
             supportedHardware ?? ["Any hardware supported by the installed Windows build"],
             evidenceRequirements ?? [registryExportPath is null ? "Exact active power-scheme identifier" : $"Exact local state at {registryExportPath}"],
             sources ?? ["Microsoft Windows platform behavior plus exact local state inspection"],
@@ -77,12 +77,12 @@ public sealed class OptimizationCatalog
             RegistryDword("gaming.hags", "Enable hardware GPU scheduling",
                 "Moves supported GPU scheduling work to dedicated hardware.", "Gaming", RiskLevel.Medium, true,
                 RegistryHive.LocalMachine, @"SYSTEM\CurrentControlSet\Control\GraphicsDrivers", "HwSchMode", 2,
-                () => OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041) ? null : "Requires Windows 10 version 2004 or newer",
+                () => OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000) ? null : "Requires Windows 11",
                 stateLabel: value => value switch { 2 => "Enabled", 1 => "Disabled", _ => "Not configured" }),
             RegistryDword("gaming.hags-off", "Disable hardware GPU scheduling",
                 "Explicitly disables hardware GPU scheduling for compatibility diagnosis.", "Gaming", RiskLevel.Medium, true,
                 RegistryHive.LocalMachine, @"SYSTEM\CurrentControlSet\Control\GraphicsDrivers", "HwSchMode", 1,
-                () => OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041) ? null : "Requires Windows 10 version 2004 or newer",
+                () => OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000) ? null : "Requires Windows 11",
                 stateLabel: value => value switch { 2 => "Enabled", 1 => "Disabled", _ => "Not configured" }),
             RegistryDeleteDword("gaming.hags-default", "Restore the default GPU scheduling policy",
                 "Removes the explicit HAGS override and returns scheduling policy to Windows and the graphics driver.", "Gaming", RiskLevel.Medium, true,

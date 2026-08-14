@@ -1,4 +1,5 @@
 using NeuroTune;
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -12,6 +13,12 @@ var json = new JsonSerializerOptions
 try
 {
     var command = args.FirstOrDefault() ?? throw new InvalidOperationException("Missing agent command.");
+    if (command == "measurement-watchdog")
+    {
+        if (args.Length != 2 || !Guid.TryParse(args[1], out var watchdogId)) throw new InvalidOperationException("Invalid watchdog session ID.");
+        new MeasurementService().Watchdog(watchdogId);
+        return;
+    }
     var input = await Console.In.ReadToEndAsync();
     var settingsService = new SettingsService();
     var catalog = new OptimizationCatalog();
@@ -30,6 +37,16 @@ try
         "apply" => await Apply(Read<ApplyRequest>(input), catalog, backup),
         "history" => backup.LoadHistory(),
         "rollback" => await Rollback(Read<RollbackRequest>(input), catalog, backup),
+        "measurement-workloads" => new MeasurementService().Workloads(),
+        "measurement-start" => StartMeasurement(Read<MeasurementStartRequest>(input)),
+        "measurement-stop" => new MeasurementService().Stop(Read<MeasurementIdRequest>(input).SessionId),
+        "measurement-cancel" => new MeasurementService().Cancel(Read<MeasurementIdRequest>(input).SessionId),
+        "measurement-analyze" => AnalyzeMeasurement(Read<MeasurementIdRequest>(input)),
+        "measurement-list" => new MeasurementService().List(),
+        "measurement-compare" => new MeasurementService().Compare(Read<MeasurementCompareRequest>(input)),
+        "measurement-topology" => new MeasurementService().Topology(),
+        "measurement-gpu-candidates" => new MeasurementService().GpuAffinityCandidates(Read<GpuCandidateRequest>(input)),
+        "measurement-delete" => DeleteMeasurement(Read<MeasurementIdRequest>(input)),
         _ => throw new InvalidOperationException($"Unknown agent command: {command}")
     };
     Write(new AgentResponse(true, result, null));
@@ -116,10 +133,12 @@ async Task<object> Diagnose(DiagnoseRequest request, SettingsService service, Op
         throw new InvalidOperationException("Diagnosis requires a system profile and tuning goals.");
     var settings = service.Load();
     var key = service.LoadApiKey(settings);
-    var report = LlmClient.MeasureEvidence(LlmClient.BuildEvidenceFacts(request.Profile));
+    var measurementEvidence = new MeasurementService().BuildNormalizedEvidence(request.MeasurementSessionIds ?? []);
+    var evidence = LlmClient.MergeEvidenceFacts(LlmClient.BuildEvidenceFacts(request.Profile), measurementEvidence);
+    var report = LlmClient.MeasureEvidence(evidence);
     try
     {
-        var result = await new LlmClient(actionCatalog).DiagnoseAsync(request.Profile, request.Goals, settings, key);
+        var result = await new LlmClient(actionCatalog).DiagnoseAsync(request.Profile, request.Goals, settings, key, measurementEvidence);
         new PayloadMetricsService().Record(report, settings, "diagnosis-completed");
         return result;
     }
@@ -128,6 +147,40 @@ async Task<object> Diagnose(DiagnoseRequest request, SettingsService service, Op
         new PayloadMetricsService().Record(report, settings, "provider-error");
         throw;
     }
+}
+
+MeasurementSession StartMeasurement(MeasurementStartRequest request)
+{
+    var service = new MeasurementService();
+    var session = service.Start(request, Path.Combine(AppContext.BaseDirectory, "NeuroTuneLatency.wprp"));
+    StartWatchdog(session.Id);
+    return session;
+}
+
+MeasurementSession AnalyzeMeasurement(MeasurementIdRequest request)
+{
+    Console.Error.WriteLine("Parsing ETW events and applying trace quality gates…");
+    return new MeasurementService().Analyze(request.SessionId);
+}
+
+object? DeleteMeasurement(MeasurementIdRequest request)
+{
+    new MeasurementService().Delete(request.SessionId);
+    return null;
+}
+
+void StartWatchdog(Guid sessionId)
+{
+    var executable = Environment.ProcessPath ?? throw new InvalidOperationException("The NeuroTune agent executable path is unavailable.");
+    var start = new ProcessStartInfo(executable)
+    {
+        UseShellExecute = false,
+        CreateNoWindow = true,
+        WindowStyle = ProcessWindowStyle.Hidden
+    };
+    start.ArgumentList.Add("measurement-watchdog");
+    start.ArgumentList.Add(sessionId.ToString("D"));
+    Process.Start(start)?.Dispose();
 }
 
 object Actions(OptimizationCatalog actionCatalog) => actionCatalog.All.Select(action => new
@@ -154,7 +207,7 @@ async Task<object?> Rollback(RollbackRequest request, OptimizationCatalog action
 
 sealed record AgentResponse(bool Ok, object? Data, string? Error);
 sealed record SaveProviderRequest(UserSettings Settings, string? ApiKey);
-sealed record DiagnoseRequest(SystemProfile? Profile, TuningGoals? Goals);
+sealed record DiagnoseRequest(SystemProfile? Profile, TuningGoals? Goals, List<Guid>? MeasurementSessionIds = null);
 sealed record ApplyRequest(List<string> ActionIds, bool HighRiskConfirmed = false);
 sealed record RollbackRequest(Guid OperationId);
 sealed record ScanRequest(bool OptionalTelemetryConsent);

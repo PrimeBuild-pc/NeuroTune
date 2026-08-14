@@ -13,7 +13,7 @@ NeuroTune is developed safety-first: a feature is not considered complete merely
 - [x] Verified reverse-order rollback
 - [x] Before/after observational telemetry
 - [x] English product UI and clearer safety messaging
-- [ ] End-to-end validation on clean Windows 10 and Windows 11 virtual machines ([#2](../../issues/2))
+- [x] End-to-end validation on a clean Windows 11 virtual machine
 - [ ] Accessibility pass with keyboard-only and screen-reader testing ([#1](../../issues/1))
 
 ## v0.3 — Native Web UI and Open Providers
@@ -34,7 +34,7 @@ NeuroTune is developed safety-first: a feature is not considered complete merely
 - [x] Show only diagnosis-backed actions with Select all, Select safe only, explicit approval, and printable reports
 - [x] Require model findings to cite observed profile values and keep execution on the compiled allowlist
 - [ ] Publish a support matrix by Windows build, GPU family, and driver capability
-- [ ] Add repeatable pre/post workload measurements instead of synthetic “health scores”
+- [x] Add repeatable pre/post workload measurements instead of synthetic “health scores”
 - [ ] Require an evidence note and rollback test for every new optimization
 - [ ] Add exportable operation reports with privacy review
 - [ ] Improve offline behavior and provider-specific error guidance
@@ -65,6 +65,18 @@ NeuroTune is developed safety-first: a feature is not considered complete merely
 - [x] Unsigned NSIS and portable ZIP assets with SHA-256 checksums
 - [ ] MIT-licensed public repository after full-history privacy and secret review
 
+## v0.7 — ETW Measurement Alpha
+
+- [x] Capture named, bounded WPR sessions for an already-running process without CPU sampling or stack walks
+- [x] Analyze ISR/DPC, context switches, ReadyThread, per-core residency, migrations, and temporal overlap locally
+- [x] Persist versioned sessions atomically and delete raw ETL after successful analysis unless the user opts in
+- [x] Add trace quality gates, deterministic observations, and 1+1 exploratory / 3+3 repeated comparisons
+- [x] Keep ETL, PID, command lines, and full paths out of optional AI evidence
+- [x] Complete WPR/analyzer smoke validation on Windows 11 build 26200
+- [ ] Validate repeatability with DirectX workloads on physical AMD and NVIDIA GPU hosts
+- [x] Add read-only CPU/PnP topology and opaque GPU IRQ candidate previews from 3+ valid baselines
+- [ ] Gate the first supervised GPU IRQ-affinity experiment on those physical validation reports
+
 ## v1.0 — Release Criteria
 
 - [ ] Supported actions pass apply/verify/rollback tests across the support matrix
@@ -76,4 +88,4 @@ NeuroTune is developed safety-first: a feature is not considered complete merely
 
 ## Deliberate Non-Goals
 
-NeuroTune will not execute LLM-generated scripts, accept model-supplied download or write paths, download remote tweak catalogs, delete user files for “cleanup,” disable Defender or Firewall for performance, force HPET/platform timers, or apply undocumented generic network tweaks. Generated scripts may be reviewed and saved for manual use; verified text artifacts require a locally reviewed, hash-pinned definition.
+NeuroTune will not execute LLM-generated scripts, accept model-supplied download or write paths, download remote tweak catalogs, delete user files for “cleanup,” disable Defender or Firewall for performance, force HPET/platform timers, or apply undocumented generic network tweaks. Generated scripts may be reviewed and saved for manual use; verified text artifacts require a locally reviewed, hash-pinned definition. DEVICE-TWEAKER remains research input only and is never imported, executed, or copied into the production backend.

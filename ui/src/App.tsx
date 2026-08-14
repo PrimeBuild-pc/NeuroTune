@@ -4,18 +4,19 @@ import {
   Activity, Bot, Check, ChevronRight, CircleGauge, Cloud, Copy, Cpu, Database, Download,
   FileText, HardDrive, KeyRound, Laptop, ListChecks, LoaderCircle, LockKeyhole, LogIn,
   Monitor, MonitorCog, Moon, Palette, Printer, RefreshCw, RotateCcw, ScanLine, Settings,
-  ShieldCheck, SlidersHorizontal, Sun, Target, TerminalSquare, Wifi, X,
+  ShieldCheck, SlidersHorizontal, Sun, Target, TerminalSquare, Timer, Wifi, X,
 } from 'lucide-react';
 import { agent, cancelAgent, newRequestId } from './agent';
 import { planKindLabel, scriptArtifactFilename, selectActionIdsForProfile } from './plan';
 import { applyTheme, loadThemePreference } from './theme';
 import type {
   ConflictPattern, Diagnosis, OperationManifest, OptimizationAction, ProviderKind, ProviderSettings,
-  Recommendation, RiskProfile, ScanResult, ThemePreference, TuningGoals,
+  GpuCandidateSet, MachineTopology, MeasurementComparison, MeasurementLabel, MeasurementSession, MeasurementWorkload, Recommendation,
+  RiskProfile, ScanResult, ThemePreference, TuningGoals,
 } from './types';
 import './App.css';
 
-type Page = 'overview' | 'provider' | 'scan' | 'review' | 'activity' | 'settings';
+type Page = 'overview' | 'provider' | 'scan' | 'measurements' | 'review' | 'activity' | 'settings';
 
 const providers: Array<{ id: ProviderKind; name: string; detail: string; icon: typeof Cloud }> = [
   { id: 'openRouter', name: 'OpenRouter', detail: 'API key or browser sign-in', icon: Cloud },
@@ -39,6 +40,7 @@ const navigation: Array<{ id: Page; label: string; icon: typeof Activity }> = [
   { id: 'overview', label: 'Overview', icon: CircleGauge },
   { id: 'provider', label: 'AI provider', icon: Bot },
   { id: 'scan', label: 'System scan', icon: ScanLine },
+  { id: 'measurements', label: 'Measurements', icon: Timer },
   { id: 'review', label: 'Review changes', icon: ListChecks },
   { id: 'activity', label: 'Activity & restore', icon: Activity },
   { id: 'settings', label: 'Settings', icon: Settings },
@@ -64,6 +66,7 @@ function App() {
   const [actions, setActions] = useState<OptimizationAction[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [history, setHistory] = useState<OperationManifest[]>([]);
+  const [measurementEvidenceIds, setMeasurementEvidenceIds] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState('');
   const [scanRequestId, setScanRequestId] = useState<string>();
   const activeScan = useRef<string | undefined>(undefined);
@@ -197,7 +200,7 @@ function App() {
       agent<ConflictPattern[]>('analyze-local', { profile: scan.profile, goals }));
     if (!conflicts) return;
     const result = await run('AI synthesis · checking every claim against local evidence…', () =>
-      agent<Diagnosis>('diagnose', { profile: scan.profile, goals }));
+      agent<Diagnosis>('diagnose', { profile: scan.profile, goals, measurementSessionIds: [...measurementEvidenceIds] }));
     setDiagnosis(result ?? {
       summary: 'The provider diagnosis failed, but the deterministic local conflict graph is still available.',
       findings: [], recommendations: [], conflicts,
@@ -248,7 +251,7 @@ function App() {
         </nav>
         <div className="sidebar-foot">
           <div className="security-chip"><ShieldCheck size={16}/><span>Allowlisted actions</span></div>
-          <small>v0.6.0-alpha.1</small>
+          <small>v0.7.0-alpha.1</small>
         </div>
       </aside>
 
@@ -269,6 +272,7 @@ function App() {
           {page === 'overview' && <Overview hasProvider={hasCredential || !provider.requiresApiKey} scan={scan} history={history} scanning={Boolean(scanRequestId)} onProvider={() => setPage('provider')} onScan={scanSystem}/>}
           {page === 'provider' && <ProviderPage provider={provider} apiKey={apiKey} hasCredential={hasCredential} models={models} onChoose={chooseProvider} onChange={setProvider} onKey={setApiKey} onSave={saveProvider} onLoadModels={loadModels} onBrowserSignIn={browserSignIn}/>}
           {page === 'scan' && <ScanPage scan={scan} diagnosis={diagnosis} goals={goals} scanning={Boolean(scanRequestId)} onGoals={setGoals} onScan={scanSystem} onDiagnose={diagnose}/>}
+          {page === 'measurements' && <MeasurementsPage evidenceIds={measurementEvidenceIds} onEvidenceIds={setMeasurementEvidenceIds}/>}
           {page === 'review' && <ReviewPage diagnosis={diagnosis} actions={actions} recommendations={recommendations} selected={selected} riskProfile={goals.riskProfile} onToggle={id => setSelected(current => toggle(current, id))} onPreset={applyPreset} onApply={applyChanges}/>}
           {page === 'activity' && <ActivityPage history={history} onRefresh={async () => setHistory(await agent<OperationManifest[]>('history'))} onRollback={rollback}/>}
           {page === 'settings' && <SettingsPage theme={theme} onTheme={setTheme} telemetryConsent={telemetryConsent} onTelemetryConsent={value => {
@@ -373,6 +377,134 @@ function ReviewPage({ diagnosis, actions, recommendations, selected, riskProfile
   </div>;
 }
 
+function MeasurementsPage({ evidenceIds, onEvidenceIds }: { evidenceIds: Set<string>; onEvidenceIds: (value: Set<string>) => void }) {
+  const [workloads, setWorkloads] = useState<MeasurementWorkload[]>([]);
+  const [sessions, setSessions] = useState<MeasurementSession[]>([]);
+  const [selectedProcessId, setSelectedProcessId] = useState('');
+  const [label, setLabel] = useState<MeasurementLabel>('baseline');
+  const [durationSeconds, setDurationSeconds] = useState(180);
+  const [keepRawTrace, setKeepRawTrace] = useState(false);
+  const [focusedId, setFocusedId] = useState('');
+  const [compareIds, setCompareIds] = useState<Set<string>>(new Set());
+  const [comparison, setComparison] = useState<MeasurementComparison>();
+  const [topology, setTopology] = useState<MachineTopology>();
+  const [selectedGpu, setSelectedGpu] = useState('');
+  const [gpuCandidates, setGpuCandidates] = useState<GpuCandidateSet>();
+  const [busy, setBusy] = useState('');
+  const [message, setMessage] = useState('');
+  const [now, setNow] = useState(Date.now());
+  const analysisRequest = useRef<string | undefined>(undefined);
+
+  const refreshSessions = async () => {
+    const items = await agent<MeasurementSession[]>('measurement-list');
+    setSessions(items);
+    if (!focusedId && items.length) setFocusedId(items[0].id);
+  };
+  const refreshWorkloads = async () => {
+    const items = await agent<MeasurementWorkload[]>('measurement-workloads');
+    setWorkloads(items);
+    if (!items.some(item => String(item.processId) === selectedProcessId)) setSelectedProcessId(items[0] ? String(items[0].processId) : '');
+  };
+  useEffect(() => {
+    void Promise.all([
+      agent<MeasurementWorkload[]>('measurement-workloads'),
+      agent<MeasurementSession[]>('measurement-list'),
+      agent<MachineTopology>('measurement-topology'),
+    ]).then(([processes, history, machine]) => {
+      setWorkloads(processes);
+      setSessions(history);
+      setTopology(machine);
+      setSelectedProcessId(processes[0] ? String(processes[0].processId) : '');
+      setFocusedId(history[0]?.id ?? '');
+      setSelectedGpu(machine.gpus[0]?.deviceKey ?? '');
+    }).catch(error => setMessage(String(error)));
+  }, []);
+  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
+
+  const active = sessions.find(item => item.state === 'recording');
+  const focused = sessions.find(item => item.id === focusedId) ?? sessions[0];
+  const remaining = active?.recordingStartedAtUtc
+    ? Math.max(0, active.durationSeconds - Math.floor((now - new Date(active.recordingStartedAtUtc).getTime()) / 1000)) : 0;
+
+  async function execute(text: string, operation: () => Promise<unknown>) {
+    setBusy(text); setMessage('');
+    try { await operation(); await refreshSessions(); }
+    catch (error) { setMessage(error instanceof Error ? error.message : String(error)); }
+    finally { setBusy(''); }
+  }
+  async function start() {
+    const workload = workloads.find(item => String(item.processId) === selectedProcessId);
+    if (!workload) return;
+    await execute('Starting the named WPR session…', async () => {
+      const session = await agent<MeasurementSession>('measurement-start', { processId: workload.processId, processStartTimeUtc: workload.startTimeUtc, label, durationSeconds, keepRawTrace });
+      setFocusedId(session.id);
+    });
+  }
+  async function analyze(id: string) {
+    const requestId = newRequestId(); analysisRequest.current = requestId;
+    await execute('Analyzing the ETL locally…', async () => {
+      try { await agent<MeasurementSession>('measurement-analyze', { sessionId: id }, requestId); }
+      catch (error) { if (!String(error).includes('Agent request cancelled')) throw error; }
+      finally { analysisRequest.current = undefined; }
+    });
+  }
+  async function compare() {
+    const chosen = sessions.filter(item => compareIds.has(item.id));
+    await execute('Comparing normalized session metrics…', async () => setComparison(await agent<MeasurementComparison>('measurement-compare', {
+      baselineSessionIds: chosen.filter(item => item.label === 'baseline').map(item => item.id),
+      candidateSessionIds: chosen.filter(item => item.label === 'candidate').map(item => item.id),
+    })));
+  }
+  async function generateGpuCandidates() {
+    const baselineSessionIds = sessions.filter(item => compareIds.has(item.id) && item.label === 'baseline' && item.state === 'completed').map(item => item.id);
+    await execute('Ranking read-only GPU IRQ candidates…', async () => setGpuCandidates(await agent<GpuCandidateSet>('measurement-gpu-candidates', { deviceKey: selectedGpu, baselineSessionIds })));
+  }
+
+  return <div className="stack-lg measurement-page">
+    <div className="page-actions"><div><span className="eyebrow">Measurement-first alpha</span><h2>Capture facts before proposing changes</h2></div><button className="secondary" disabled={Boolean(busy)} onClick={() => void Promise.all([refreshWorkloads(), refreshSessions()])}><RefreshCw size={16}/>Refresh</button></div>
+    {message && <div className="notice danger" role="alert"><span>{message}</span></div>}
+    {busy && <div className="busy-bar" role="status"><LoaderCircle size={16} className="spin"/><span>{busy}</span>{analysisRequest.current && <button className="ghost" onClick={() => void cancelAgent(analysisRequest.current!)}><X size={14}/>Cancel analysis</button>}</div>}
+    <section className="section-card measurement-setup">
+      <div className="section-heading"><div><span className="eyebrow">1 · Prerequisites and workload</span><h3>Select an already-running process</h3></div><span className="status-pill good">WPR · local only</span></div>
+      <p className="muted-copy">Requires a supported Windows 11 x64 build and administrator privileges. NeuroTune does not launch or attach to the workload.</p>
+      <div className="form-grid">
+        <label className="wide"><span>Active process</span><select value={selectedProcessId} disabled={Boolean(active)} onChange={event => setSelectedProcessId(event.target.value)}>{workloads.map(item => <option key={`${item.processId}-${item.startTimeUtc}`} value={item.processId}>{item.name} · {item.description} · PID {item.processId}</option>)}</select></label>
+        <label><span>Side</span><select value={label} disabled={Boolean(active)} onChange={event => setLabel(event.target.value as MeasurementLabel)}><option value="baseline">Baseline</option><option value="candidate">Candidate</option></select></label>
+        <label><span>Duration (seconds)</span><input type="number" min="30" max="600" value={durationSeconds} disabled={Boolean(active)} onChange={event => setDurationSeconds(Math.max(30, Math.min(600, Number(event.target.value))))}/><small>Default 180; maximum 600.</small></label>
+        <label className="wide consent-toggle"><input type="checkbox" checked={keepRawTrace} disabled={Boolean(active)} onChange={event => setKeepRawTrace(event.target.checked)}/><span><strong>Keep the raw ETL after successful analysis</strong><small>Off by default. Failed analyses remain retryable for at most 24 hours.</small></span></label>
+      </div>
+      <div className="button-row">{active ? <><button className="primary" onClick={() => void execute('Stopping and saving the trace…', () => agent('measurement-stop', { sessionId: active.id }))}><Timer size={16}/>Stop · {remaining}s</button><button className="secondary" onClick={() => void execute('Cancelling and deleting incomplete data…', () => agent('measurement-cancel', { sessionId: active.id }))}><X size={16}/>Cancel & delete</button></> : <button className="primary" disabled={!selectedProcessId || Boolean(busy)} onClick={() => void start()}><Timer size={16}/>Start measurement</button>}</div>
+    </section>
+
+    <section className="section-card">
+      <div className="section-heading"><div><span className="eyebrow">2 · History and analysis</span><h3>{sessions.length} measurement sessions</h3></div></div>
+      <div className="measurement-history">{sessions.map(session => <article key={session.id} className={focused?.id === session.id ? 'measurement-row selected' : 'measurement-row'} onClick={() => setFocusedId(session.id)}>
+        <label onClick={event => event.stopPropagation()}><input aria-label={`Select ${session.id} for comparison`} type="checkbox" disabled={session.state !== 'completed'} checked={compareIds.has(session.id)} onChange={() => setCompareIds(toggle(compareIds, session.id))}/></label>
+        <div><strong>{session.processName}</strong><small>{new Date(session.createdAtUtc).toLocaleString()} · {session.durationSeconds}s</small></div>
+        <span className={`status-pill ${session.report?.quality.isValid ? 'good' : ''}`}>{session.label} · {session.state}</span>
+        <div className="button-row" onClick={event => event.stopPropagation()}>{session.state === 'captured' || session.state === 'failed' ? <button className="secondary" onClick={() => void analyze(session.id)}>Analyze</button> : null}<button className={evidenceIds.has(session.id) ? 'ghost active' : 'ghost'} disabled={session.state !== 'completed'} onClick={() => onEvidenceIds(toggle(evidenceIds, session.id))}>{evidenceIds.has(session.id) ? 'Included in AI' : 'Use in AI'}</button><button className="ghost" disabled={session.state === 'recording'} onClick={() => { if (window.confirm('Delete this measurement session and its local data?')) void execute('Deleting measurement…', () => agent('measurement-delete', { sessionId: session.id })); }}><X size={14}/></button></div>
+      </article>)}</div>
+      {!sessions.length && <p className="muted-copy">No measurement has been captured yet.</p>}
+      <div className="button-row comparison-actions"><button className="secondary" disabled={!sessions.some(item => compareIds.has(item.id) && item.label === 'baseline') || !sessions.some(item => compareIds.has(item.id) && item.label === 'candidate')} onClick={() => void compare()}><CircleGauge size={16}/>Compare selected</button><small>1+1 is exploratory. 3+3 enables repeated aggregation.</small></div>
+    </section>
+
+    {focused?.report && <MeasurementReportView session={focused}/>}
+    {comparison && <section className="section-card"><div className="section-heading"><div><span className="eyebrow">Comparison</span><h3>{comparison.level} result</h3></div><span className={`status-pill ${comparison.rejectionReasons.length ? '' : 'good'}`}>{comparison.rejectionReasons.length ? 'Rejected' : `${comparison.metrics.length} metrics`}</span></div>{comparison.rejectionReasons.length ? <ul className="muted-copy">{comparison.rejectionReasons.map(reason => <li key={reason}>{reason}</li>)}</ul> : <div className="measurement-table">{comparison.metrics.slice(0, 20).map(metric => <article key={metric.evidenceId}><code>{metric.evidenceId}</code><span>{metric.baselineMedian.toFixed(2)} → {metric.candidateMedian.toFixed(2)}</span><strong className={metric.outcome}>{metric.deltaPercent.toFixed(1)}% · {metric.outcome}</strong></article>)}</div>}</section>}
+    {topology && <section className="section-card"><div className="section-heading"><div><span className="eyebrow">Next closed-loop tranche</span><h3>GPU IRQ candidate preview</h3></div><span className="status-pill">Read-only</span></div><p className="muted-copy">Windows reports {topology.processors.length} logical processors, {new Set(topology.processors.map(item => `${item.processorGroup}:${item.physicalCore}`)).size} physical cores, and {new Set(topology.processors.map(item => `${item.processorGroup}:${item.cacheCluster}`)).size} cache clusters. Cache clusters are not labelled as CCDs.</p><div className="form-grid"><label className="wide"><span>Physical AMD/NVIDIA GPU</span><select value={selectedGpu} onChange={event => setSelectedGpu(event.target.value)}>{topology.gpus.map(gpu => <option key={gpu.deviceKey} value={gpu.deviceKey}>{gpu.vendor} · {gpu.name} · driver {gpu.driverVersion}</option>)}</select></label></div><div className="button-row"><button className="secondary" disabled={!selectedGpu || sessions.filter(item => compareIds.has(item.id) && item.label === 'baseline' && item.state === 'completed').length < 3} onClick={() => void generateGpuCandidates()}><Cpu size={16}/>Generate from 3+ selected baselines</button></div>{gpuCandidates && <div className="measurement-table">{gpuCandidates.candidates.map(candidate => <article key={candidate.candidateId}><strong>Group {candidate.processorGroup} · LP {candidate.logicalProcessor} · core {candidate.physicalCore} · SMT {candidate.smtIndex}</strong><span>IRQ {candidate.interruptSharePercent.toFixed(2)}% · target {candidate.targetRunningMilliseconds.toFixed(1)} ms · overlap {candidate.readyOverlapMicroseconds.toFixed(1)} µs</span><code>{candidate.candidateId} · cache cluster {candidate.cacheCluster} · efficiency {candidate.efficiencyClass}</code><small>{candidate.gateReason}</small></article>)}</div>}<p className="muted-copy">No Registry value is written and no candidate is executable. The provider AI does not receive device IDs, Registry paths, masks, or processor numbers.</p></section>}
+  </div>;
+}
+
+function MeasurementReportView({ session }: { session: MeasurementSession }) {
+  const report = session.report!;
+  return <section className="section-card"><div className="section-heading"><div><span className="eyebrow">3 · Deterministic report</span><h3>{session.processName}</h3></div><span className={`status-pill ${report.quality.isValid ? 'good' : ''}`}>{report.quality.isValid ? 'Quality gate passed' : 'Invalid trace'}</span></div>
+    <div className="metric-grid four"><Metric icon={Timer} label="Trace" value={`${(report.quality.durationMilliseconds / 1000).toFixed(1)} s`}/><Metric icon={Activity} label="Events lost" value={String(report.quality.eventsLost)} tone={report.quality.eventsLost ? 'warn' : 'good'}/><Metric icon={Target} label="Target presence" value={`${report.quality.targetPresencePercent.toFixed(1)}%`}/><Metric icon={Cpu} label="Observed threads" value={String(report.threads.length)}/></div>
+    {report.quality.missingProviders.length > 0 && <p className="error-text">Missing required streams: {report.quality.missingProviders.join(', ')}</p>}
+    <div className="measurement-report-grid"><div><h4>Top ISR/DPC pressure</h4><div className="measurement-table">{report.interrupts.slice(0, 10).map((item, index) => <article key={`${item.kind}-${item.module}-${item.logicalProcessor}-${index}`}><strong>{item.kind.toUpperCase()} · {item.module}</strong><span>LP {item.logicalProcessor} · {item.distribution.count} events</span><code>P95 {item.distribution.p95Microseconds.toFixed(2)} µs · P99 {item.distribution.p99Microseconds.toFixed(2)} µs</code></article>)}</div></div><div><h4>Target scheduling</h4><div className="measurement-table">{report.threads.slice(0, 10).map(item => <article key={item.threadKey}><strong>{item.threadKey}</strong><span>{item.runningMilliseconds.toFixed(1)} ms running · {item.migrations} migrations</span><code>Ready P99 {item.readyTime.p99Microseconds.toFixed(2)} µs</code></article>)}</div></div></div>
+    {report.observations.length > 0 && <div className="finding-list">{report.observations.map(item => <article key={item.evidenceIds.join('|')}><strong>{item.title}</strong><code>{item.evidenceIds.join(', ')}</code><p>{item.observedMetric}. {item.explanation}</p><p><strong>Test:</strong> {item.verifiableHypothesis}</p></article>)}</div>}
+    <p className="muted-copy">“Use in AI” is explicit opt-in. Only normalized numeric evidence IDs are included; the ETL, PID, command line and full paths stay local.</p>
+  </section>;
+}
+
 function ActivityPage({ history, onRefresh, onRollback }: { history: OperationManifest[]; onRefresh: () => void; onRollback: (id: string) => void }) {
   return <div className="stack-lg"><div className="page-actions"><div><span className="eyebrow">Operation journal</span><h2>Every attempted change remains traceable</h2></div><button className="secondary" onClick={onRefresh}><RefreshCw size={16}/>Refresh</button></div>{history.length ? <div className="history-list">{history.map(item => <article className="history-card" key={item.id}><div className="history-icon"><Activity size={19}/></div><div className="history-main"><div><strong>{item.status}</strong><span>{new Date(item.createdAt).toLocaleString()}</span></div><p>{item.actions.length} journaled actions · {item.id}</p>{item.error && <small className="error-text">{item.error}</small>}</div><button className="secondary" disabled={!item.actions.some(action => (action.applied || action.attempted) && !action.rolledBack)} onClick={() => onRollback(item.id)}><RotateCcw size={15}/>Restore</button></article>)}</div> : <EmptyState icon={Activity} title="No operations yet" text="Completed and interrupted operations will appear here with their rollback state."/>}</div>;
 }
@@ -398,6 +530,6 @@ function toggle(current: Set<string>, id: string) { const next = new Set(current
 function optionalNumber(value: string): number | undefined { return value === '' ? undefined : Number(value); }
 function saveScriptArtifact(item: Recommendation) { const blob = new Blob([item.script], { type: 'text/plain;charset=utf-8' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = scriptArtifactFilename(item.id); link.click(); URL.revokeObjectURL(url); }
 function formatBytes(bytes: number) { return bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KiB`; }
-function pageTitle(page: Page) { return ({ overview: 'System control center', provider: 'Model connection', scan: 'Local system profile', review: 'Safe optimization plan', activity: 'Recovery and history', settings: 'Application preferences' } satisfies Record<Page, string>)[page]; }
+function pageTitle(page: Page) { return ({ overview: 'System control center', provider: 'Model connection', scan: 'Local system profile', measurements: 'ETW measurement lab', review: 'Safe optimization plan', activity: 'Recovery and history', settings: 'Application preferences' } satisfies Record<Page, string>)[page]; }
 
 export default App;
