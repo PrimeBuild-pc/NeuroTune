@@ -17,13 +17,19 @@ $profilePath = Join-Path $resolvedAgentDirectory 'NeuroTuneLatency.wprp'
 if (-not (Test-Path -LiteralPath $agentPath -PathType Leaf)) { throw "Agent not found: $agentPath" }
 if (-not (Test-Path -LiteralPath $profilePath -PathType Leaf)) { throw "WPR profile not found: $profilePath" }
 
-function Get-CredentialPath([string]$VmName) {
-    $labCredential = 'C:\VmLab\Secrets\guest-credential.xml'
-    if ($VmName -eq 'NeuroTune-W11' -and (Test-Path -LiteralPath $labCredential -PathType Leaf)) {
-        return $labCredential
+function Get-VmCredential([string]$VmName) {
+    $unattendPath = 'C:\VmLab\NeuroTune-W11-diagnostics\unattend.xml'
+    if ($VmName -eq 'NeuroTune-W11' -and (Test-Path -LiteralPath $unattendPath -PathType Leaf)) {
+        [xml]$unattend = Get-Content -Raw -LiteralPath $unattendPath
+        $account = $unattend.SelectSingleNode("//*[local-name()='LocalAccount'][*[local-name()='Name']='NeuroTuneTest']")
+        $value = $account.SelectSingleNode("./*[local-name()='Password']/*[local-name()='Value']").InnerText
+        if ([string]::IsNullOrWhiteSpace($value)) { throw 'The W11 lab credential is unavailable.' }
+        return [pscredential]::new("$VmName\NeuroTuneTest", ($value | ConvertTo-SecureString -AsPlainText -Force))
     }
     $file = if ($VmName -match 'W11') { 'w11-credential.xml' } else { 'w10-credential.xml' }
-    Join-Path $env:USERPROFILE ".neurotune-vm\$file"
+    $path = Join-Path $env:USERPROFILE ".neurotune-vm\$file"
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Credential file not found for $VmName." }
+    Import-Clixml -LiteralPath $path
 }
 
 function Wait-PowerShellDirect([string]$VmName, [PSCredential]$Credential) {
@@ -47,11 +53,7 @@ $results = foreach ($vmName in $VmNames) {
         $vm = Get-VM -Name $vmName -ErrorAction Stop
         if ($vm.State -ne 'Running') { throw "VM $vmName must already be running." }
 
-        $credentialPath = Get-CredentialPath $vmName
-        if (-not (Test-Path -LiteralPath $credentialPath -PathType Leaf)) {
-            throw "Credential file not found for $vmName."
-        }
-        $credential = Import-Clixml -LiteralPath $credentialPath
+        $credential = Get-VmCredential $vmName
         Wait-PowerShellDirect $vmName $credential
         $session = New-PSSession -VMName $vmName -Credential $credential
 
