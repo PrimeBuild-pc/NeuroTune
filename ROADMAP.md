@@ -65,6 +65,17 @@ NeuroTune is developed safety-first: a feature is not considered complete merely
 - [x] Unsigned NSIS and portable ZIP assets with SHA-256 checksums
 - [ ] MIT-licensed public repository after full-history privacy and secret review
 
+## v0.7 — ETW Measurement Alpha
+
+- [x] Capture named, bounded WPR sessions for an already-running process without CPU sampling or stack walks
+- [x] Analyze ISR/DPC, context switches, ReadyThread, per-core residency, migrations, and temporal overlap locally
+- [x] Persist versioned sessions atomically and delete raw ETL after successful analysis unless the user opts in
+- [x] Add trace quality gates, deterministic observations, and 1+1 exploratory / 3+3 repeated comparisons
+- [x] Keep ETL, PID, command lines, and full paths out of optional AI evidence
+- [ ] Complete WPR/analyzer smoke validation on Windows 10 build 19045 and Windows 11 build 26200
+- [ ] Validate repeatability with DirectX workloads on physical AMD and NVIDIA GPU hosts
+- [ ] Gate the first supervised GPU IRQ-affinity experiment on those physical validation reports
+
 ## v1.0 — Release Criteria
 
 - [ ] Supported actions pass apply/verify/rollback tests across the support matrix
@@ -76,4 +87,4 @@ NeuroTune is developed safety-first: a feature is not considered complete merely
 
 ## Deliberate Non-Goals
 
-NeuroTune will not execute LLM-generated scripts, accept model-supplied download or write paths, download remote tweak catalogs, delete user files for “cleanup,” disable Defender or Firewall for performance, force HPET/platform timers, or apply undocumented generic network tweaks. Generated scripts may be reviewed and saved for manual use; verified text artifacts require a locally reviewed, hash-pinned definition.
+NeuroTune will not execute LLM-generated scripts, accept model-supplied download or write paths, download remote tweak catalogs, delete user files for “cleanup,” disable Defender or Firewall for performance, force HPET/platform timers, or apply undocumented generic network tweaks. Generated scripts may be reviewed and saved for manual use; verified text artifacts require a locally reviewed, hash-pinned definition. DEVICE-TWEAKER remains research input only and is never imported, executed, or copied into the production backend.

@@ -55,6 +55,29 @@ Use a disposable Windows virtual machine. Do not use a primary PC for the first 
 
 In a disposable VM only, terminate NeuroTune while an operation is marked **Applying**. Restart it and confirm that the recovery banner identifies the interrupted journal and allows rollback.
 
+## 6. ETW Measurements
+
+1. Open **Measurements**, start a workload yourself, refresh the process list,
+   and select that already-running process.
+2. Record a 30-second Baseline. Close the UI during a second capture and verify
+   that the internal watchdog still saves it at the deadline without leaving a
+   named WPR session active.
+3. Test Stop, Cancel, and analysis cancellation. Cancel must delete incomplete
+   capture data; analysis cancellation must leave the ETL retryable.
+4. Confirm the report separates ISR and DPC, shows Ready Time, running time,
+   migrations, per-core residency/interrupt share, and explicit trace quality.
+5. With **Keep raw ETL** off, confirm `capture.etl` disappears after successful
+   analysis. With it on, confirm the file stays local.
+6. Create one Baseline and one Candidate to confirm an Exploratory comparison;
+   then create 3+3 valid sessions to confirm median aggregation and the
+   Improvement/Regression/Inconclusive rule.
+7. Opt one completed report into the next AI diagnosis. Inspect the provider
+   payload and verify it contains only `measurement:*` IDs with numeric/boolean
+   values—never ETL bytes, PID, command line, username, or full path.
+8. Repeat the smoke test on Windows 10 build 19045 and Windows 11 build 26200.
+   Record WPR orphan checks and lost-event counts. Physical DirectX validation
+   on AMD and NVIDIA hosts is mandatory before enabling any GPU action.
+
 ## Reporting
 
 Include the Windows build, hardware/VM configuration, provider, selected action IDs, operation status, and redacted log lines. Never include an API key or an unredacted system profile.
