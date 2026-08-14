@@ -1,8 +1,8 @@
-# NeuroTune v0.6.0-alpha.1
+# NeuroTune v0.7.0-alpha.1
 
-This unsigned alpha introduces the foundation of NeuroTune's contextual AI
-planner. It is intended for controlled testing on Windows 10 and Windows 11,
-preferably first in a disposable VM.
+This unsigned alpha adds local, measurement-first ETW analysis to NeuroTune's
+contextual planner. It supports Microsoft-supported Windows 11 x64 builds and
+should be tested first in a disposable VM.
 
 ## Highlights
 
@@ -17,6 +17,12 @@ preferably first in a disposable VM.
 - Verified text-artifact and official GPU/chipset/motherboard advisor
   foundations are present; the public artifact and external-app catalogs are
   intentionally empty pending individual PrimeBuild approval.
+- Named WPR sessions capture an already-running workload for deterministic
+  ISR/DPC, scheduling, Ready Time, migration, per-core, and comparison reports.
+- Raw ETL stays local and is deleted after successful analysis unless the user
+  explicitly keeps it. Optional AI receives only normalized measurement facts.
+- Read-only GPU IRQ candidates can be previewed from three valid baselines;
+  no device policy is writable in this release.
 
 ## Distribution and verification
 
@@ -34,5 +40,7 @@ this free open-source alpha.
 - The cross-version page-file writer, typed per-app GPU target, and
   platform-qualified core-parking actions are not yet in the public catalog.
 - Version-feed adapters and the first reviewed external artifact are pending.
-- User-entered performance metrics are contextual, unverified observations;
-  NeuroTune does not yet automate game benchmarks or claim measured gains.
+- DirectX repeatability on physical AMD and NVIDIA systems remains required
+  before the supervised GPU IRQ-affinity writer can be enabled.
+- NeuroTune does not automate game launch or claim measured gains from a
+  universal score.

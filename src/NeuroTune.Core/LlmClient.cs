@@ -58,13 +58,13 @@ public sealed class LlmClient
     }
 
     public async Task<DiagnosisResult> DiagnoseAsync(SystemProfile profile, TuningGoals goals, UserSettings settings, string? apiKey,
-        CancellationToken cancellationToken = default)
+        IReadOnlyDictionary<string, string>? measurementEvidence = null, CancellationToken cancellationToken = default)
     {
         ValidateSettings(settings, apiKey);
         goals.Validate();
         if (string.IsNullOrWhiteSpace(settings.Model)) throw new InvalidOperationException("Select a model.");
 
-        var evidenceFacts = BuildEvidenceFacts(profile);
+        var evidenceFacts = MergeEvidenceFacts(BuildEvidenceFacts(profile), measurementEvidence);
         if (!MeasureEvidence(evidenceFacts).FitsSinglePass)
             throw new InvalidOperationException("The evidence bundle exceeds NeuroTune's local single-pass safety limit. Review the payload and use a smaller scan; unvalidated character slicing is not allowed.");
         var localConflicts = ConflictAnalyzer.Analyze(profile, goals);
@@ -370,6 +370,26 @@ public sealed class LlmClient
             var items = values ?? [];
             for (var index = 0; index < items.Count; index++) facts[$"{prefix}:{index}"] = items[index] ?? "Unavailable";
         }
+    }
+
+    public static IReadOnlyDictionary<string, string> MergeEvidenceFacts(
+        IReadOnlyDictionary<string, string> profileFacts,
+        IReadOnlyDictionary<string, string>? measurementFacts)
+    {
+        var merged = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        foreach (var fact in profileFacts) merged[fact.Key] = fact.Value;
+        if (measurementFacts is null) return merged;
+        foreach (var fact in measurementFacts)
+        {
+            if (!fact.Key.StartsWith("measurement:", StringComparison.Ordinal) ||
+                fact.Key.Any(character => !(char.IsLetterOrDigit(character) || character is ':' or '.' or '_' or '-')) ||
+                fact.Value.Length > 64 ||
+                !(bool.TryParse(fact.Value, out _) || double.TryParse(fact.Value, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out _)))
+                throw new InvalidOperationException("Measurement evidence was not normalized.");
+            merged[fact.Key] = fact.Value;
+        }
+        return merged;
     }
 
     public static EvidencePayloadReport MeasureEvidence(IReadOnlyDictionary<string, string> facts)

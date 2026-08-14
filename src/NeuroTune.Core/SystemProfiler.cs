@@ -501,9 +501,9 @@ public sealed class SystemProfiler
         catch { }
     }
 
-    private static List<T> Query<T>(string query, Func<ManagementBaseObject, T> map) => Query(@"root\cimv2", query, map);
+    internal static List<T> Query<T>(string query, Func<ManagementBaseObject, T> map) => Query(@"root\cimv2", query, map);
 
-    private static List<T> Query<T>(string scope, string query, Func<ManagementBaseObject, T> map)
+    internal static List<T> Query<T>(string scope, string query, Func<ManagementBaseObject, T> map)
     {
         try
         {

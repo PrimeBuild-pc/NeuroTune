@@ -293,6 +293,7 @@ public sealed class CoreTests
         Assert.HasCount(25, catalog.All);
         Assert.HasCount(25, catalog.Definitions.Select(item => item.Id).Distinct(StringComparer.OrdinalIgnoreCase));
         Assert.IsTrue(catalog.All.All(action => action is IReversibleAction));
+        Assert.IsTrue(catalog.Definitions.All(definition => definition.SupportedWindowsBuilds.SequenceEqual(["Windows 11"])));
         Assert.IsTrue(catalog.Definitions.All(definition =>
         {
             definition.Validate();
@@ -300,6 +301,7 @@ public sealed class CoreTests
                 definition.SupportedHardware.Count > 0 && definition.EvidenceRequirements.Count > 0 &&
                 definition.Sources.Count > 0 && definition.SideEffects.Count > 0;
         }));
+        Assert.IsTrue(ProbeCatalog.Registry.All(probe => probe.SupportedSystems == "Windows 11"));
     }
 
     [TestMethod]

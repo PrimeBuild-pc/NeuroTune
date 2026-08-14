@@ -1,10 +1,13 @@
 [CmdletBinding()]
 param(
-    [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot),
+    [string]$RepositoryRoot,
     [string]$OutputDirectory
 )
 
 $ErrorActionPreference = 'Stop'
+if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
+    $RepositoryRoot = Split-Path -Parent $PSScriptRoot
+}
 $root = (Resolve-Path -LiteralPath $RepositoryRoot).Path
 if (-not $OutputDirectory) { $OutputDirectory = Join-Path $root 'artifacts/release' }
 $config = Get-Content -LiteralPath (Join-Path $root 'ui/src-tauri/tauri.conf.json') -Raw | ConvertFrom-Json
@@ -18,6 +21,7 @@ $required = @(
     $mainExecutable,
     (Join-Path $agentDirectory 'NeuroTune.Agent.exe'),
     (Join-Path $agentDirectory 'NeuroTune.Telemetry.exe'),
+    (Join-Path $agentDirectory 'NeuroTuneLatency.wprp'),
     (Join-Path $root 'LICENSE'),
     (Join-Path $root 'README.md'),
     (Join-Path $root 'RELEASE_NOTES.md')
@@ -38,6 +42,7 @@ New-Item -ItemType Directory -Path (Join-Path $portableRoot 'agent') -Force | Ou
 Copy-Item -LiteralPath $mainExecutable -Destination (Join-Path $portableRoot 'NeuroTune.exe')
 Copy-Item -LiteralPath (Join-Path $agentDirectory 'NeuroTune.Agent.exe') -Destination (Join-Path $portableRoot 'agent/NeuroTune.Agent.exe')
 Copy-Item -LiteralPath (Join-Path $agentDirectory 'NeuroTune.Telemetry.exe') -Destination (Join-Path $portableRoot 'agent/NeuroTune.Telemetry.exe')
+Copy-Item -LiteralPath (Join-Path $agentDirectory 'NeuroTuneLatency.wprp') -Destination (Join-Path $portableRoot 'agent/NeuroTuneLatency.wprp')
 Copy-Item -LiteralPath (Join-Path $root 'LICENSE') -Destination $portableRoot
 Copy-Item -LiteralPath (Join-Path $root 'README.md') -Destination $portableRoot
 Copy-Item -LiteralPath (Join-Path $root 'RELEASE_NOTES.md') -Destination $portableRoot
@@ -53,7 +58,7 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 $archive = [System.IO.Compression.ZipFile]::OpenRead($zip)
 try {
     $entries = $archive.Entries.FullName -replace '\\', '/'
-    foreach ($relative in @('NeuroTune.exe', 'agent/NeuroTune.Agent.exe', 'agent/NeuroTune.Telemetry.exe', 'LICENSE')) {
+    foreach ($relative in @('NeuroTune.exe', 'agent/NeuroTune.Agent.exe', 'agent/NeuroTune.Telemetry.exe', 'agent/NeuroTuneLatency.wprp', 'LICENSE')) {
         $expected = "$portableName/$relative"
         if ($entries -notcontains $expected) { throw "Portable archive is incomplete: $expected is missing." }
     }
@@ -68,7 +73,7 @@ $checksums = $assets | ForEach-Object {
     $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
     "$hash  $($_.Name)"
 }
-$checksums | Set-Content -LiteralPath $checksumPath -Encoding utf8NoBOM
+[System.IO.File]::WriteAllLines($checksumPath, [string[]]$checksums, [System.Text.UTF8Encoding]::new($false))
 
 Write-Host "Release assets created in $output"
 $assets + (Get-Item -LiteralPath $checksumPath) | Select-Object Name, Length

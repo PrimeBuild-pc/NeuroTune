@@ -9,10 +9,10 @@ or validation report.
 
 | Field | Value |
 |---|---|
-| Target | `v0.6.0-alpha.1` |
-| Branch | `codex/dynamic-planner-foundation` |
-| Current milestone | M2 — remaining typed capability families |
-| Last verified baseline | `64d74bb` / PR #4 |
+| Target | `v0.7.0-alpha.1` |
+| Branch | `main` |
+| Current milestone | M9 — GPU IRQ closed-loop validation |
+| Last verified baseline | `8810ab5`; Windows 11 build 26200 ETW smoke report, 2026-08-14 |
 | Distribution | unsigned NSIS plus portable ZIP, GitHub/Discord |
 | License | MIT, copyright PrimeBuild |
 | Repository visibility | private until the full-history privacy/secret audit passes |
@@ -39,6 +39,18 @@ or validation report.
   Aggressive only after dedicated capture, rollback, and validation.
 - Automated game benchmarking is deferred. Measurements supplied by the user
   are explicitly labelled unverified input.
+- ETW measurement follows Baseline → trace → local analysis → comparison →
+  hypothesis. Raw ETL never reaches a provider and is deleted after successful
+  analysis unless the user explicitly keeps it.
+- The first measurement release is read-only. GPU IRQ affinity and every later
+  device writer remain gated on repeated physical-host validation and exact
+  rollback evidence.
+- TraceProcessing 1.12.10 was not selected because its redistribution terms add
+  obligations beyond the repository's MIT grant. The stable application
+  contracts use the MIT-licensed TraceEvent 3.2.5 fallback.
+- Windows 10 is retained only in historical validation evidence. New releases,
+  automation, compatibility metadata, and support claims target x64 builds of
+  Windows 11 that are still supported by Microsoft.
 
 ## Milestones
 
@@ -46,12 +58,49 @@ or validation report.
 |---|---|---|---|
 | M0 | Close legacy backlog, add MIT, consolidate planning | Completed | `73ad228`; issues #1–#3 closed 2026-08-02; PR #5 |
 | M1 | Structured dynamic-plan contract and goal/measurement context | Completed | `9ec9332`; 21 .NET tests, 7 Vitest tests, UI typecheck/lint/build; PR #5 |
-| M2 | Extensible reversible capability registry and first expansion | In progress | `c0acdb2`; 25 actions, 24 .NET tests, exact round-trip on builds 19045/26200; PR #5 |
+| M2 | Extensible reversible capability registry and first expansion | In progress | `c0acdb2`; 25 actions, 24 .NET tests, exact round-trip on Windows 11 build 26200 plus historical Windows 10 build 19045; PR #5 |
 | M3 | Verified artifact catalog and deterministic update advisor | In progress | `a7fa9a6`; empty-by-default catalogs, exact text transaction, official vendor advisor, 29 .NET tests; PR #5 |
 | M4 | Plan-focused accessible UI and script/resource review | In progress | `b1d7d11`; five labelled types, inert script copy/save, enforced high-risk confirmation; 30 .NET, 7 UI, 2 Rust tests; manual scaling/Narrator remain; PR #5 |
-| M5 | NSIS, portable ZIP, checksums, release documentation | Completed | `8416b69`; NSIS and 64,196,039-byte ZIP, checksums and smoke/matrix on builds 19045/26200; PR #5 |
+| M5 | NSIS, portable ZIP, checksums, release documentation | Completed | `8416b69`; NSIS and 64,196,039-byte ZIP, checksums and Windows 11 smoke; historical Windows 10 evidence retained; PR #5 |
 | M6 | Full-history secret/privacy audit and public repository | Blocked | `32fd2aa`; no secrets; reachable personal Gmail author metadata requires PrimeBuild accept/rewrite/private decision; PR #5 |
 | M7 | Optional imported benchmark evidence and researched sources | Planned | Deferred until the planner and advisor are stable |
+| M8 | ETW Measurement Alpha | In validation | `1bf387c`, `8810ab5`; three of three valid watchdog captures on Windows 11 build 26200, zero lost events, no raw ETL or WPR orphan; physical DirectX matrix remains |
+| M9 | GPU IRQ closed-loop | In progress | Read-only CPU-set/PnP topology and opaque three-candidate preview implemented; writer, restart, Keep/Rollback, driver matrix, and AI candidate selection remain gated |
+
+## M8 — ETW Measurement Alpha
+
+- Select an already-running process and record for 30–600 seconds (180 by
+  default) using one named, globally serialized WPR session.
+- Capture only process/thread, loader, CSwitch, ReadyThread, ISR/DPC, and CPU
+  metadata in memory mode. Do not enable stack walk or sampled profiling.
+- Persist session state atomically under
+  `%LocalAppData%\NeuroTune\measurements\<session-id>` and let an internal,
+  non-UI-callable watchdog stop the recording at its deadline.
+- Analyze locally with nearest-rank percentiles and an interval sweep. Unknown
+  module/thread identities stay `Unknown`; reports make no causal claim.
+- Reject comparisons across executables, hardware/configuration fingerprints,
+  durations outside ±10%, invalid quality gates, or lost critical events.
+- Keep `PerformanceSnapshotService` as general observation only; its WMI CPU,
+  RAM, process count, ping, and power-plan values are not benchmark proof.
+- After analyzer validation, open a separate milestone for supervised GPU IRQ
+  affinity. No MSI, RWEverything, PCI writes, secret executables, or imported
+  DEVICE-TWEAKER backend code enters M8.
+
+## M9 — GPU IRQ closed-loop
+
+- Read CPU group, physical core, SMT index, efficiency class, and last-level
+  cache cluster from the native Windows CPU-set API. Never relabel a cache
+  cluster as a CCD.
+- Map physical PCI AMD/NVIDIA GPUs to local PnP identity, driver version, and
+  the derived affinity-policy Registry location. These identifiers remain
+  local and are not added to provider evidence.
+- From at least three valid matching Baselines, rank at most three distinct
+  physical cores by median interrupt share, target residency, and Ready/IRQ
+  overlap. Expose opaque `candidateId` values and validated masks as a
+  read-only preview.
+- Keep every candidate `ApplyEnabled=false` until AMD/NVIDIA driver fixtures,
+  exact capture/verify/restore, restart handling, and the physical-host matrix
+  pass. Only then add the supervised writer and AI selection by candidate ID.
 
 ## M1 — dynamic plan foundation
 
@@ -81,7 +130,8 @@ or validation report.
   physical-host rollback matrix exists.
 - Implemented first validated batch: the original 12 actions, Balanced power,
   default/on/off state families for gaming/capture/visual settings, and BCD
-  timer/resource-limit repair. All 25 pass the disposable Windows 10/11 probe.
+  timer/resource-limit repair. All 25 passed the Windows 11 probe; the earlier
+  Windows 10 pass is retained only as historical evidence.
 - Remaining before M2 completion: typed per-app GPU targets, a cross-version
   page-file backend, and platform-qualified core-parking/power definitions.
   The first WMI page-file writer was removed after Windows 11 rejected it.
@@ -137,8 +187,9 @@ cargo clippy -- -D warnings
 cargo test
 ```
 
-New system writers additionally require the disposable Windows 10/11
-Inspect/Apply/Verify/Rollback matrix. Installer and portable assets require a
+New system writers additionally require the disposable Windows 11
+Inspect/Apply/Verify/Rollback matrix. Historical Windows 10 results do not
+expand the current support claim. Installer and portable assets require a
 final launch/uninstall or extract/launch smoke check before tagging.
 
 ## Update protocol
