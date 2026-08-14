@@ -74,6 +74,7 @@ NeuroTune is developed safety-first: a feature is not considered complete merely
 - [x] Keep ETL, PID, command lines, and full paths out of optional AI evidence
 - [ ] Complete WPR/analyzer smoke validation on Windows 10 build 19045 and Windows 11 build 26200
 - [ ] Validate repeatability with DirectX workloads on physical AMD and NVIDIA GPU hosts
+- [x] Add read-only CPU/PnP topology and opaque GPU IRQ candidate previews from 3+ valid baselines
 - [ ] Gate the first supervised GPU IRQ-affinity experiment on those physical validation reports
 
 ## v1.0 — Release Criteria

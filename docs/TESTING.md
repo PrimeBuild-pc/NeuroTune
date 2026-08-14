@@ -77,6 +77,10 @@ In a disposable VM only, terminate NeuroTune while an operation is marked **Appl
 8. Repeat the smoke test on Windows 10 build 19045 and Windows 11 build 26200.
    Record WPR orphan checks and lost-event counts. Physical DirectX validation
    on AMD and NVIDIA hosts is mandatory before enabling any GPU action.
+9. Select at least three valid Baselines and generate the GPU IRQ preview.
+   Confirm it returns at most three distinct physical cores, uses the Windows
+   group/SMT/efficiency/cache-cluster labels verbatim, and exposes no Apply
+   control. Confirm WPR reports no active session before and after this step.
 
 ## Reporting
 

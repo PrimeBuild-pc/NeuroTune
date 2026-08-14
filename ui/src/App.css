@@ -183,6 +183,7 @@ button.ghost { border: 1px solid transparent; background: transparent; color: va
 .measurement-table article { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 11px 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-raised); }
 .measurement-table article strong, .measurement-table article span, .measurement-table article code { min-width: 0; font-size: 10px; }
 .measurement-table article code { overflow-wrap: anywhere; color: var(--accent-text); font-family: ui-monospace, Consolas, monospace; }
+.measurement-table article > small { grid-column: 1 / -1; color: var(--warning-text); }
 .measurement-table .improvement { color: var(--success-text); }
 .measurement-table .regression { color: var(--danger-text); }
 .measurement-table .inconclusive { color: var(--muted-strong); }

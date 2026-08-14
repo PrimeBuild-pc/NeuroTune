@@ -203,6 +203,14 @@ public sealed class MeasurementService
         return new MeasurementComparison { Id = comparisonId, Level = level, BaselineSessionIds = request.BaselineSessionIds, CandidateSessionIds = request.CandidateSessionIds, Metrics = metrics };
     }
 
+    public MachineTopology Topology() => new HardwareTopologyService().Collect();
+
+    public GpuCandidateSet GpuAffinityCandidates(GpuCandidateRequest request)
+    {
+        var sessions = request.BaselineSessionIds.Distinct().Select(Load).ToList();
+        return new HardwareTopologyService().Generate(request, sessions);
+    }
+
     public void Watchdog(Guid id, CancellationToken cancellationToken = default)
     {
         var session = TryLoad(id);
@@ -231,6 +239,7 @@ public sealed class MeasurementService
             foreach (var item in report.Processors)
             {
                 facts[$"measurement:{session.Id}:cpu:{item.LogicalProcessor}:interrupt_share_percent"] = item.InterruptSharePercent.ToString("F3", System.Globalization.CultureInfo.InvariantCulture);
+                facts[$"measurement:{session.Id}:cpu:{item.LogicalProcessor}:target_running_ms"] = item.TargetRunningMilliseconds.ToString("F3", System.Globalization.CultureInfo.InvariantCulture);
                 facts[$"measurement:{session.Id}:cpu:{item.LogicalProcessor}:ready_overlap_us"] = item.ReadyOverlapMicroseconds.ToString("F3", System.Globalization.CultureInfo.InvariantCulture);
             }
             foreach (var item in report.Threads)
@@ -331,7 +340,7 @@ public sealed class MeasurementService
             throw new InvalidOperationException($"Invalid measurement transition: {session.State} → {state}.");
         session.State = state;
     }
-    private static string Fingerprint(params string[] values) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join("\n", values)))).ToLowerInvariant();
+    internal static string Fingerprint(params string[] values) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join("\n", values)))).ToLowerInvariant();
     internal static double Median(IEnumerable<double> values)
     {
         var sorted = values.Order().ToArray();
