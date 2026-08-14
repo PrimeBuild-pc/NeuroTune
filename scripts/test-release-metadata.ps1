@@ -1,9 +1,12 @@
 [CmdletBinding()]
 param(
-    [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot)
+    [string]$RepositoryRoot
 )
 
 $ErrorActionPreference = 'Stop'
+if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
+    $RepositoryRoot = Split-Path -Parent $PSScriptRoot
+}
 $root = (Resolve-Path -LiteralPath $RepositoryRoot).Path
 $tauriConfig = Get-Content -LiteralPath (Join-Path $root 'ui/src-tauri/tauri.conf.json') -Raw | ConvertFrom-Json
 $package = Get-Content -LiteralPath (Join-Path $root 'ui/package.json') -Raw | ConvertFrom-Json
