@@ -157,6 +157,17 @@ public sealed record CandidateAction(
 
 public sealed record GpuCandidateRequest(string DeviceKey, IReadOnlyList<Guid> BaselineSessionIds);
 public sealed record GpuCandidateSet(string HardwareFingerprint, IReadOnlyList<Guid> BaselineSessionIds, IReadOnlyList<CandidateAction> Candidates);
+public sealed record GpuAffinityInspectRequest(string DeviceKey);
+public sealed record RegistryValueSnapshot(bool Exists, string Kind, string HexValue, int ByteLength);
+public sealed record GpuAffinityPolicySnapshot(
+    string DeviceKey,
+    string DeviceName,
+    string State,
+    RegistryValueSnapshot AssignmentSetOverride,
+    RegistryValueSnapshot DevicePolicy,
+    bool Restorable,
+    bool ApplyEnabled,
+    string GateReason);
 
 internal readonly record struct TimeInterval(double StartMilliseconds, double EndMilliseconds, int LogicalProcessor);
 
