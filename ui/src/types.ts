@@ -307,3 +307,14 @@ export interface GpuCandidateSet {
     gateReason: string;
   }>;
 }
+
+export interface GpuAffinityPolicySnapshot {
+  deviceKey: string;
+  deviceName: string;
+  state: 'windowsDefault' | 'configured' | 'unsupported';
+  assignmentSetOverride: { exists: boolean; kind: string; hexValue: string; byteLength: number };
+  devicePolicy: { exists: boolean; kind: string; hexValue: string; byteLength: number };
+  restorable: boolean;
+  applyEnabled: false;
+  gateReason: string;
+}

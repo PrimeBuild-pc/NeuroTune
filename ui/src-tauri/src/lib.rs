@@ -32,6 +32,7 @@ const COMMANDS: &[&str] = &[
     "measurement-compare",
     "measurement-topology",
     "measurement-gpu-candidates",
+    "measurement-gpu-affinity-inspect",
     "measurement-delete",
 ];
 

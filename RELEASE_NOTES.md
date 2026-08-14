@@ -21,7 +21,8 @@ should be tested first in a disposable VM.
   ISR/DPC, scheduling, Ready Time, migration, per-core, and comparison reports.
 - Raw ETL stays local and is deleted after successful analysis unless the user
   explicitly keeps it. Optional AI receives only normalized measurement facts.
-- Read-only GPU IRQ candidates can be previewed from three valid baselines;
+- Read-only GPU IRQ candidates can be previewed from three valid baselines,
+  and the current policy can be inspected for exact rollback compatibility;
   no device policy is writable in this release.
 
 ## Distribution and verification

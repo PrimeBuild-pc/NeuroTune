@@ -112,4 +112,17 @@ public sealed class MeasurementTests
             }
         };
     }
+
+    [TestMethod]
+    public void Gpu_affinity_policy_snapshot_classifies_only_exact_registry_types_as_restorable()
+    {
+        var missing = new RegistryValueSnapshot(false, "None", "", 0);
+        var mask = new RegistryValueSnapshot(true, "Binary", "08", 1);
+        var policy = new RegistryValueSnapshot(true, "DWord", "00000004", 4);
+
+        Assert.AreEqual("windowsDefault", HardwareTopologyService.PolicyState(missing, missing));
+        Assert.AreEqual("configured", HardwareTopologyService.PolicyState(mask, policy));
+        Assert.AreEqual("unsupported", HardwareTopologyService.PolicyState(new(true, "String", "", 0), policy));
+        Assert.AreEqual("unsupported", HardwareTopologyService.PolicyState(new(true, "Binary", new string('F', 18), 9), policy));
+    }
 }
