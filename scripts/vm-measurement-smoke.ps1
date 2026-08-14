@@ -142,7 +142,9 @@ $results = foreach ($vmName in $VmNames) {
 
                     $analyzed = Invoke-Agent 'measurement-analyze' @{ sessionId = $capture.id }
                     if ($analyzed.state -ne 'completed' -or -not $analyzed.report.quality.isValid) {
-                        throw 'The analyzed trace did not pass its deterministic quality gate.'
+                        $quality = $analyzed.report.quality
+                        $missing = @($quality.missingProviders) -join ','
+                        throw "Trace quality gate failed: eventsLost=$($quality.eventsLost); targetPresencePercent=$($quality.targetPresencePercent); missingProviders=$missing"
                     }
                     if ([long]$analyzed.report.quality.eventsLost -ne 0 -or @($analyzed.report.quality.missingProviders).Count -ne 0) {
                         throw 'The analyzed trace lost events or missed a required stream.'
