@@ -30,26 +30,39 @@ public sealed class TraceAnalyzer
         };
         double firstTargetMs = double.MaxValue, lastTargetMs = 0;
 
+        // ponytail: a discovery pass avoids retaining every system scheduling event; revisit only if ETL parse time becomes material.
+        using (var identitySource = new ETWTraceEventSource(etlPath))
+        {
+            void RegisterIdentity(ThreadTraceData data)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (data.ProcessID == session.ProcessId) targetThreads.Add(data.ThreadID);
+            }
+            identitySource.Kernel.ThreadStartGroup += RegisterIdentity;
+            identitySource.Kernel.ThreadEndGroup += RegisterIdentity;
+            identitySource.Process();
+        }
+
         using var source = new ETWTraceEventSource(etlPath);
         source.Kernel.PerfInfoDPC += data => AddInterrupt("dpc", data.TimeStampRelativeMSec, data.ElapsedTimeMSec, data.ProcessorNumber, data.Routine);
         source.Kernel.PerfInfoThreadedDPC += data => AddInterrupt("dpc", data.TimeStampRelativeMSec, data.ElapsedTimeMSec, data.ProcessorNumber, data.Routine);
         source.Kernel.PerfInfoTimerDPC += data => AddInterrupt("dpc", data.TimeStampRelativeMSec, data.ElapsedTimeMSec, data.ProcessorNumber, data.Routine);
         source.Kernel.PerfInfoISR += data => AddInterrupt("isr", data.TimeStampRelativeMSec, data.ElapsedTimeMSec, data.ProcessorNumber, data.Routine);
-        source.Kernel.ThreadStart += RegisterThread;
-        source.Kernel.ThreadDCStart += RegisterThread;
+        source.Kernel.ThreadStartGroup += RegisterThread;
+        source.Kernel.ThreadEndGroup += RegisterThread;
         source.Kernel.ThreadCSwitch += data =>
         {
             cancellationToken.ThrowIfCancellationRequested();
             streamCounts["CSwitch"]++;
             var timestamp = data.TimeStampRelativeMSec;
-            if (data.NewProcessID == session.ProcessId) targetThreads.Add(data.NewThreadID);
-            if (data.OldProcessID == session.ProcessId) targetThreads.Add(data.OldThreadID);
-            if (data.OldProcessID == session.ProcessId && activeByCpu.TryGetValue(data.ProcessorNumber, out var active) && timestamp >= active.StartMs)
+            var newIsTarget = targetThreads.Contains(data.NewThreadID);
+            var oldIsTarget = targetThreads.Contains(data.OldThreadID);
+            if (oldIsTarget && activeByCpu.TryGetValue(data.ProcessorNumber, out var active) && timestamp >= active.StartMs)
                 running.Add(new(active.ThreadId, new(active.StartMs, timestamp, data.ProcessorNumber)));
             activeByCpu[data.ProcessorNumber] = (data.NewThreadID, timestamp);
-            if (data.NewProcessID == session.ProcessId && readyAt.Remove(data.NewThreadID, out var readyTimestamp) && timestamp >= readyTimestamp)
+            if (newIsTarget && readyAt.Remove(data.NewThreadID, out var readyTimestamp) && timestamp >= readyTimestamp)
                 ready.Add(new(data.NewThreadID, new(readyTimestamp, timestamp, data.ProcessorNumber)));
-            if (data.NewProcessID == session.ProcessId || data.OldProcessID == session.ProcessId)
+            if (newIsTarget || oldIsTarget)
             {
                 firstTargetMs = Math.Min(firstTargetMs, timestamp);
                 lastTargetMs = Math.Max(lastTargetMs, timestamp);
@@ -58,10 +71,9 @@ public sealed class TraceAnalyzer
         source.Kernel.DispatcherReadyThread += data =>
         {
             streamCounts["ReadyThread"]++;
-            if (data.AwakenedProcessID == session.ProcessId)
+            if (targetThreads.Contains(data.AwakenedThreadID))
             {
                 readyAt[data.AwakenedThreadID] = data.TimeStampRelativeMSec;
-                targetThreads.Add(data.AwakenedThreadID);
             }
         };
         source.Kernel.ImageLoad += RegisterImage;
