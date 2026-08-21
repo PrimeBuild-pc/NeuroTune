@@ -1,16 +1,20 @@
 <div align="center">
-  <h1>🧠 NeuroTune</h1>
+  <img src="readme-banner.svg" alt="NeuroTune — AI-guided Windows optimization with verified rollback" width="100%">
   <p><strong>AI-assisted Windows optimization with safety boundaries and reliable rollback.</strong></p>
   <p>
-    NeuroTune profiles your PC, requests contextual recommendations from your preferred LLM,
-    and applies only predefined, reversible system changes.
+    <a href="https://github.com/PrimeBuild-pc/NeuroTune/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/PrimeBuild-pc/NeuroTune?style=plastic&amp;logo=git&amp;logoColor=white"></a>
+    <a href="https://github.com/PrimeBuild-pc/NeuroTune/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/PrimeBuild-pc/NeuroTune?style=plastic&amp;logo=github"></a>
+    <a href="https://github.com/PrimeBuild-pc/NeuroTune/issues"><img alt="Open issues" src="https://img.shields.io/github/issues/PrimeBuild-pc/NeuroTune?style=plastic&amp;logo=github"></a>
   </p>
   <p>
-    <a href="https://github.com/PrimeBuild-pc/NeuroTune/actions/workflows/build.yml"><img alt="Build" src="https://github.com/PrimeBuild-pc/NeuroTune/actions/workflows/build.yml/badge.svg"></a>
-    <img alt="Tauri 2" src="https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white">
-    <img alt="React" src="https://img.shields.io/badge/React-19-087EA4?logo=react&logoColor=white">
-    <img alt="Windows 11" src="https://img.shields.io/badge/Windows-11-0078D4?logo=windows&logoColor=white">
-    <img alt="Status: Alpha" src="https://img.shields.io/badge/status-Alpha-orange">
+    <a href="https://github.com/PrimeBuild-pc/NeuroTune/actions/workflows/build.yml"><img alt="Build" src="https://img.shields.io/github/actions/workflow/status/PrimeBuild-pc/NeuroTune/build.yml?branch=main&amp;style=plastic&amp;logo=githubactions&amp;label=build"></a>
+    <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/PrimeBuild-pc/NeuroTune?style=plastic"></a>
+    <img alt="Status: Alpha" src="https://img.shields.io/badge/status-alpha-f59e0b?style=plastic">
+    <img alt="Windows 11" src="https://img.shields.io/badge/Windows-11-0078D4?style=plastic&amp;logo=windows&amp;logoColor=white">
+    <img alt="Tauri 2" src="https://img.shields.io/badge/Tauri-2-24C8DB?style=plastic&amp;logo=tauri&amp;logoColor=white">
+    <img alt="React 19" src="https://img.shields.io/badge/React-19-087EA4?style=plastic&amp;logo=react&amp;logoColor=white">
+    <img alt="Bring your own key" src="https://img.shields.io/badge/AI-BYOK-8b5cf6?style=plastic">
+    <img alt="Local LLM support" src="https://img.shields.io/badge/local%20LLM-supported-2ea44f?style=plastic">
   </p>
 </div>
 
