@@ -222,6 +222,11 @@ public sealed record UpdateNoticeDefinition(
 
 public sealed class OfficialUpdateAdvisor
 {
+    private static readonly OfficialUpdateRecord[] DefaultRecords =
+    [
+        new(UpdateComponentKind.GpuDriver, "AMD", "AMD Radeon RX 6950 XT", "32.0.21045.5002",
+            "https://www.amd.com/en/resources/support-articles/release-notes/RN-RAD-WIN-26-8-1.html")
+    ];
     private sealed record VendorSource(string CanonicalName, string OfficialUrl, string Domain);
 
     private static readonly Dictionary<string, VendorSource> Sources = new(StringComparer.OrdinalIgnoreCase)
@@ -239,7 +244,7 @@ public sealed class OfficialUpdateAdvisor
 
     public OfficialUpdateAdvisor(IEnumerable<OfficialUpdateRecord>? records = null)
     {
-        _records = records?.ToList() ?? [];
+        _records = records?.ToList() ?? DefaultRecords.ToList();
         foreach (var record in _records)
         {
             var source = ResolveSource(record.Vendor)

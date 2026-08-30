@@ -12,11 +12,18 @@ internal static class ComponentBaselineCatalog
         var results = new Dictionary<string, string>(StringComparer.Ordinal);
         var cpuMatch = $"{identities.GetValueOrDefault("CPU specification ID")}|{identities.GetValueOrDefault("CPU model")}";
         results["CPU"] = Describe(Data.Cpu.FirstOrDefault(item => item.Match == cpuMatch), cpuMatch);
+        var motherboard = identities.GetValueOrDefault("Motherboard", "Unavailable");
+        var bios = identities.GetValueOrDefault("BIOS", "Unavailable");
+        results["Motherboard"] = Describe(Data.Motherboard.FirstOrDefault(item => item.Match == motherboard), motherboard);
+        results["BIOS"] = Describe(Data.Bios.FirstOrDefault(item => item.Match == bios), bios);
 
         foreach (var (key, value) in identities.Where(item => item.Key.StartsWith("DIMM ", StringComparison.Ordinal) && item.Key.EndsWith(" specification ID", StringComparison.Ordinal)))
             results[key[..^" specification ID".Length]] = Describe(Data.Memory.FirstOrDefault(item => item.Match == value), value);
-        foreach (var (key, value) in identities.Where(item => item.Key.StartsWith("GPU ", StringComparison.Ordinal) && item.Key.EndsWith(" specification ID", StringComparison.Ordinal)))
+        foreach (var (key, value) in identities.Where(item => item.Key.StartsWith("GPU ", StringComparison.Ordinal) &&
+            !item.Key.Contains(" driver ", StringComparison.Ordinal) && item.Key.EndsWith(" specification ID", StringComparison.Ordinal)))
             results[key[..^" specification ID".Length]] = Describe(Data.Gpu.FirstOrDefault(item => item.Match == value), value);
+        foreach (var (key, value) in identities.Where(item => item.Key.StartsWith("GPU ", StringComparison.Ordinal) && item.Key.EndsWith(" driver specification ID", StringComparison.Ordinal)))
+            results[key[..^" specification ID".Length]] = Describe(Data.Driver.FirstOrDefault(item => item.Match == value), value);
         return results;
     }
 
@@ -40,6 +47,9 @@ internal static class ComponentBaselineCatalog
         public List<Baseline> Cpu { get; set; } = [];
         public List<Baseline> Memory { get; set; } = [];
         public List<Baseline> Gpu { get; set; } = [];
+        public List<Baseline> Motherboard { get; set; } = [];
+        public List<Baseline> Bios { get; set; } = [];
+        public List<Baseline> Driver { get; set; } = [];
     }
 
     private sealed class Baseline

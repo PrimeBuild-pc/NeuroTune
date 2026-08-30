@@ -10,9 +10,14 @@ public sealed class BackupService
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
     public static readonly string OperationsDirectory = Path.Combine(SettingsService.DataDirectory, "operations");
 
-    public OperationManifest Prepare(IEnumerable<OptimizationAction> actions)
+    public OperationManifest Prepare(IEnumerable<OptimizationAction> actions, Guid? operationId = null,
+        Guid? optimizationRunId = null)
     {
-        var manifest = new OperationManifest();
+        var manifest = new OperationManifest
+        {
+            Id = operationId ?? Guid.NewGuid(),
+            OptimizationRunId = optimizationRunId
+        };
         manifest.DirectoryPath = Path.Combine(OperationsDirectory, $"{manifest.CreatedAt:yyyyMMdd-HHmmss}-{manifest.Id:N}");
         Directory.CreateDirectory(manifest.DirectoryPath);
         Save(manifest);
@@ -77,6 +82,29 @@ public sealed class BackupService
             })
             .Where(x => x is not null).Cast<OperationManifest>()
             .OrderByDescending(x => x.CreatedAt).ToList();
+    }
+
+    public OperationManifest? Load(Guid id)
+    {
+        if (id == Guid.Empty) throw new InvalidOperationException("The operation ID was invalid.");
+        if (!Directory.Exists(OperationsDirectory)) return null;
+        var paths = Directory.GetDirectories(OperationsDirectory)
+            .Where(path => Path.GetFileName(path).EndsWith($"-{id:N}", StringComparison.OrdinalIgnoreCase))
+            .Select(path => Path.Combine(path, "manifest.json")).Where(File.Exists).ToList();
+        if (paths.Count == 0) return null;
+        if (paths.Count > 1) throw new InvalidOperationException("Multiple operation journals use the same ID.");
+        try
+        {
+            var manifest = JsonSerializer.Deserialize<OperationManifest>(File.ReadAllText(paths[0]))
+                ?? throw new JsonException("The operation journal was empty.");
+            manifest.DirectoryPath = Path.GetDirectoryName(paths[0])!;
+            if (manifest.Id != id) throw new InvalidOperationException("The operation journal ID does not match its directory.");
+            return manifest;
+        }
+        catch (Exception exception)
+        {
+            throw new InvalidOperationException($"The operation journal is corrupt: {paths[0]}", exception);
+        }
     }
 
     private static bool RestorePointExists(string description)

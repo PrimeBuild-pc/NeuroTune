@@ -160,10 +160,16 @@ public sealed class CoreTests
         {
             ["CPU specification ID"] = "AuthenticAMD-25-21-2",
             ["CPU model"] = "AMD Ryzen 7 5800X3D 8-Core Processor",
-            ["GPU 1 specification ID"] = "VEN_1002&DEV_73A5&SUBSYS_05041043&REV_C0|AMD Radeon RX 6950 XT"
+            ["GPU 1 specification ID"] = "VEN_1002&DEV_73A5&SUBSYS_05041043&REV_C0|AMD Radeon RX 6950 XT",
+            ["GPU 1 driver specification ID"] = "VEN_1002&DEV_73A5&SUBSYS_05041043&REV_C0|32.0.21045.5002",
+            ["Motherboard"] = "Micro-Star International Co., Ltd.|MPG X570 GAMING EDGE WIFI (MS-7C37)|1.0",
+            ["BIOS"] = "American Megatrends International, LLC.|1.S1"
         });
         StringAssert.Contains(amd["CPU"], "100-100000651WOF");
         StringAssert.Contains(amd["GPU 1"], "PCI 1002:73A5");
+        StringAssert.Contains(amd["Motherboard"], "MSI MS-7C37");
+        StringAssert.StartsWith(amd["BIOS"], "Baseline unavailable");
+        StringAssert.StartsWith(amd["GPU 1 driver"], "Baseline unavailable");
     }
 
     [TestMethod]
@@ -290,8 +296,8 @@ public sealed class CoreTests
     {
         var catalog = new OptimizationCatalog();
 
-        Assert.HasCount(25, catalog.All);
-        Assert.HasCount(25, catalog.Definitions.Select(item => item.Id).Distinct(StringComparer.OrdinalIgnoreCase));
+        Assert.IsGreaterThanOrEqualTo(27, catalog.All.Count);
+        Assert.AreEqual(catalog.All.Count, catalog.Definitions.Select(item => item.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count());
         Assert.IsTrue(catalog.All.All(action => action is IReversibleAction));
         Assert.IsTrue(catalog.Definitions.All(definition => definition.SupportedWindowsBuilds.SequenceEqual(["Windows 11"])));
         Assert.IsTrue(catalog.Definitions.All(definition =>
@@ -341,10 +347,24 @@ public sealed class CoreTests
             "gaming.game-dvr-on", "gaming.game-dvr-off", "gaming.game-dvr-default",
             "gaming.app-capture-on", "gaming.app-capture-off", "gaming.app-capture-default",
             "system.visual-effects", "system.visual-effects-default", "system.visual-effects-appearance",
+            "system.core-parking-off", "system.pagefile-managed-sizes",
             "system.bcd-timer-default", "system.bcd-resource-default"
         }) Assert.Contains(id, ids);
         Assert.IsFalse(ids.Any(id => new[] { "defender", "firewall", "uac", "hpet" }
             .Any(forbidden => id.Contains(forbidden, StringComparison.OrdinalIgnoreCase))));
+    }
+
+    [TestMethod]
+    public void Page_file_summary_distinguishes_global_per_volume_and_fixed_management()
+    {
+        Assert.AreEqual(@"D:\pagefile.sys", OptimizationCatalog.ParsePageFileEntry(@"D:\pagefile.sys 0 0").Path);
+        Assert.IsNull(OptimizationCatalog.ParsePageFileEntry(@"D:\pagefile.sys 999999999999 999999999999").InitialSize);
+        Assert.AreEqual(
+            "Windows-managed-global=False; configured=2; system-managed=1; fixed=1; form-factor=desktop",
+            SystemProfiler.SummarizePageFiles(false, [@"D:\pagefile.sys 0 0", @"E:\pagefile.sys 4096 8192"], "desktop"));
+        Assert.AreEqual(
+            "Windows-managed-global=True; configured=1; system-managed=1; fixed=0; form-factor=laptop",
+            SystemProfiler.SummarizePageFiles(true, [@"?:\pagefile.sys"], "laptop"));
     }
 
     [TestMethod]
@@ -427,6 +447,12 @@ public sealed class CoreTests
         Assert.IsTrue(new Uri(exact.OfficialUrl).Host.EndsWith("nvidia.com", StringComparison.OrdinalIgnoreCase));
         Assert.ThrowsExactly<InvalidOperationException>(() => new OfficialUpdateAdvisor([new OfficialUpdateRecord(
             UpdateComponentKind.GpuDriver, "NVIDIA", "Example GPU", "3.0", "https://evil.example/driver")]));
+
+        var pinned = new OfficialUpdateAdvisor().AnalyzeComponents([
+            new(UpdateComponentKind.GpuDriver, "AMD", "AMD Radeon RX 6950 XT", "32.0.21045.5002")]).Single();
+        Assert.AreEqual(UpdateComparisonStatus.Current, pinned.Status);
+        Assert.AreEqual("32.0.21045.5002", pinned.LatestVersion);
+        Assert.AreEqual("www.amd.com", new Uri(pinned.OfficialUrl).Host);
     }
 
     [TestMethod]
@@ -437,6 +463,67 @@ public sealed class CoreTests
         Assert.IsTrue(OfficialUpdateAdvisor.TryCompareVersions("2.1", "2.1.0", out var equal));
         Assert.AreEqual(0, equal);
         Assert.IsFalse(OfficialUpdateAdvisor.TryCompareVersions("E7C37AMS.1Q0", "E7C37AMS.1R0", out _));
+    }
+
+    [TestMethod]
+    public void Per_app_gpu_capabilities_use_only_a_durable_opaque_target_id()
+    {
+        var path = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "Example Game.exe"));
+        var target = new GameGpuTarget(GameGpuTargetStore.CreateId(path), Path.GetFileName(path), path);
+        var actions = OptimizationCatalog.PerAppGpuPreferences(target).ToList();
+
+        Assert.HasCount(3, actions);
+        Assert.IsTrue(actions.All(action => action.Id.Contains(target.Id, StringComparison.Ordinal) &&
+            !action.Id.Contains("Example", StringComparison.OrdinalIgnoreCase) && !action.Description.Contains(path, StringComparison.OrdinalIgnoreCase)));
+        CollectionAssert.AreEquivalent(new[] { "high", "saving", "default" }, actions.Select(action => action.Id.Split('.').Last()).ToList());
+    }
+
+    [TestMethod]
+    public void Corrupt_per_app_gpu_target_cache_is_quarantined_instead_of_bricking_the_catalog()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"neurotune-gpu-targets-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var path = Path.Combine(directory, "game-gpu-targets.json");
+            File.WriteAllText(path, "not-json");
+
+            Assert.IsEmpty(GameGpuTargetStore.LoadFrom(path));
+            Assert.IsFalse(File.Exists(path));
+            Assert.HasCount(1, Directory.GetFiles(directory, "game-gpu-targets.json.corrupt-*"));
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
+    [TestMethod]
+    public void Planner_protocol_accepts_only_bounded_registered_nonrepeated_evidence_requests()
+    {
+        var turn = PlannerProtocol.Parse("""
+            {"kind":"requestEvidence","evidenceIds":["gaming:Game Mode","system:cpu","gaming:Game Mode"]}
+            """);
+        var available = new Dictionary<string, string>
+        {
+            ["gaming:Game Mode"] = "1",
+            ["system:cpu"] = "CPU"
+        };
+
+        CollectionAssert.AreEqual(new[] { "gaming:Game Mode", "system:cpu" },
+            PlannerProtocol.ValidateRequest(turn, available, new Dictionary<string, string>()).ToArray());
+        Assert.ThrowsExactly<InvalidOperationException>(() => PlannerProtocol.ValidateRequest(
+            turn, available, new Dictionary<string, string> { ["system:cpu"] = "CPU" }));
+        Assert.ThrowsExactly<InvalidOperationException>(() => PlannerProtocol.Parse(
+            $$"""{"kind":"requestEvidence","evidenceIds":{{System.Text.Json.JsonSerializer.Serialize(Enumerable.Range(0, PlannerProtocol.MaxEvidencePerTurn + 1).Select(index => $"id:{index}"))}}}"""));
+    }
+
+    [TestMethod]
+    public void Planner_protocol_keeps_the_diagnosis_inside_the_typed_envelope()
+    {
+        var turn = PlannerProtocol.Parse("""
+            {"kind":"diagnosis","diagnosis":{"summary":"Checked","findings":[],"recommendations":[],"consentQuestion":"Continue?"}}
+            """);
+
+        Assert.AreEqual(PlannerTurnKind.Diagnosis, turn.Kind);
+        Assert.AreEqual("Checked", LlmClient.ParseDiagnosis(turn.DiagnosisJson, new OptimizationCatalog()).Summary);
     }
 
     [TestMethod]
@@ -478,6 +565,8 @@ public sealed class CoreTests
 
         Assert.IsTrue(manifest.HasPendingRollback);
         manifest.Status = "Completed";
+        Assert.IsTrue(manifest.HasPendingRollback);
+        manifest.Actions[0].RolledBack = true;
         Assert.IsFalse(manifest.HasPendingRollback);
     }
 

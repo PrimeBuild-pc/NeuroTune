@@ -54,6 +54,13 @@ public sealed class SystemProfile
     public List<string> RelevantDrivers { get; set; } = [];
     public List<string> DeviceIssues { get; set; } = [];
     public List<string> SoftwareSignals { get; set; } = [];
+    public List<string> DetectedLaunchers { get; set; } = [];
+    public List<string> DetectedGames { get; set; } = [];
+    public List<string> GameExecutables { get; set; } = [];
+    public List<string> GraphicsApiSignals { get; set; } = [];
+    public List<string> PerAppGpuPreferences { get; set; } = [];
+    public List<string> DisplayTopology { get; set; } = [];
+    public List<string> ActiveGpuMappings { get; set; } = [];
     public List<ScanPhase> ScanPhases { get; set; } = [];
     public List<string> TopProcesses { get; set; } = [];
     public List<string> StartupItems { get; set; } = [];
@@ -251,6 +258,7 @@ public sealed class OperationManifest
 {
     public int SchemaVersion { get; set; } = 2;
     public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid? OptimizationRunId { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
     public string Status { get; set; } = "Preparing";
     public string RestorePoint { get; set; } = "";
@@ -263,8 +271,5 @@ public sealed class OperationManifest
     public string DirectoryPath { get; set; } = "";
 
     [JsonIgnore]
-    public bool HasPendingRollback => Actions.Any(x => (x.Attempted || x.Applied) && !x.RolledBack) &&
-        (Status is "Preparing" or "Applying" or "Rolling back" or "Preparazione" or "Applicazione" ||
-         Status.Contains("incomplet", StringComparison.OrdinalIgnoreCase) ||
-         Status.Contains("in corso", StringComparison.OrdinalIgnoreCase));
+    public bool HasPendingRollback => Actions.Any(x => (x.Attempted || x.Applied) && !x.RolledBack);
 }

@@ -4,6 +4,7 @@ public enum MeasurementLabel { Baseline, Candidate }
 public enum MeasurementSessionState { Prepared, Recording, Captured, Analyzing, Completed, Cancelled, Failed }
 public enum ComparisonLevel { Exploratory, Repeated }
 public enum ComparisonOutcome { Improvement, Regression, Inconclusive }
+public enum ComparisonDecision { InsufficientEvidence, Keep, Rollback }
 
 public sealed record MeasurementWorkload(int ProcessId, string Name, DateTimeOffset StartTimeUtc, string Description);
 
@@ -11,6 +12,7 @@ public sealed class MeasurementSession
 {
     public int SchemaVersion { get; init; } = 1;
     public Guid Id { get; init; }
+    public Guid? OptimizationRunId { get; init; }
     public int ProcessId { get; init; }
     public string ProcessName { get; init; } = "";
     public DateTimeOffset ProcessStartTimeUtc { get; init; }
@@ -23,6 +25,8 @@ public sealed class MeasurementSession
     public DateTimeOffset? CapturedAtUtc { get; set; }
     public string HardwareFingerprint { get; init; } = "";
     public string ConfigurationFingerprint { get; init; } = "";
+    public double? ThermalCelsius { get; init; }
+    public double? CpuPerformancePercent { get; init; }
     public string InstanceName { get; init; } = "";
     public TraceReport? Report { get; set; }
     public string? Error { get; set; }
@@ -73,6 +77,18 @@ public sealed record DiagnosticObservation(
     string VerifiableHypothesis,
     string Confidence);
 
+public sealed record FrameTimeMetrics(
+    string Source,
+    long SampleCount,
+    double CapturedDurationMilliseconds,
+    double AverageFps,
+    double OnePercentLowFps,
+    double P50Milliseconds,
+    double P95Milliseconds,
+    double P99Milliseconds,
+    long StutterCount,
+    IReadOnlyList<string> PresentModes);
+
 public sealed class TraceReport
 {
     public int SchemaVersion { get; init; } = 1;
@@ -83,6 +99,7 @@ public sealed class TraceReport
     public IReadOnlyList<InterruptMetrics> Interrupts { get; init; } = [];
     public IReadOnlyList<ProcessorMetrics> Processors { get; init; } = [];
     public IReadOnlyList<ThreadSchedulingMetrics> Threads { get; init; } = [];
+    public FrameTimeMetrics? FrameTimes { get; init; }
     public IReadOnlyList<DiagnosticObservation> Observations { get; init; } = [];
 }
 
@@ -102,6 +119,8 @@ public sealed class MeasurementComparison
     public IReadOnlyList<Guid> CandidateSessionIds { get; init; } = [];
     public IReadOnlyList<ComparisonMetric> Metrics { get; init; } = [];
     public IReadOnlyList<string> RejectionReasons { get; init; } = [];
+    public ComparisonDecision Recommendation { get; init; }
+    public string RecommendationReason { get; init; } = "";
 }
 
 public sealed record MeasurementStartRequest(
@@ -109,10 +128,13 @@ public sealed record MeasurementStartRequest(
     DateTimeOffset ProcessStartTimeUtc,
     MeasurementLabel Label,
     int DurationSeconds = 180,
-    bool KeepRawTrace = false);
+    bool KeepRawTrace = false,
+    Guid? OptimizationRunId = null);
 
-public sealed record MeasurementIdRequest(Guid SessionId);
-public sealed record MeasurementCompareRequest(IReadOnlyList<Guid> BaselineSessionIds, IReadOnlyList<Guid> CandidateSessionIds);
+public sealed record MeasurementIdRequest(Guid SessionId, Guid? OptimizationRunId = null);
+public sealed record FrameTimeImportRequest(Guid SessionId, string Csv, Guid? OptimizationRunId = null);
+public sealed record MeasurementCompareRequest(IReadOnlyList<Guid> BaselineSessionIds, IReadOnlyList<Guid> CandidateSessionIds,
+    Guid? OptimizationRunId = null);
 
 public sealed record CpuTopologyEntry(
     ushort ProcessorGroup,
