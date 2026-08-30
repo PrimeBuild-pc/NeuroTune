@@ -5,7 +5,9 @@ Use a disposable Windows virtual machine. Do not use a primary PC for the first 
 ## Prerequisites
 
 - A currently supported Windows 11 build, x64
-- A VM checkpoint created outside the guest operating system
+- A VM checkpoint created outside the guest operating system, unless a
+  supervised, already-running existing guest is run with
+  `-SkipCheckpointRestore`
 - System Protection enabled on the Windows drive
 - Administrator access
 - A low-value test API key, an OpenRouter account, or a disposable local model endpoint
@@ -43,17 +45,31 @@ Use a disposable Windows virtual machine. Do not use a primary PC for the first 
 
 ## 4. Apply and Roll Back
 
-1. Select one low-risk action.
-2. Apply it and confirm that NeuroTune reports a completed operation.
+1. Create an Optimization Run, record three matching quality-valid Baselines,
+   and select one low-risk approved action.
+2. Apply it and confirm that NeuroTune reports a completed operation linked to
+   the same run ID.
 3. Verify that the operation directory contains `manifest.json` and Registry exports where applicable.
 4. Confirm that a restore point with the NeuroTune operation ID exists in Windows.
-5. Review the before/after observations; treat them as telemetry, not a benchmark.
-6. Select the operation in Activity & Restore and run rollback.
-7. Confirm that the action returns to its original state and the manifest reports **Rollback completed**.
+5. If the run requires a restart, restart Windows and verify the restart gate
+   before continuing.
+6. Record three matching quality-valid Candidates and compare the exact 3+3
+   sessions. Confirm drift or invalid quality blocks the decision gate.
+7. Review the automatic recommendation, choose **Keep candidate**, and confirm
+   `run-keep` completes only after the accepted repeated comparison.
+8. With no other active run, select the kept operation in Activity & Restore
+   and run rollback using its original run ID.
+9. Confirm that the action returns to its original state, the manifest reports
+   **Rollback completed**, and the kept run is terminal with a Rollback decision.
+10. Repeat with a second run and choose Rollback directly at the decision gate.
 
 ## 5. Recovery
 
-In a disposable VM only, terminate NeuroTune while an operation is marked **Applying**. Restart it and confirm that the recovery banner identifies the interrupted journal and allows rollback.
+In a disposable VM only, terminate NeuroTune while an operation is marked
+**Applying**. Restart it, reconcile the same run ID, and confirm that the
+recovery path identifies the interrupted journal. Retry rollback with the same
+run and operation IDs, then verify the matching operation alone was restored.
+Repeat while **Rolling back** and confirm the retry is idempotent.
 
 ## 6. ETW Measurements
 
@@ -113,8 +129,23 @@ deletes all created sessions, and writes a redacted report to
 more than one physical AMD/NVIDIA adapter. A successful run validates only
 that exact GPU, driver, game, tester-declared graphics API, and Windows build.
 
-For the slower per-action Registry integrity pass, run scripts/vm-action-integrity.ps1 with InstallerPath set to the same final installer. It creates real restore points, validates mixed Registry value kinds and absent values, and restores the selected clean Hyper-V checkpoint in a finally block.
+For the slower per-action integrity pass, run scripts/vm-action-integrity.ps1
+with InstallerPath set to the same final installer. It creates real restore
+points and validates mixed Registry value kinds, absent values, page-file
+multi-strings, core-parking power settings, and dynamic per-app GPU preferences.
+By default it restores the selected clean Hyper-V checkpoint in a finally
+block. Use `-SkipCheckpointRestore` only for a supervised existing guest; in
+that mode the script captures and restores each seeded state directly.
 
-Provisioning refuses to overwrite an existing VM or VM directory. Validation restores Clean-NeuroTune-Alpha2, so use it only with the disposable NeuroTune-W11 guest created for this project.
+Provisioning refuses to overwrite an existing VM or VM directory. Validation
+restores `Clean-NeuroTune-Alpha2` by default, so use it only with the disposable
+`NeuroTune-W11` guest created for this project. Passing
+`-SkipCheckpointRestore` never creates, deletes, or merges checkpoints.
 
-The automated validation report covers installation, the validated baseline action apply/verify/rollback cycle, interrupted Apply and Rollback recovery, orphan-process checks, Defender, PawnIO absence, and clean uninstall. The page-file, core-parking, and dynamic per-app GPU writers remain explicitly pending until the repaired disposable VM is available. Scaling, keyboard navigation, forced-colors, physical sensors, SPD/XMP/EXPO, and real-GPU HAGS remain manual or physical-hardware checks.
+The 2026-08-31 automated Windows 11 reports cover installation, 16 targeted
+writer round trips (including page file, core parking, and per-app GPU
+high/default), interrupted Apply and Rollback recovery, orphan-process checks,
+Defender, PawnIO absence, HVCI configuration, and clean uninstall. The complete
+current-action sweep, per-app GPU power-saving case, scaling, keyboard
+navigation, forced colors, physical sensors, SPD/XMP/EXPO, and real-GPU HAGS
+remain manual or physical-hardware checks.

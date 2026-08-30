@@ -10,9 +10,9 @@ or validation report.
 | Field | Value |
 |---|---|
 | Target | Next AI-harness alpha |
-| Branch | `main` |
+| Branch | `codex/ai-optimization-harness-20260830` |
 | Current milestone | M10 — AI optimization harness validation |
-| Last verified baseline | `8810ab5`; Windows 11 build 26200 ETW smoke report, 2026-08-14 |
+| Last verified baseline | `fae4c79`; PR #10 CI plus committed Windows 11 build 26200 writer/recovery reports, 2026-08-31 |
 | Distribution | unsigned NSIS plus portable ZIP, GitHub/Discord |
 | License | MIT, copyright PrimeBuild |
 | Repository visibility | private until the full-history privacy/secret audit passes |
@@ -103,15 +103,12 @@ execution, verification, rollback, and measurement quality.
 
 ### Current validation blockers
 
-- The new page-file, core-parking, and dynamic per-app GPU writers still need
-  the disposable Windows 11 Inspect/Apply/Verify/Rollback and interrupted-write
-  matrix. They are implemented but are not considered release-validated; the
-  configured `NeuroTune-W11` VM now exposes two duplicate
-  `Clean-NeuroTune-Alpha2` checkpoint objects (parent/child), but `Start-VM`
-  still fails with Hyper-V `object not found`; VMMS logs `0x80070037`/data-folder
-  unavailable and the configured disk/previous checkpoint state includes an
-  orphaned AVHDX chain. Checkpoints and AVHDX files remain untouched pending
-  supervised VM repair.
+- The existing `NeuroTune-W11` VM on `D:` was repaired and registered in place
+  without copying its disks or modifying its AVHDX/checkpoint chain. On Windows
+  11 build 26200, 16 targeted writer round trips passed, including page file,
+  core parking, and per-app GPU high/default; interrupted Apply and Rollback
+  recovery also passed with the exact run ID. P5 remains open for the complete
+  current-action sweep and per-app GPU power-saving case.
 - Physical repeated DirectX validation still needs supported AMD and NVIDIA
   hosts; one local AMD machine cannot establish the two-vendor matrix.
 - Scaling, Narrator, forced-colors, keyboard-only, and final recovery UX checks
@@ -171,7 +168,7 @@ execution, verification, rollback, and measurement quality.
 | M7 | Optional imported benchmark evidence and researched sources | Planned | Deferred until the planner and advisor are stable |
 | M8 | ETW Measurement Alpha | In validation | `1bf387c`, `8810ab5`; three of three valid watchdog captures on Windows 11 build 26200, zero lost events, no raw ETL or WPR orphan; physical DirectX matrix remains |
 | M9 | GPU IRQ closed-loop | In progress | Read-only CPU-set/PnP topology, exact current-policy snapshot, and opaque three-candidate preview implemented; writer, restart, Keep/Rollback, driver matrix, and AI candidate selection remain gated |
-| M10 | AI optimization harness | In validation | Working tree 2026-08-30; 60 .NET tests, 7 UI tests, 2 Rust tests, Release builds, lint/typecheck, no NuGet vulnerabilities, unsigned NSIS/portable ZIP/checksums and release metadata verified; independent Claude Code reviews via Herdr |
+| M10 | AI optimization harness | In validation | `fae4c79`, PR #10; CI passed; 60 .NET tests, 7 UI tests, 2 Rust tests, Release builds, lint/typecheck, unsigned NSIS/portable ZIP/checksums, committed Windows 11 writer/recovery reports; independent Claude Code reviews via Herdr |
 
 ## M8 — ETW Measurement Alpha
 
