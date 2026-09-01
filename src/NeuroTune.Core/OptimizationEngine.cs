@@ -13,7 +13,8 @@ public sealed class OptimizationEngine
         _performance = performance ?? new PerformanceSnapshotService();
     }
 
-    public Task<OperationManifest> ApplyAsync(IEnumerable<string> actionIds, bool highRiskConfirmed = false) => Task.Run(() =>
+    public Task<OperationManifest> ApplyAsync(IEnumerable<string> actionIds, bool highRiskConfirmed = false,
+        Guid? operationId = null, Guid? optimizationRunId = null) => Task.Run(() =>
     {
         var actions = actionIds.Distinct(StringComparer.OrdinalIgnoreCase).Select(_catalog.Get).ToList();
         if (actions.Count == 0) throw new InvalidOperationException("Select at least one optimization.");
@@ -32,7 +33,7 @@ public sealed class OptimizationEngine
         try
         {
             var before = _performance.Collect();
-            var manifest = _backup.Prepare(actions);
+            var manifest = _backup.Prepare(actions, operationId, optimizationRunId);
             manifest.Before = before;
             try
             {

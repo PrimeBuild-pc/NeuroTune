@@ -1,0 +1,20 @@
+{
+    "generatedAt":  "2026-08-30T22:45:10.6826682+00:00",
+    "installerSha256":  "8D33E53E0CDEBA56C09303C8E082F1BB68DDEDD25AAD06D96F80D1F829B79465",
+    "checkpoint":  "Clean-NeuroTune-Alpha2",
+    "results":  [
+                    {
+                        "windows":  "Microsoft Windows 11 Pro",
+                        "build":  "10.0.26200.0",
+                        "version":  "0.7.0-alpha.1",
+                        "actionCount":  12,
+                        "applyVerifyRollback":  "passed",
+                        "crashApplyRecovery":  "passed",
+                        "crashRollbackRecovery":  "passed",
+                        "pawnIoService":  "absent",
+                        "uninstall":  "passed",
+                        "defender":  "no-detection",
+                        "hvciConfigured":  1
+                    }
+                ]
+}

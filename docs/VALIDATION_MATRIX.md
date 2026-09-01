@@ -6,19 +6,20 @@
 |---|---|---|---|
 | Gen 2, UEFI, Secure Boot, vTPM | required | required | n/a |
 | Memory Integrity | enabled and recorded | recorded when available | required before driver experiments |
-| v0.6.0-alpha.1 NSIS per-machine install, launch, version, Defender, uninstall | passed on build 26200 | passed on build 19045 after clean reinstall | installer SHA-256 `8E449C97A327E4C5700D602FDCA61102C8A562F72493D59918318D831D142076` |
-| v0.6.0-alpha.1 legacy 12-action apply/verify/rollback and crash recovery | passed | passed | high-risk confirmation supplied explicitly by the VM harness |
+| v0.7.0-alpha.1 NSIS per-machine install, agent version, Defender, uninstall | passed on build 26200 | not repeated; v0.6 historical pass only | installer SHA-256 `8D33E53E0CDEBA56C09303C8E082F1BB68DDEDD25AAD06D96F80D1F829B79465` |
+| v0.7.0-alpha.1 run-aware apply/verify/rollback and interrupted Apply/Rollback recovery | passed | not repeated; v0.6 historical pass only | explicit `OptimizationRun`/`runId`; deterministic VM-only BaselineReady fixture; not a 3+3 quality-gate test |
 | v0.6.0-alpha.1 portable ZIP layout, agent response, and UI launch | passed on physical build 26200 | not repeated | complete ZIP contains UI, Agent, Telemetry, license, README, and release notes |
 | Scan cancellation / no orphan process tree | Rust fake-agent test plus VM checklist | same | optional |
-| All 25 registered actions: Inspect, Capture, Apply, Verify, exact Restore | passed on build 26200 | passed on build 19045 | repeat before stable release |
+| Writer integrity: Inspect, Capture, Apply, Verify, exact Restore | 16 targeted actions passed, including page file, core parking, and per-app GPU high/default | historical legacy pass | every-current-action sweep and per-app GPU power-saving remain open before stable release |
 | Crash while Applying and Rolling back | passed with deterministic VM-only delay hook, kill, history recovery, rollback | passed with the same harness | not required |
 | 100%, 150%, 200% scaling | 100% passed; 150%/200% blocked by Enhanced Session | manual visual pass | manual |
 | Keyboard-only, focus visibility, reduced motion, forced colors | manual plus CSS/semantic checks | manual plus CSS/semantic checks | manual |
 | SPD/XMP/EXPO, motherboard sensors, temperatures, real HAGS | unavailable | unavailable | required |
 | PawnIO install/HVCI/uninstall | deliberately excluded | deliberately excluded | disposable dedicated PC only after approval |
 | v0.7.0-alpha.1 ETW watchdog, analysis, quality, cleanup | 3/3 valid on build 26200; 0 lost events; no ETL or WPR orphan | not required | redacted physical DirectX harness available; AMD/NVIDIA runs pending |
+| Shareable hardware collector | Windows PowerShell 5.1 self-test passed; no-admin/offline/read-only contract | not required | AMD host report passed: 1 CPU, 16 CPU sets, 1 GPU, 11 relevant interrupt devices; NVIDIA reports pending |
 
-scripts/vm-provision.ps1 creates clean Hyper-V guests and DPAPI-protected credential files. scripts/vm-validation.ps1 restores the clean checkpoint, copies the installer with PowerShell Direct, runs the automated matrix, and writes a redacted JSON report. Neither script prints or commits guest passwords.
+scripts/vm-provision.ps1 creates clean Hyper-V guests and DPAPI-protected credential files. scripts/vm-validation.ps1 normally restores the clean checkpoint, copies the installer with PowerShell Direct, runs the automated matrix, and writes a redacted JSON report. `-SkipCheckpointRestore` is available for a supervised, already-running existing guest; the harness then restores every state it seeds instead of changing the checkpoint chain. Neither script prints or commits guest passwords.
 
 Windows 11 25H2 is used because it is the current ISO available in the lab. As
 of v0.7.0-alpha.1, NeuroTune supports only Microsoft-supported Windows 11 x64
@@ -30,22 +31,38 @@ and was replaced during v0.6 validation with a clean Windows 10 Pro 22H2
 installation. Those results remain reproducibility history only; the VM and
 its checkpoint are no longer required or maintained.
 
-The detailed Windows 11 integrity harness then exercised every action separately with deliberately mixed original Registry states (DWORD, QWORD, string, and absent values). All 12 passed Inspect, Apply, Verify, raw read-back, Registry export, apply/rollback restore points, exact value-and-kind rollback, and final manifest validation. The harness restored `Clean-NeuroTune-Alpha2` after completion.
+On 2026-08-31 the recovered in-place `NeuroTune-W11` guest on `D:` passed the
+v0.7 run-aware validation without copying the VM or modifying its checkpoint
+chain. `docs/validation/v0.7.0-alpha.1-windows11-writer-integrity.json`
+records 16 passed targeted
+actions and no failures, including Windows-managed page-file sizes, AC core
+parking, and dynamic per-app GPU high/default preferences. Each case passed
+Inspect, Apply, Verify, raw read-back, restore-point lookup, exact rollback,
+and terminal manifest checks.
+`docs/validation/v0.7.0-alpha.1-windows11-recovery.json` records successful
+install/version, run-aware apply/rollback, interrupted Apply and Rollback
+recovery, Defender, PawnIO absence, HVCI configuration, and uninstall.
+The writer harness asserts that its deterministic VM-only journal fixture
+reaches `BaselineReady`; it does not claim to validate a real ETW Baseline or
+the repeated 3+3 Keep gate, which remain separate tests.
 
 On 2026-08-02 the M2 capability probe repeated the exact-state round trip for
 all 25 registered actions, including the new Balanced plan, BCD timer/resource
 repair, and complementary
 default/on/off states for Game Mode, HAGS, Game DVR, app capture, and visual
 effects. Windows 10 Pro 22H2 build 19045 and Windows 11 build 26200 both passed
-all 25 cases at that time. A proposed Windows-managed-pagefile writer passed on Windows 10
-but failed on Windows 11 build 26200 and was therefore removed from the public
-catalog. The Windows 11 VM was temporarily started with 4 GB because the
+all 25 cases at that time. That historical result predates the current
+Windows-managed page-file, core-parking, and dynamic per-app GPU writers and does
+not replace the current v0.7 evidence above. The Windows 11 VM was temporarily started with 4 GB because the
 host disk could not allocate its 8 GB runtime-state file; the runner then shut
 it down and verified that its original 8 GB startup setting was restored.
 
 ## Manual accessibility acceptance
 
 Recorded Windows 11 result on 2026-08-02: the 100% scale pass completed without overlap or clipping. Windows blocked 150% and 200% changes because Hyper-V Connect was using an Enhanced/remote session, so those two results are not claimed. High Contrast and Reduced Motion remain optional manual follow-ups.
+The remaining supervised checks are intentionally deferred until the interface
+is closer to feature-complete; automated semantic and keyboard regressions stay
+in the regular test gate.
 
 At 100%, 150%, and 200% display scale:
 
@@ -57,3 +74,24 @@ At 100%, 150%, and 200% display scale:
 6. Print the review report and confirm interactive controls are omitted.
 
 VM automation cannot validate real sensor correctness, GPU scheduling on a passed-through GPU, or motherboard firmware state.
+
+## AMD/NVIDIA fleet intake
+
+`tools/hardware-collector/Collect-NeuroTune-HardwareReport.cmd` creates a dated
+JSON beside itself. It reads CIM, the 64-bit Registry view, and the Windows
+CPU-set API. It does not request elevation, access the network, start ETW, or
+change a setting, service, driver, device, or Registry value.
+
+Each report contains Windows/build/security status, non-serial platform model,
+CPU topology, GPU hardware/driver identity, and relevant display/network/audio/
+storage/USB-controller interrupt-policy snapshots. Raw PnP identifiers are
+replaced by random report-local device keys; user/computer names, serials,
+MAC/IP addresses, full paths, and Registry paths are excluded and checked
+before write.
+Existing interrupt masks are reduced to presence, Registry type, and byte
+length; the mask value itself is not exported.
+
+Fleet reports determine which physical fixtures deserve testing. They do not
+validate a performance gain or authorize automatic affinity changes. A device
+writer still requires exact capture/verify/restore, restart behavior, and
+repeatable 3+3 Baseline/Candidate evidence for the specific driver family.

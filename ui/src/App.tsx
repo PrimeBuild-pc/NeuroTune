@@ -10,7 +10,7 @@ import { agent, cancelAgent, newRequestId } from './agent';
 import { planKindLabel, scriptArtifactFilename, selectActionIdsForProfile } from './plan';
 import { applyTheme, loadThemePreference } from './theme';
 import type {
-  ConflictPattern, Diagnosis, OperationManifest, OptimizationAction, ProviderKind, ProviderSettings,
+  ConflictPattern, Diagnosis, OperationManifest, OptimizationAction, OptimizationRun, ProviderKind, ProviderSettings,
   GpuAffinityPolicySnapshot, GpuCandidateSet, MachineTopology, MeasurementComparison, MeasurementLabel, MeasurementSession, MeasurementWorkload, Recommendation,
   RiskProfile, ScanResult, ThemePreference, TuningGoals,
 } from './types';
@@ -67,6 +67,7 @@ function App() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [history, setHistory] = useState<OperationManifest[]>([]);
   const [measurementEvidenceIds, setMeasurementEvidenceIds] = useState<Set<string>>(new Set());
+  const [activeRun, setActiveRun] = useState<OptimizationRun>();
   const [busy, setBusy] = useState('');
   const [scanRequestId, setScanRequestId] = useState<string>();
   const activeScan = useRef<string | undefined>(undefined);
@@ -85,11 +86,19 @@ function App() {
       agent<{ settings: ProviderSettings; hasCredential: boolean }>('get-state'),
       agent<OptimizationAction[]>('actions'),
       agent<OperationManifest[]>('history'),
-    ]).then(([state, availableActions, operations]) => {
+      agent<OptimizationRun[]>('run-list'),
+    ]).then(async ([state, availableActions, operations, runs]) => {
       setProvider(state.settings);
       setHasCredential(state.hasCredential);
       setActions(availableActions);
       setHistory(operations);
+      const latest = runs.find(item => !['completed', 'failed'].includes(item.state));
+      let resumed = latest;
+      if (latest) {
+        try { resumed = await agent<OptimizationRun>('run-reconcile', { runId: latest.id }); }
+        catch (error) { showError(error); }
+      }
+      hydrateRun(resumed);
     }).catch(showError);
   }, []);
 
@@ -102,6 +111,19 @@ function App() {
 
   function showError(error: unknown) {
     setNotice({ tone: 'danger', text: error instanceof Error ? error.message : String(error) });
+  }
+
+  function hydrateRun(run?: OptimizationRun) {
+    setActiveRun(run);
+    if (!run) return;
+    setGoals(run.goals);
+    setDiagnosis(run.diagnosis);
+    setSelected(new Set(run.approvedActionIds));
+    setMeasurementEvidenceIds(new Set([...run.baselineSessionIds, ...run.candidateSessionIds]));
+    if (['applying', 'rollingBack', 'recoveryRequired'].includes(run.state)) setPage('activity');
+    else if (['baselinePending', 'restartPending', 'candidatePending', 'evaluating', 'decisionPending'].includes(run.state)) setPage('measurements');
+    else if (['baselineReady', 'approved'].includes(run.state)) setPage('review');
+    else setPage('scan');
   }
 
   async function run<T>(label: string, operation: () => Promise<T>): Promise<T | undefined> {
@@ -159,6 +181,10 @@ function App() {
   }
 
   async function scanSystem() {
+    if (activeRun && !['completed', 'failed'].includes(activeRun.state)) {
+      showError(new Error('Finish or recover the active optimization run before starting a new scan.'));
+      return;
+    }
     if (activeScan.current) return cancelScan();
     const requestId = newRequestId();
     activeScan.current = requestId;
@@ -170,6 +196,7 @@ function App() {
       setScan(result);
       setActions(result.actions);
       setDiagnosis(undefined);
+      setActiveRun(undefined);
       setSelected(new Set());
       setPage('scan');
       setNotice({ tone: 'success', text: 'Local scan complete. No profile was sent to an AI provider.' });
@@ -199,8 +226,19 @@ function App() {
     const conflicts = await run('Building the local objective-aware conflict graph…', () =>
       agent<ConflictPattern[]>('analyze-local', { profile: scan.profile, goals }));
     if (!conflicts) return;
+    const optimizationRun = activeRun && (activeRun.state === 'scanned' || activeRun.state === 'hypothesizing')
+      ? activeRun
+      : await run('Opening a recoverable optimization run…', () =>
+        agent<OptimizationRun>('run-create', {
+          profile: scan.profile, goals, measurementSessionIds: [...measurementEvidenceIds],
+        }));
+    if (!optimizationRun) return;
+    setActiveRun(optimizationRun);
     const result = await run('AI synthesis · checking every claim against local evidence…', () =>
-      agent<Diagnosis>('diagnose', { profile: scan.profile, goals, measurementSessionIds: [...measurementEvidenceIds] }));
+      agent<Diagnosis>('diagnose', {
+        profile: scan.profile, goals, measurementSessionIds: [...measurementEvidenceIds], runId: optimizationRun.id,
+      }));
+    hydrateRun(await agent<OptimizationRun>('run-get', { runId: optimizationRun.id }));
     setDiagnosis(result ?? {
       summary: 'The provider diagnosis failed, but the deterministic local conflict graph is still available.',
       findings: [], recommendations: [], conflicts,
@@ -217,13 +255,18 @@ function App() {
   }
 
   async function applyChanges() {
+    if (!activeRun || activeRun.state !== 'baselineReady') {
+      showError(new Error('A quality-valid Baseline in the active optimization run is required before apply.'));
+      return;
+    }
     const highRisk = actions.filter(action => selected.has(action.id) && action.risk === 'high').length;
     if (!selected.size || !window.confirm(`Apply ${selected.size} selected changes after creating a verified restore point?`)) return;
     if (highRisk && !window.confirm(`Separate high-risk confirmation: apply ${highRisk} HIGH RISK action(s)? Review evidence, side effects, and rollback notes before continuing.`)) return;
     const result = await run('Creating backups and applying verified changes…', () =>
-      agent<OperationManifest>('apply', { actionIds: [...selected], highRiskConfirmed: highRisk > 0 }));
+      agent<OperationManifest>('apply', { actionIds: [...selected], highRiskConfirmed: highRisk > 0, runId: activeRun.id }));
     if (result) {
       setHistory(current => [result, ...current]);
+      if (activeRun) setActiveRun(await agent<OptimizationRun>('run-get', { runId: activeRun.id }));
       setSelected(new Set());
       setPage('activity');
       setNotice({ tone: 'success', text: 'Operation completed. Restart Windows if a selected action requires it.' });
@@ -234,10 +277,12 @@ function App() {
 
   async function rollback(operationId: string) {
     if (!window.confirm('Create another restore point and restore this operation?')) return;
-    const result = await run('Restoring the saved system state…', () => agent<null>('rollback', { operationId }));
+    const runId = history.find(item => item.id === operationId)?.optimizationRunId;
+    const result = await run('Restoring the saved system state…', () => agent<null>('rollback', { operationId, runId }));
     if (result !== undefined) {
       setHistory(await agent<OperationManifest[]>('history'));
       setActions(await agent<OptimizationAction[]>('actions'));
+      if (runId) setActiveRun(await agent<OptimizationRun>('run-get', { runId }));
       setNotice({ tone: 'success', text: 'Rollback completed and verified.' });
     }
   }
@@ -272,8 +317,8 @@ function App() {
           {page === 'overview' && <Overview hasProvider={hasCredential || !provider.requiresApiKey} scan={scan} history={history} scanning={Boolean(scanRequestId)} onProvider={() => setPage('provider')} onScan={scanSystem}/>}
           {page === 'provider' && <ProviderPage provider={provider} apiKey={apiKey} hasCredential={hasCredential} models={models} onChoose={chooseProvider} onChange={setProvider} onKey={setApiKey} onSave={saveProvider} onLoadModels={loadModels} onBrowserSignIn={browserSignIn}/>}
           {page === 'scan' && <ScanPage scan={scan} diagnosis={diagnosis} goals={goals} scanning={Boolean(scanRequestId)} onGoals={setGoals} onScan={scanSystem} onDiagnose={diagnose}/>}
-          {page === 'measurements' && <MeasurementsPage evidenceIds={measurementEvidenceIds} onEvidenceIds={setMeasurementEvidenceIds}/>}
-          {page === 'review' && <ReviewPage diagnosis={diagnosis} actions={actions} recommendations={recommendations} selected={selected} riskProfile={goals.riskProfile} onToggle={id => setSelected(current => toggle(current, id))} onPreset={applyPreset} onApply={applyChanges}/>}
+          {page === 'measurements' && <MeasurementsPage evidenceIds={measurementEvidenceIds} onEvidenceIds={setMeasurementEvidenceIds} optimizationRun={activeRun} onRun={setActiveRun}/>}
+          {page === 'review' && <ReviewPage diagnosis={diagnosis} actions={actions} recommendations={recommendations} selected={selected} riskProfile={goals.riskProfile} canApply={activeRun?.state === 'baselineReady'} onToggle={id => setSelected(current => toggle(current, id))} onPreset={applyPreset} onApply={applyChanges}/>}
           {page === 'activity' && <ActivityPage history={history} onRefresh={async () => setHistory(await agent<OperationManifest[]>('history'))} onRollback={rollback}/>}
           {page === 'settings' && <SettingsPage theme={theme} onTheme={setTheme} telemetryConsent={telemetryConsent} onTelemetryConsent={value => {
             setTelemetryConsent(value);
@@ -296,7 +341,7 @@ function Overview({ hasProvider, scan, history, scanning, onProvider, onScan }: 
 function ProviderPage({ provider, apiKey, hasCredential, models, onChoose, onChange, onKey, onSave, onLoadModels, onBrowserSignIn }: { provider: ProviderSettings; apiKey: string; hasCredential: boolean; models: string[]; onChoose: (id: ProviderKind) => void; onChange: (value: ProviderSettings) => void; onKey: (value: string) => void; onSave: () => void; onLoadModels: () => void; onBrowserSignIn: () => void }) {
   const editable = provider.provider === 'custom' || provider.provider === 'local';
   return <div className="provider-layout">
-    <section className="section-card provider-picker"><div className="section-heading"><div><span className="eyebrow">Connection type</span><h3>Choose where inference runs</h3></div></div><div className="provider-list">{providers.map(item => <button key={item.id} className={provider.provider === item.id ? 'provider-option selected' : 'provider-option'} onClick={() => onChoose(item.id)}><item.icon size={20}/><div><strong>{item.name}</strong><span>{item.detail}</span></div>{provider.provider === item.id && <Check size={17}/>}</button>)}</div></section>
+    <section className="section-card provider-picker"><div className="section-heading"><div><span className="eyebrow">Connection type</span><h3>Choose where inference runs</h3></div></div><div className="provider-list">{providers.map(item => <button key={item.id} aria-pressed={provider.provider === item.id} className={provider.provider === item.id ? 'provider-option selected' : 'provider-option'} onClick={() => onChoose(item.id)}><item.icon size={20}/><div><strong>{item.name}</strong><span>{item.detail}</span></div>{provider.provider === item.id && <Check size={17}/>}</button>)}</div></section>
     <section className="section-card provider-form"><div className="section-heading"><div><span className="eyebrow">Provider details</span><h3>{provider.providerName}</h3></div><div className={hasCredential || !provider.requiresApiKey ? 'status-pill good' : 'status-pill'}>{hasCredential || !provider.requiresApiKey ? 'Credential ready' : 'Not connected'}</div></div>
       {provider.provider === 'openRouter' && <div className="oauth-panel"><div><LogIn size={20}/><div><strong>Sign in with OpenRouter</strong><span>Authorize in your browser. NeuroTune stores the issued key with DPAPI.</span></div></div><button className="secondary" onClick={onBrowserSignIn}>Continue in browser</button></div>}
       <div className="form-grid">
@@ -358,7 +403,7 @@ function GoalContextEditor({ goals, onGoals }: { goals: TuningGoals; onGoals: (v
   </details>;
 }
 
-function ReviewPage({ diagnosis, actions, recommendations, selected, riskProfile, onToggle, onPreset, onApply }: { diagnosis?: Diagnosis; actions: OptimizationAction[]; recommendations: Map<string, string>; selected: Set<string>; riskProfile: RiskProfile; onToggle: (id: string) => void; onPreset: (mode: RiskProfile | 'none') => void; onApply: () => void }) {
+function ReviewPage({ diagnosis, actions, recommendations, selected, riskProfile, canApply, onToggle, onPreset, onApply }: { diagnosis?: Diagnosis; actions: OptimizationAction[]; recommendations: Map<string, string>; selected: Set<string>; riskProfile: RiskProfile; canApply: boolean; onToggle: (id: string) => void; onPreset: (mode: RiskProfile | 'none') => void; onApply: () => void }) {
   const [view, setView] = useState<'recommended' | 'conflicts' | 'all'>('recommended');
   if (!diagnosis) return <EmptyState icon={Bot} title="No diagnosis yet" text="Scan the PC, choose your priorities, and ask the configured model for an evidence-backed diagnosis."/>;
   const conflictActionIds = new Set(diagnosis.conflicts.flatMap(conflict => conflict.suggestedActionIds));
@@ -373,11 +418,11 @@ function ReviewPage({ diagnosis, actions, recommendations, selected, riskProfile
     {visible.length > 0 ? <div className="action-list">{visible.map(action => { const related = diagnosis.conflicts.filter(conflict => conflict.suggestedActionIds.includes(action.id)).map(conflict => conflict.title); const reason = recommendations.get(action.id) ?? (related.join(' · ') || 'Registered reversible capability; not selected by this diagnosis.'); return <button key={action.id} aria-pressed={selected.has(action.id)} className={`action-card ${selected.has(action.id) ? 'selected' : ''} ${!action.availability.canApply ? 'disabled' : ''}`} disabled={!action.availability.canApply} onClick={() => onToggle(action.id)}><span className="check-box">{selected.has(action.id) && <Check size={15}/>}</span><div className="action-main"><div><strong>{action.name}</strong>{action.requiresRestart && <span className="tag">Restart</span>}</div><p>{action.description}</p><small>{reason}</small></div><div className="action-meta"><span className={`risk ${action.risk}`}>{action.risk} risk</span><strong>{action.availability.status}</strong><small>Current: {action.availability.currentValue}</small></div></button>; })}</div> : <section className="section-card no-fixes"><ShieldCheck size={22}/><div><strong>No executable capability in this view.</strong><p>Manual guidance and scripts remain visible above but cannot enter the apply transaction.</p></div></section>}
     {selectedHighRisk > 0 && <div className="high-risk-warning" role="alert"><ShieldCheck size={19}/><span><strong>{selectedHighRisk} high-risk action(s) selected</strong><small>They remain selectable, but require an additional explicit confirmation before backup and execution.</small></span></div>}
     <section className="consent-card"><Bot size={20}/><div><span className="eyebrow">Model request</span><strong>{diagnosis.consentQuestion}</strong><small>Only selected registered actions enter the verified backup/apply/rollback transaction.</small></div></section>
-    <div className="sticky-apply"><div><strong>{selected.size} changes selected</strong><span>A verified restore point and Registry exports are mandatory.</span></div><button className="primary" disabled={!selected.size} onClick={onApply}><ShieldCheck size={17}/>Back up & apply selected</button></div>
+    <div className="sticky-apply"><div><strong>{selected.size} changes selected</strong><span>{canApply ? 'A verified restore point and Registry exports are mandatory.' : 'Record and analyze a quality-valid Baseline before applying changes.'}</span></div><button className="primary" disabled={!selected.size || !canApply} onClick={onApply}><ShieldCheck size={17}/>Back up & apply selected</button></div>
   </div>;
 }
 
-function MeasurementsPage({ evidenceIds, onEvidenceIds }: { evidenceIds: Set<string>; onEvidenceIds: (value: Set<string>) => void }) {
+function MeasurementsPage({ evidenceIds, onEvidenceIds, optimizationRun, onRun }: { evidenceIds: Set<string>; onEvidenceIds: (value: Set<string>) => void; optimizationRun?: OptimizationRun; onRun: (value: OptimizationRun) => void }) {
   const [workloads, setWorkloads] = useState<MeasurementWorkload[]>([]);
   const [sessions, setSessions] = useState<MeasurementSession[]>([]);
   const [selectedProcessId, setSelectedProcessId] = useState('');
@@ -421,6 +466,10 @@ function MeasurementsPage({ evidenceIds, onEvidenceIds }: { evidenceIds: Set<str
     }).catch(error => setMessage(String(error)));
   }, []);
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
+  useEffect(() => {
+    if (optimizationRun?.state === 'baselinePending' || optimizationRun?.state === 'baselineReady') setLabel('baseline');
+    if (optimizationRun?.state === 'candidatePending') setLabel('candidate');
+  }, [optimizationRun?.state]);
 
   const active = sessions.find(item => item.state === 'recording');
   const focused = sessions.find(item => item.id === focusedId) ?? sessions[0];
@@ -437,24 +486,49 @@ function MeasurementsPage({ evidenceIds, onEvidenceIds }: { evidenceIds: Set<str
     const workload = workloads.find(item => String(item.processId) === selectedProcessId);
     if (!workload) return;
     await execute('Starting the named WPR session…', async () => {
-      const session = await agent<MeasurementSession>('measurement-start', { processId: workload.processId, processStartTimeUtc: workload.startTimeUtc, label, durationSeconds, keepRawTrace });
+      const session = await agent<MeasurementSession>('measurement-start', { processId: workload.processId, processStartTimeUtc: workload.startTimeUtc, label, durationSeconds, keepRawTrace, optimizationRunId: optimizationRun?.id });
       setFocusedId(session.id);
     });
   }
   async function analyze(id: string) {
     const requestId = newRequestId(); analysisRequest.current = requestId;
     await execute('Analyzing the ETL locally…', async () => {
-      try { await agent<MeasurementSession>('measurement-analyze', { sessionId: id }, requestId); }
+      try {
+        const session = await agent<MeasurementSession>('measurement-analyze', { sessionId: id, optimizationRunId: sessions.find(item => item.id === id)?.optimizationRunId }, requestId);
+        if (session.optimizationRunId) onRun(await agent<OptimizationRun>('run-get', { runId: session.optimizationRunId }));
+      }
       catch (error) { if (!String(error).includes('Agent request cancelled')) throw error; }
       finally { analysisRequest.current = undefined; }
     });
   }
+  async function importFrameTimes(file: File) {
+    if (!focused) return;
+    const csv = await file.text();
+    await execute('Aggregating PresentMon frame times locally…', async () => {
+      const session = await agent<MeasurementSession>('measurement-frame-import', {
+        sessionId: focused.id,
+        csv,
+        optimizationRunId: optimizationRun &&
+          (optimizationRun.baselineSessionIds.includes(focused.id) || optimizationRun.candidateSessionIds.includes(focused.id))
+          ? optimizationRun.id : focused.optimizationRunId,
+      });
+      if (session.optimizationRunId) onRun(await agent<OptimizationRun>('run-get', { runId: session.optimizationRunId }));
+    });
+  }
   async function compare() {
-    const chosen = sessions.filter(item => compareIds.has(item.id));
-    await execute('Comparing normalized session metrics…', async () => setComparison(await agent<MeasurementComparison>('measurement-compare', {
-      baselineSessionIds: chosen.filter(item => item.label === 'baseline').map(item => item.id),
-      candidateSessionIds: chosen.filter(item => item.label === 'candidate').map(item => item.id),
-    })));
+    const chosen = optimizationRun?.state === 'candidatePending'
+      ? sessions.filter(item => optimizationRun.baselineSessionIds.includes(item.id) || optimizationRun.candidateSessionIds.includes(item.id))
+      : sessions.filter(item => compareIds.has(item.id));
+    await execute('Comparing normalized session metrics…', async () => {
+      const result = await agent<MeasurementComparison>('measurement-compare', {
+        baselineSessionIds: chosen.filter(item => item.label === 'baseline').map(item => item.id),
+        candidateSessionIds: chosen.filter(item => item.label === 'candidate').map(item => item.id),
+        optimizationRunId: optimizationRun?.state === 'candidatePending' ? optimizationRun.id : undefined,
+      });
+      setComparison(result);
+      if (optimizationRun?.state === 'candidatePending' && !result.rejectionReasons.length)
+        onRun(await agent<OptimizationRun>('run-get', { runId: optimizationRun.id }));
+    });
   }
   async function generateGpuCandidates() {
     const baselineSessionIds = sessions.filter(item => compareIds.has(item.id) && item.label === 'baseline' && item.state === 'completed').map(item => item.id);
@@ -463,11 +537,22 @@ function MeasurementsPage({ evidenceIds, onEvidenceIds }: { evidenceIds: Set<str
   async function inspectGpuPolicy() {
     await execute('Inspecting the current GPU IRQ policy…', async () => setGpuPolicy(await agent<GpuAffinityPolicySnapshot>('measurement-gpu-affinity-inspect', { deviceKey: selectedGpu })));
   }
+  async function keepCandidate() {
+    if (!optimizationRun || !window.confirm('Keep this measured candidate configuration?')) return;
+    await execute('Recording the Keep decision…', async () =>
+      onRun(await agent<OptimizationRun>('run-keep', { runId: optimizationRun.id })));
+  }
+  async function resumeAfterRestart() {
+    if (!optimizationRun) return;
+    await execute('Verifying the Windows restart…', async () =>
+      onRun(await agent<OptimizationRun>('run-resume-after-restart', { runId: optimizationRun.id })));
+  }
 
   return <div className="stack-lg measurement-page">
     <div className="page-actions"><div><span className="eyebrow">Measurement-first alpha</span><h2>Capture facts before proposing changes</h2></div><button className="secondary" disabled={Boolean(busy)} onClick={() => void Promise.all([refreshWorkloads(), refreshSessions()])}><RefreshCw size={16}/>Refresh</button></div>
     {message && <div className="notice danger" role="alert"><span>{message}</span></div>}
     {busy && <div className="busy-bar" role="status"><LoaderCircle size={16} className="spin"/><span>{busy}</span>{analysisRequest.current && <button className="ghost" onClick={() => void cancelAgent(analysisRequest.current!)}><X size={14}/>Cancel analysis</button>}</div>}
+    {optimizationRun?.state === 'restartPending' && <section className="section-card"><div className="section-heading"><div><span className="eyebrow">Restart gate</span><h3>Verify the required Windows restart</h3></div></div><p className="muted-copy">Candidate measurement stays blocked until NeuroTune detects a different Windows boot.</p><button className="primary" onClick={() => void resumeAfterRestart()}><RefreshCw size={16}/>Verify restart</button></section>}
     <section className="section-card measurement-setup">
       <div className="section-heading"><div><span className="eyebrow">1 · Prerequisites and workload</span><h3>Select an already-running process</h3></div><span className="status-pill good">WPR · local only</span></div>
       <p className="muted-copy">Requires a supported Windows 11 x64 build and administrator privileges. NeuroTune does not launch or attach to the workload.</p>
@@ -486,14 +571,14 @@ function MeasurementsPage({ evidenceIds, onEvidenceIds }: { evidenceIds: Set<str
         <label onClick={event => event.stopPropagation()}><input aria-label={`Select ${session.id} for comparison`} type="checkbox" disabled={session.state !== 'completed'} checked={compareIds.has(session.id)} onChange={() => setCompareIds(toggle(compareIds, session.id))}/></label>
         <div><strong>{session.processName}</strong><small>{new Date(session.createdAtUtc).toLocaleString()} · {session.durationSeconds}s</small></div>
         <span className={`status-pill ${session.report?.quality.isValid ? 'good' : ''}`}>{session.label} · {session.state}</span>
-        <div className="button-row" onClick={event => event.stopPropagation()}>{session.state === 'captured' || session.state === 'failed' ? <button className="secondary" onClick={() => void analyze(session.id)}>Analyze</button> : null}<button className={evidenceIds.has(session.id) ? 'ghost active' : 'ghost'} disabled={session.state !== 'completed'} onClick={() => onEvidenceIds(toggle(evidenceIds, session.id))}>{evidenceIds.has(session.id) ? 'Included in AI' : 'Use in AI'}</button><button className="ghost" disabled={session.state === 'recording'} onClick={() => { if (window.confirm('Delete this measurement session and its local data?')) void execute('Deleting measurement…', () => agent('measurement-delete', { sessionId: session.id })); }}><X size={14}/></button></div>
+        <div className="button-row" onClick={event => event.stopPropagation()}>{session.state === 'captured' || session.state === 'failed' ? <button className="secondary" onClick={() => void analyze(session.id)}>Analyze</button> : null}<button className={evidenceIds.has(session.id) ? 'ghost active' : 'ghost'} disabled={session.state !== 'completed'} onClick={() => onEvidenceIds(toggle(evidenceIds, session.id))}>{evidenceIds.has(session.id) ? 'Included in AI' : 'Use in AI'}</button><button className="ghost" aria-label={`Delete measurement ${session.id}`} disabled={session.state === 'recording'} onClick={() => { if (window.confirm('Delete this measurement session and its local data?')) void execute('Deleting measurement…', () => agent('measurement-delete', { sessionId: session.id })); }}><X size={14}/></button></div>
       </article>)}</div>
       {!sessions.length && <p className="muted-copy">No measurement has been captured yet.</p>}
       <div className="button-row comparison-actions"><button className="secondary" disabled={!sessions.some(item => compareIds.has(item.id) && item.label === 'baseline') || !sessions.some(item => compareIds.has(item.id) && item.label === 'candidate')} onClick={() => void compare()}><CircleGauge size={16}/>Compare selected</button><small>1+1 is exploratory. 3+3 enables repeated aggregation.</small></div>
     </section>
 
-    {focused?.report && <MeasurementReportView session={focused}/>}
-    {comparison && <section className="section-card"><div className="section-heading"><div><span className="eyebrow">Comparison</span><h3>{comparison.level} result</h3></div><span className={`status-pill ${comparison.rejectionReasons.length ? '' : 'good'}`}>{comparison.rejectionReasons.length ? 'Rejected' : `${comparison.metrics.length} metrics`}</span></div>{comparison.rejectionReasons.length ? <ul className="muted-copy">{comparison.rejectionReasons.map(reason => <li key={reason}>{reason}</li>)}</ul> : <div className="measurement-table">{comparison.metrics.slice(0, 20).map(metric => <article key={metric.evidenceId}><code>{metric.evidenceId}</code><span>{metric.baselineMedian.toFixed(2)} → {metric.candidateMedian.toFixed(2)}</span><strong className={metric.outcome}>{metric.deltaPercent.toFixed(1)}% · {metric.outcome}</strong></article>)}</div>}</section>}
+    {focused?.report && <><section className="section-card"><div className="section-heading"><div><span className="eyebrow">Optional frame evidence</span><h3>Attach the matching PresentMon CSV</h3></div><span className="status-pill">local only</span></div><p className="muted-copy">The CSV must cover the same executable and duration. NeuroTune stores only aggregate FPS, 1% low, frame-time tails, stutter count, and present modes.</p><input type="file" accept=".csv,text/csv" aria-label="Import matching PresentMon CSV" onChange={event => { const file = event.currentTarget.files?.[0]; if (file) void importFrameTimes(file); event.currentTarget.value = ''; }}/></section><MeasurementReportView session={focused}/></>}
+    {comparison && <section className="section-card"><div className="section-heading"><div><span className="eyebrow">Comparison</span><h3>{comparison.level} result</h3></div><span className={`status-pill ${comparison.rejectionReasons.length ? '' : 'good'}`}>{comparison.rejectionReasons.length ? 'Rejected' : `${comparison.metrics.length} metrics`}</span></div>{comparison.rejectionReasons.length ? <ul className="muted-copy">{comparison.rejectionReasons.map(reason => <li key={reason}>{reason}</li>)}</ul> : <><div className="consent-card"><Bot size={20}/><div><span className="eyebrow">Automatic measured recommendation</span><strong>{comparison.recommendation}</strong><small>{comparison.recommendationReason}</small></div></div><div className="measurement-table">{comparison.metrics.slice(0, 20).map(metric => <article key={metric.evidenceId}><code>{metric.evidenceId}</code><span>{metric.baselineMedian.toFixed(2)} → {metric.candidateMedian.toFixed(2)}</span><strong className={metric.outcome}>{metric.deltaPercent.toFixed(1)}% · {metric.outcome}</strong></article>)}</div>{optimizationRun?.state === 'decisionPending' && <div className="button-row"><button className="primary" onClick={() => void keepCandidate()}><Check size={16}/>Keep candidate</button><small>Use Activity &amp; restore to choose Rollback.</small></div>}</>}</section>}
     {topology && <section className="section-card"><div className="section-heading"><div><span className="eyebrow">Next closed-loop tranche</span><h3>GPU IRQ candidate preview</h3></div><span className="status-pill">Read-only</span></div><p className="muted-copy">Windows reports {topology.processors.length} logical processors, {new Set(topology.processors.map(item => `${item.processorGroup}:${item.physicalCore}`)).size} physical cores, and {new Set(topology.processors.map(item => `${item.processorGroup}:${item.cacheCluster}`)).size} cache clusters. Cache clusters are not labelled as CCDs.</p><div className="form-grid"><label className="wide"><span>Physical AMD/NVIDIA GPU</span><select value={selectedGpu} onChange={event => { setSelectedGpu(event.target.value); setGpuPolicy(undefined); setGpuCandidates(undefined); }}>{topology.gpus.map(gpu => <option key={gpu.deviceKey} value={gpu.deviceKey}>{gpu.vendor} · {gpu.name} · driver {gpu.driverVersion}</option>)}</select></label></div><div className="button-row"><button className="secondary" disabled={!selectedGpu} onClick={() => void inspectGpuPolicy()}><ScanLine size={16}/>Inspect current policy</button><button className="secondary" disabled={!selectedGpu || sessions.filter(item => compareIds.has(item.id) && item.label === 'baseline' && item.state === 'completed').length < 3} onClick={() => void generateGpuCandidates()}><Cpu size={16}/>Generate from 3+ selected baselines</button></div>{gpuPolicy && <div className="measurement-table"><article><strong>{gpuPolicy.deviceName} · {gpuPolicy.state}</strong><span>AssignmentSetOverride: {gpuPolicy.assignmentSetOverride.exists ? `${gpuPolicy.assignmentSetOverride.kind} · ${gpuPolicy.assignmentSetOverride.hexValue}` : 'not set'}</span><code>DevicePolicy: {gpuPolicy.devicePolicy.exists ? `${gpuPolicy.devicePolicy.kind} · ${gpuPolicy.devicePolicy.hexValue}` : 'not set'} · exact restore {gpuPolicy.restorable ? 'possible' : 'blocked'}</code><small>{gpuPolicy.gateReason}</small></article></div>}{gpuCandidates && <div className="measurement-table">{gpuCandidates.candidates.map(candidate => <article key={candidate.candidateId}><strong>Group {candidate.processorGroup} · LP {candidate.logicalProcessor} · core {candidate.physicalCore} · SMT {candidate.smtIndex}</strong><span>IRQ {candidate.interruptSharePercent.toFixed(2)}% · target {candidate.targetRunningMilliseconds.toFixed(1)} ms · overlap {candidate.readyOverlapMicroseconds.toFixed(1)} µs</span><code>{candidate.candidateId} · cache cluster {candidate.cacheCluster} · efficiency {candidate.efficiencyClass}</code><small>{candidate.gateReason}</small></article>)}</div>}<p className="muted-copy">No Registry value is written and no candidate is executable. The provider AI does not receive device IDs, Registry paths, masks, policy snapshots, or processor numbers.</p></section>}
   </div>;
 }
@@ -502,6 +587,8 @@ function MeasurementReportView({ session }: { session: MeasurementSession }) {
   const report = session.report!;
   return <section className="section-card"><div className="section-heading"><div><span className="eyebrow">3 · Deterministic report</span><h3>{session.processName}</h3></div><span className={`status-pill ${report.quality.isValid ? 'good' : ''}`}>{report.quality.isValid ? 'Quality gate passed' : 'Invalid trace'}</span></div>
     <div className="metric-grid four"><Metric icon={Timer} label="Trace" value={`${(report.quality.durationMilliseconds / 1000).toFixed(1)} s`}/><Metric icon={Activity} label="Events lost" value={String(report.quality.eventsLost)} tone={report.quality.eventsLost ? 'warn' : 'good'}/><Metric icon={Target} label="Target presence" value={`${report.quality.targetPresencePercent.toFixed(1)}%`}/><Metric icon={Cpu} label="Observed threads" value={String(report.threads.length)}/></div>
+    {report.frameTimes && <div className="metric-grid four"><Metric icon={CircleGauge} label="Average FPS" value={report.frameTimes.averageFps.toFixed(1)}/><Metric icon={Target} label="1% low" value={`${report.frameTimes.onePercentLowFps.toFixed(1)} FPS`}/><Metric icon={Timer} label="Frame-time P99" value={`${report.frameTimes.p99Milliseconds.toFixed(2)} ms`}/><Metric icon={Activity} label="Stutters" value={String(report.frameTimes.stutterCount)}/></div>}
+    {report.frameTimes && <p className="muted-copy">Present modes: {report.frameTimes.presentModes.join(', ') || 'not reported'} · {report.frameTimes.sampleCount} local frames · raw CSV not stored.</p>}
     {report.quality.missingProviders.length > 0 && <p className="error-text">Missing required streams: {report.quality.missingProviders.join(', ')}</p>}
     <div className="measurement-report-grid"><div><h4>Top ISR/DPC pressure</h4><div className="measurement-table">{report.interrupts.slice(0, 10).map((item, index) => <article key={`${item.kind}-${item.module}-${item.logicalProcessor}-${index}`}><strong>{item.kind.toUpperCase()} · {item.module}</strong><span>LP {item.logicalProcessor} · {item.distribution.count} events</span><code>P95 {item.distribution.p95Microseconds.toFixed(2)} µs · P99 {item.distribution.p99Microseconds.toFixed(2)} µs</code></article>)}</div></div><div><h4>Target scheduling</h4><div className="measurement-table">{report.threads.slice(0, 10).map(item => <article key={item.threadKey}><strong>{item.threadKey}</strong><span>{item.runningMilliseconds.toFixed(1)} ms running · {item.migrations} migrations</span><code>Ready P99 {item.readyTime.p99Microseconds.toFixed(2)} µs</code></article>)}</div></div></div>
     {report.observations.length > 0 && <div className="finding-list">{report.observations.map(item => <article key={item.evidenceIds.join('|')}><strong>{item.title}</strong><code>{item.evidenceIds.join(', ')}</code><p>{item.observedMetric}. {item.explanation}</p><p><strong>Test:</strong> {item.verifiableHypothesis}</p></article>)}</div>}
@@ -529,7 +616,7 @@ function PlanItemReview({ recommendations }: { recommendations: Recommendation[]
   return <section className="section-card plan-item-section"><div className="section-heading"><div><span className="eyebrow">Review-only plan items</span><h3>Guidance, scripts, resources, and notices</h3></div><span className="status-pill">Never auto-run</span></div><div className="plan-item-list">{reviewOnly.map(item => <article aria-label={`${planKindLabel(item.kind)}: ${item.title}`} key={item.id} className={`plan-item ${item.kind}`}><div className="plan-item-heading"><FileText size={18}/><div><span>{planKindLabel(item.kind)}</span><strong>{item.title}</strong></div><span className={`risk ${item.risk}`}>{item.risk} risk</span></div><p>{item.reason}</p>{item.expectedImpact && <small><strong>Expected impact:</strong> {item.expectedImpact}</small>}{item.tradeoffs.length > 0 && <small><strong>Trade-offs:</strong> {item.tradeoffs.join(' · ')}</small>}{item.reviewWarnings.length > 0 && <div className="script-warnings" role="alert">{item.reviewWarnings.map(warning => <span key={warning}>{warning}</span>)}</div>}{item.kind === 'scriptArtifact' && <><pre className="script-preview" tabIndex={0} aria-label={`Full ${item.scriptLanguage} script preview`}>{item.script}</pre><div className="button-row"><button className="secondary" aria-label={`Copy script ${item.title}`} onClick={async () => { await navigator.clipboard.writeText(item.script); setCopiedId(item.id); }}><Copy size={15}/>Copy</button><button className="secondary" aria-label={`Save script ${item.title} as an inert text file`} onClick={() => saveScriptArtifact(item)}><Download size={15}/>Save as .txt</button></div>{copiedId === item.id && <span className="sr-only" role="status">Script copied to clipboard.</span>}</>}{item.sourceReferences.length > 0 && <div className="source-list">{item.sourceReferences.map(source => <a key={`${item.id}-${source.url}-${source.title}`} href={source.url || undefined} target="_blank" rel="noreferrer">{source.title} · {source.grade}</a>)}</div>}<div className="conflict-evidence">{item.evidenceIds.map(id => <code key={id}>{id}</code>)}</div></article>)}</div></section>;
 }
 function ConflictView({ conflicts }: { conflicts: ConflictPattern[] }) { return <section className="section-card conflict-section"><div className="section-heading"><div><span className="eyebrow">Local conflict graph</span><h3>{conflicts.length} objective-aware relationships</h3></div><span className="status-pill">Deterministic rules</span></div><div className="conflict-list">{conflicts.map(conflict => <article key={conflict.id} className={`conflict-card ${conflict.kind}`}><div className="conflict-title"><div><span>{conflict.kind.replace(/([A-Z])/g, ' $1')}</span><strong>{conflict.title}</strong></div><small>{conflict.confidence} confidence</small></div><p>{conflict.explanation}</p><p><strong>Why it may be counterproductive:</strong> {conflict.whyCounterproductive}</p><div className="conflict-evidence">{Object.entries(conflict.evidence).map(([id, value]) => <code key={id}>{id} = {value}</code>)}</div><small>Objectives: {conflict.objectives.join(', ')}</small></article>)}</div></section>; }
-function ThemeOption({ active, icon: Icon, title, text, onClick }: { active: boolean; icon: typeof Sun; title: string; text: string; onClick: () => void }) { return <button className={active ? 'theme-option active' : 'theme-option'} onClick={onClick}><Icon size={21}/><span><strong>{title}</strong><small>{text}</small></span>{active && <Check size={17}/>}</button>; }
+function ThemeOption({ active, icon: Icon, title, text, onClick }: { active: boolean; icon: typeof Sun; title: string; text: string; onClick: () => void }) { return <button aria-pressed={active} className={active ? 'theme-option active' : 'theme-option'} onClick={onClick}><Icon size={21}/><span><strong>{title}</strong><small>{text}</small></span>{active && <Check size={17}/>}</button>; }
 function toggle(current: Set<string>, id: string) { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; }
 function optionalNumber(value: string): number | undefined { return value === '' ? undefined : Number(value); }
 function saveScriptArtifact(item: Recommendation) { const blob = new Blob([item.script], { type: 'text/plain;charset=utf-8' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = scriptArtifactFilename(item.id); link.click(); URL.revokeObjectURL(url); }

@@ -112,7 +112,13 @@ public sealed class HardwareTopologyService
     internal static string PolicyState(RegistryValueSnapshot assignment, RegistryValueSnapshot policy)
     {
         if (!assignment.Exists && !policy.Exists) return "windowsDefault";
-        if (assignment.Exists && (assignment.Kind != nameof(RegistryValueKind.Binary) || assignment.ByteLength is < 1 or > 8)) return "unsupported";
+        if (assignment.Exists && (assignment switch
+        {
+            { Kind: nameof(RegistryValueKind.Binary), ByteLength: >= 1 and <= 8 } => false,
+            { Kind: nameof(RegistryValueKind.DWord), ByteLength: 4 } => false,
+            { Kind: nameof(RegistryValueKind.QWord), ByteLength: 8 } => false,
+            _ => true
+        })) return "unsupported";
         if (policy.Exists && (policy.Kind != nameof(RegistryValueKind.DWord) || policy.ByteLength != 4)) return "unsupported";
         return "configured";
     }
@@ -126,6 +132,7 @@ public sealed class HardwareTopologyService
         {
             RegistryValueKind.Binary when value is byte[] bytes => new(true, nameof(RegistryValueKind.Binary), Convert.ToHexString(bytes), bytes.Length),
             RegistryValueKind.DWord when value is int number => new(true, nameof(RegistryValueKind.DWord), $"{unchecked((uint)number):X8}", sizeof(uint)),
+            RegistryValueKind.QWord when value is long number => new(true, nameof(RegistryValueKind.QWord), $"{unchecked((ulong)number):X16}", sizeof(ulong)),
             _ => new(true, kind.ToString(), "", 0)
         };
     }

@@ -58,10 +58,14 @@ public sealed class LlmClient
     }
 
     public async Task<DiagnosisResult> DiagnoseAsync(SystemProfile profile, TuningGoals goals, UserSettings settings, string? apiKey,
+        IReadOnlyDictionary<string, string>? measurementEvidence = null, CancellationToken cancellationToken = default) =>
+        (await PlanAsync(profile, goals, settings, apiKey, measurementEvidence, cancellationToken)).Diagnosis;
+
+    public async Task<PlannerDiagnosisOutcome> PlanAsync(SystemProfile profile, TuningGoals goals, UserSettings settings, string? apiKey,
         IReadOnlyDictionary<string, string>? measurementEvidence = null, CancellationToken cancellationToken = default)
     {
-        ValidateSettings(settings, apiKey);
         goals.Validate();
+        ValidateSettings(settings, apiKey);
         if (string.IsNullOrWhiteSpace(settings.Model)) throw new InvalidOperationException("Select a model.");
 
         var evidenceFacts = MergeEvidenceFacts(BuildEvidenceFacts(profile), measurementEvidence);
@@ -86,50 +90,130 @@ public sealed class LlmClient
                 x.Action.Definition.SideEffects,
                 x.Action.Definition.Sources
             }));
-        var prompt = $$"""
-            Analyze this Windows profile against the user's explicit goals. Return valid JSON only, without Markdown, using this exact shape:
-            {"summary":"clear English summary","findings":[{"title":"short finding","evidenceId":"exact ID from EVIDENCE FACTS","currentValue":"exact associated value","assessment":"confirmed conflict, trade-off, or unavailable evidence"}],"recommendations":[{"id":"stable response-local ID","kind":"executableAction | manualGuidance | scriptArtifact | externalResource | updateNotice","title":"short title","evidenceIds":["exact evidence ID"],"reason":"specific reason","risk":"low | medium | high","expectedImpact":"bounded, non-promissory impact","tradeoffs":["trade-off"],"prerequisites":["prerequisite"],"requiresRestart":false,"sourceReferences":[{"title":"source title","url":"https://source.example/path","grade":"Official | Reproducible | Corroborated | Anecdotal"}],"actionId":"catalog ID only for executableAction","resourceId":"locally supplied ID only for externalResource","updateId":"locally supplied ID only for updateNotice","scriptLanguage":"powershell | cmd | text only for scriptArtifact","script":"review-only script; never executed by NeuroTune"}],"consentQuestion":"neutral question asking whether NeuroTune may apply only the selected registered actions after a restore point"}
+        var provided = SelectInitialEvidence(evidenceFacts, localConflicts);
+        var audit = new List<PlannerAuditEntry>();
 
-            Every finding must use an exact evidenceId and currentValue pair from EVIDENCE FACTS. Clearly distinguish a confirmed conflict, a trade-off, and unavailable evidence.
-            Treat conflict:* evidence facts as locally detected facts, but explain their relevance to the user's goal. Do not infer game-engine behavior from a game name.
-            ExecutableAction may use only actionId values present in the catalog. ManualGuidance may explain a user-performed step. ScriptArtifact is allowed only as a clearly labelled review-only artifact; it is never executed by NeuroTune. Do not place commands, Registry paths/values, URLs, or file paths inside an ExecutableAction.
-            ExternalResource and UpdateNotice may use only exact IDs supplied below. Never invent a resource ID, update ID, vendor version, URL, or flashing command. Updates are manual notices only.
-            Prefer no recommendation over an unsupported or speculative optimization. Do not describe a missing Registry value as wrong when Windows safely manages its default.
-            Do not promise FPS, latency, or network gains that this one profile cannot prove.
-            USER PERFORMANCE INPUT is unverified information entered by the user. Use it as context, never as measured proof.
+        for (var turnNumber = 1; turnNumber <= PlannerProtocol.MaxTurns; turnNumber++)
+        {
+            var prompt = BuildPlannerPrompt(goals, evidenceFacts, provided, localConflicts, catalogJson,
+                resources.Values, updateNotices.Values, turnNumber);
+            PlannerTurn? plannerTurn = null;
+            try
+            {
+                var content = await SendPromptAsync(settings, apiKey, prompt, cancellationToken);
+                plannerTurn = PlannerProtocol.Parse(content);
+                if (plannerTurn.Kind == PlannerTurnKind.RequestEvidence)
+                {
+                    var requested = PlannerProtocol.ValidateRequest(plannerTurn, evidenceFacts, provided);
+                    foreach (var id in requested) provided[id] = evidenceFacts[id];
+                    audit.Add(new(turnNumber, "requestEvidence", requested, true,
+                        $"Accepted {requested.Count} registered evidence request(s)."));
+                    continue;
+                }
 
-            USER GOALS:
-            {{JsonSerializer.Serialize(goals)}}
+                var diagnosis = ParseDiagnosis(plannerTurn.DiagnosisJson, _catalog, provided, resources, updateNotices);
+                diagnosis.Conflicts = localConflicts;
+                audit.Add(new(turnNumber, "diagnosis", [], true, "Diagnosis passed local evidence and capability validation."));
+                return new(diagnosis, audit, "diagnosis-completed", false);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                audit.Add(new(turnNumber, "rejected", plannerTurn?.EvidenceIds ?? [], false, PlannerFailureReason(exception)));
+                return new(LocalFallback(localConflicts), audit, "local-conflict-fallback", true);
+            }
+        }
+        return new(LocalFallback(localConflicts), audit, "planner-turn-limit", true);
 
-            EVIDENCE FACTS:
-            {{JsonSerializer.Serialize(evidenceFacts)}}
+        DiagnosisResult LocalFallback(IReadOnlyList<ConflictPattern> conflicts)
+        {
+            var recommendations = conflicts.SelectMany(conflict => conflict.SuggestedActionIds)
+                .Distinct(StringComparer.OrdinalIgnoreCase).Where(_catalog.Contains).Select(actionId =>
+                {
+                    var action = _catalog.Get(actionId);
+                    var related = conflicts.Where(conflict => conflict.SuggestedActionIds.Contains(actionId,
+                        StringComparer.OrdinalIgnoreCase)).ToList();
+                    return new PlanRecommendation
+                    {
+                        Id = $"local-{actionId}",
+                        Kind = PlanRecommendationKind.ExecutableAction,
+                        Title = action.Name,
+                        ActionId = action.Id,
+                        EvidenceIds = related.SelectMany(conflict => conflict.EvidenceIds).Distinct(StringComparer.Ordinal).Take(12).ToList(),
+                        Reason = string.Join(" ", related.Select(conflict => conflict.Explanation)),
+                        Risk = action.Risk,
+                        RequiresRestart = action.RequiresRestart,
+                        ExpectedImpact = "Restores a locally detected configuration conflict; performance impact requires measurement."
+                    };
+                }).ToList();
+            return new()
+            {
+                Summary = "The provider planner was unavailable or invalid. NeuroTune kept deterministic local findings for review, but this run cannot apply changes until an AI diagnosis succeeds.",
+                Recommendations = recommendations,
+                Conflicts = conflicts.ToList(),
+                ConsentQuestion = "Review the local evidence, record a Baseline, and apply only selected registered actions?"
+            };
+        }
+    }
 
-            LOCALLY DETECTED CONFLICT PATTERNS:
-            {{JsonSerializer.Serialize(localConflicts)}}
+    private static string BuildPlannerPrompt(TuningGoals goals,
+        IReadOnlyDictionary<string, string> available,
+        IReadOnlyDictionary<string, string> provided,
+        IReadOnlyList<ConflictPattern> conflicts,
+        string catalogJson,
+        IEnumerable<ExternalArtifactDefinition> resources,
+        IEnumerable<UpdateNoticeDefinition> updates,
+        int turn) => $$$"""
+        You are the bounded NeuroTune gaming-optimization planner. Return valid JSON only, without Markdown.
 
-            ALLOWLISTED AND COMPATIBLE ACTIONS:
-            {{catalogJson}}
+        Return exactly one of these envelopes:
+        {"kind":"requestEvidence","evidenceIds":["exact available ID"]}
+        {"kind":"diagnosis","diagnosis":{"summary":"clear English summary","findings":[{"title":"short finding","evidenceId":"exact PROVIDED EVIDENCE ID","currentValue":"exact associated value","assessment":"confirmed conflict, trade-off, or unavailable evidence"}],"recommendations":[{"id":"stable response-local ID","kind":"executableAction | manualGuidance | scriptArtifact | externalResource | updateNotice","title":"short title","evidenceIds":["exact PROVIDED EVIDENCE ID"],"reason":"specific reason","risk":"low | medium | high","expectedImpact":"bounded, non-promissory impact","tradeoffs":["trade-off"],"prerequisites":["prerequisite"],"requiresRestart":false,"sourceReferences":[{"title":"source title","url":"https://source.example/path","grade":"Official | Reproducible | Corroborated | Anecdotal"}],"actionId":"catalog ID only for executableAction","resourceId":"locally supplied ID only for externalResource","updateId":"locally supplied ID only for updateNotice","scriptLanguage":"powershell | cmd | text only for scriptArtifact","script":"review-only script; never executed by NeuroTune"}],"consentQuestion":"neutral question asking whether NeuroTune may apply only selected registered actions after a Baseline and restore point"}}
 
-            PRIMEBUILD-VERIFIED EXTERNAL RESOURCES:
-            {{JsonSerializer.Serialize(resources.Values)}}
+        This is turn {{{turn}}} of {{{PlannerProtocol.MaxTurns}}}. Request at most {{{PlannerProtocol.MaxEvidencePerTurn}}} facts. Never request an ID already in PROVIDED EVIDENCE. Request only facts necessary for the user's goal; otherwise return a diagnosis now.
+        Every finding and recommendation must cite PROVIDED EVIDENCE. Do not infer game-engine behavior from a game name.
+        ExecutableAction may use only supplied actionId values. Scripts are review-only and never executable. Never invent resource/update IDs, versions, URLs, paths, or commands.
+        Prefer no recommendation over speculation. A missing Registry value may be a safe Windows default. Do not promise gains without repeated measurements. User performance input is unverified context.
 
-            DETERMINISTIC OFFICIAL UPDATE NOTICES:
-            {{JsonSerializer.Serialize(updateNotices.Values)}}
-            """;
+        USER GOALS:
+        {{{JsonSerializer.Serialize(goals)}}}
 
+        AVAILABLE EVIDENCE IDS AND PRIVACY CLASSES:
+        {{{JsonSerializer.Serialize(available.Keys.Order(StringComparer.Ordinal).Select(id => new { id, privacy = ClassifyEvidence(id).ToString() }))}}}
+
+        PROVIDED EVIDENCE:
+        {{{JsonSerializer.Serialize(provided)}}}
+
+        LOCAL CONFLICT SUMMARIES (values remain available only through evidence requests):
+        {{{JsonSerializer.Serialize(conflicts.Select(conflict => new { conflict.Id, conflict.Title, conflict.Kind, conflict.EvidenceIds, conflict.Objectives, conflict.Explanation, conflict.WhyCounterproductive, conflict.Confidence, conflict.SuggestedActionIds }))}}}
+
+        ALLOWLISTED AND COMPATIBLE ACTIONS:
+        {{{catalogJson}}}
+
+        PRIMEBUILD-VERIFIED EXTERNAL RESOURCES:
+        {{{JsonSerializer.Serialize(resources)}}}
+
+        DETERMINISTIC OFFICIAL UPDATE NOTICES:
+        {{{JsonSerializer.Serialize(updates)}}}
+        """;
+
+    private static async Task<string> SendPromptAsync(UserSettings settings, string? apiKey, string prompt,
+        CancellationToken cancellationToken)
+    {
         using var request = settings.Protocol == ApiProtocol.Anthropic
             ? CreateAnthropicRequest(settings, apiKey, prompt)
             : CreateOpenAiRequest(settings, apiKey, prompt);
         using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         if (!response.IsSuccessStatusCode)
             throw new InvalidOperationException($"The provider returned HTTP {(int)response.StatusCode} ({response.ReasonPhrase}).");
-
-        var body = await ReadLimitedAsync(response, cancellationToken);
-        var diagnosis = ParseDiagnosis(ExtractContent(settings.Protocol, body), _catalog, evidenceFacts,
-            resources, updateNotices);
-        diagnosis.Conflicts = localConflicts;
-        return diagnosis;
+        return ExtractContent(settings.Protocol, await ReadLimitedAsync(response, cancellationToken));
     }
+
+    private static string PlannerFailureReason(Exception exception) => exception switch
+    {
+        InvalidOperationException => "Planner response or provider request failed local validation.",
+        HttpRequestException => "Provider transport failed.",
+        _ => "Provider planner failed before a validated diagnosis."
+    };
 
     public static IReadOnlyList<string> ParseModels(string body)
     {
@@ -351,6 +435,13 @@ public sealed class LlmClient
         AddList("driver", profile.RelevantDrivers);
         AddList("device-issue", profile.DeviceIssues);
         AddList("software-signal", profile.SoftwareSignals);
+        AddList("gaming-launcher", profile.DetectedLaunchers);
+        AddList("gaming-game", profile.DetectedGames);
+        AddList("gaming-executable", profile.GameExecutables);
+        AddList("gaming-graphics-api", profile.GraphicsApiSignals);
+        AddList("gaming-gpu-preference", profile.PerAppGpuPreferences);
+        AddList("gaming-display", profile.DisplayTopology);
+        AddList("gaming-active-gpu", profile.ActiveGpuMappings);
         AddList("runtime-process", profile.TopProcesses);
         AddList("startup", profile.StartupItems);
         AddList("service", profile.AutomaticServices);
@@ -402,11 +493,21 @@ public sealed class LlmClient
 
     public static EvidencePrivacy ClassifyEvidence(string evidenceId) => evidenceId.Split(':', 2)[0] switch
     {
-        "software" or "driver" or "device-issue" or "software-signal" or "runtime-process" or "startup" or "service"
+        "software" or "driver" or "device-issue" or "software-signal" or "runtime-process" or "startup" or "service" or
+        "gaming-launcher" or "gaming-game" or "gaming-executable"
             => EvidencePrivacy.SoftwareInventory,
         "conflict-observation" => EvidencePrivacy.General,
         _ => EvidencePrivacy.SystemConfiguration
     };
+
+    internal static Dictionary<string, string> SelectInitialEvidence(
+        IReadOnlyDictionary<string, string> evidenceFacts, IEnumerable<ConflictPattern> conflicts)
+    {
+        var conflictEvidence = conflicts.SelectMany(conflict => conflict.EvidenceIds).ToHashSet(StringComparer.Ordinal);
+        return evidenceFacts.Where(fact => ClassifyEvidence(fact.Key) == EvidencePrivacy.SystemConfiguration &&
+            (fact.Key.StartsWith("system:", StringComparison.Ordinal) || conflictEvidence.Contains(fact.Key)))
+            .ToDictionary(fact => fact.Key, fact => fact.Value, StringComparer.Ordinal);
+    }
 
     public static Uri ValidateBaseUrl(UserSettings settings)
     {

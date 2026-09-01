@@ -35,5 +35,15 @@
       "reference": "80 compute units; game clock 2100 MHz; boost up to 2310 MHz; 16 GB GDDR6",
       "source": "https://www.amd.com/en/products/graphics/desktops/radeon/6000-series.html"
     }
-  ]
+  ],
+  "motherboard": [
+    {
+      "match": "Micro-Star International Co., Ltd.|MPG X570 GAMING EDGE WIFI (MS-7C37)|1.0",
+      "vendorSpecificationId": "MSI MS-7C37",
+      "reference": "AMD X570; AM4; four DDR4 slots; PCIe 4.0",
+      "source": "https://www.msi.com/Motherboard/MPG-X570-GAMING-EDGE-WIFI/Specification"
+    }
+  ],
+  "bios": [],
+  "driver": []
 }

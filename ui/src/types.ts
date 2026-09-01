@@ -192,6 +192,25 @@ export interface ScanResult {
   actions: OptimizationAction[];
 }
 
+export type OptimizationRunState = 'draft' | 'scanned' | 'hypothesizing' | 'baselinePending' |
+  'baselineReady' | 'proposalReady' | 'approved' | 'applying' | 'restartPending' |
+  'candidatePending' | 'evaluating' | 'decisionPending' | 'rollingBack' | 'recoveryRequired' |
+  'completed' | 'failed';
+
+export interface OptimizationRun {
+  id: string;
+  state: OptimizationRunState;
+  requiresRecovery: boolean;
+  goals: TuningGoals;
+  evidenceFacts: Record<string, string>;
+  diagnosis?: Diagnosis;
+  baselineSessionIds: string[];
+  candidateSessionIds: string[];
+  approvedActionIds: string[];
+  operationId?: string;
+  comparison?: MeasurementComparison;
+}
+
 export interface UpdateNoticeDefinition {
   id: string;
   kind: 'gpuDriver' | 'chipsetDriver' | 'bios';
@@ -214,6 +233,7 @@ export interface ActionRecord {
 
 export interface OperationManifest {
   id: string;
+  optimizationRunId?: string;
   createdAt: string;
   status: string;
   actions: ActionRecord[];
@@ -250,11 +270,17 @@ export interface TraceReport {
   interrupts: Array<{ kind: string; module: string; logicalProcessor: number; distribution: DistributionMetrics }>;
   processors: Array<{ logicalProcessor: number; interruptSharePercent: number; targetRunningMilliseconds: number; readyOverlapMicroseconds: number }>;
   threads: Array<{ threadKey: string; runningMilliseconds: number; readyTime: DistributionMetrics; migrations: number; residencyMilliseconds: Record<string, number> }>;
+  frameTimes?: {
+    source: string; sampleCount: number; capturedDurationMilliseconds: number; averageFps: number;
+    onePercentLowFps: number; p50Milliseconds: number; p95Milliseconds: number; p99Milliseconds: number;
+    stutterCount: number; presentModes: string[];
+  };
   observations: Array<{ title: string; category: string; evidenceIds: string[]; observedMetric: string; explanation: string; verifiableHypothesis: string; confidence: string }>;
 }
 
 export interface MeasurementSession {
   id: string;
+  optimizationRunId?: string;
   processId: number;
   processName: string;
   processStartTimeUtc: string;
@@ -265,6 +291,8 @@ export interface MeasurementSession {
   createdAtUtc: string;
   recordingStartedAtUtc?: string;
   capturedAtUtc?: string;
+  thermalCelsius?: number;
+  cpuPerformancePercent?: number;
   report?: TraceReport;
   error?: string;
 }
@@ -276,6 +304,8 @@ export interface MeasurementComparison {
   candidateSessionIds: string[];
   metrics: Array<{ evidenceId: string; baselineMedian: number; candidateMedian: number; deltaPercent: number; outcome: 'improvement' | 'regression' | 'inconclusive' }>;
   rejectionReasons: string[];
+  recommendation: 'insufficientEvidence' | 'keep' | 'rollback';
+  recommendationReason: string;
 }
 
 export interface MachineTopology {

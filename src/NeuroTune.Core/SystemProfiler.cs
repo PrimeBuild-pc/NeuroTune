@@ -9,7 +9,8 @@ namespace NeuroTune;
 
 public sealed class SystemProfiler
 {
-    public SystemProfile Collect(Action<string>? progress = null, bool optionalTelemetryConsent = false)
+    public SystemProfile Collect(Action<string>? progress = null, bool optionalTelemetryConsent = false,
+        bool registerGameTargets = false)
     {
         var profile = new SystemProfile();
         RunPhase("Hardware and firmware", () =>
@@ -47,6 +48,14 @@ public sealed class SystemProfiler
             profile.TopProcesses = ReadTopProcesses();
             profile.StartupItems = ReadStartupItems();
             profile.SoftwareSignals = ReadSoftwareSignals(profile);
+            var gaming = GamingContextDetector.Collect(profile.InstalledSoftware, registerGameTargets);
+            profile.DetectedLaunchers = gaming.Launchers;
+            profile.DetectedGames = gaming.Games;
+            profile.GameExecutables = gaming.Executables;
+            profile.GraphicsApiSignals = gaming.GraphicsApis;
+            profile.PerAppGpuPreferences = gaming.GpuPreferences;
+            profile.DisplayTopology = gaming.Displays;
+            profile.ActiveGpuMappings = gaming.ActiveGpuMappings;
         });
         RunPhase("Services and local conflict checks", () =>
         {
@@ -74,7 +83,9 @@ public sealed class SystemProfiler
         profile.TelemetryCapabilities.Count + profile.BootConfiguration.Count + profile.PerformanceRegistry.Count +
         profile.PolicyConflicts.Count + profile.InstalledSoftware.Count + profile.RelevantDrivers.Count +
         profile.DeviceIssues.Count + profile.SoftwareSignals.Count + profile.TopProcesses.Count +
-        profile.StartupItems.Count + profile.AutomaticServices.Count;
+        profile.StartupItems.Count + profile.AutomaticServices.Count + profile.DetectedLaunchers.Count +
+        profile.DetectedGames.Count + profile.GameExecutables.Count + profile.GraphicsApiSignals.Count +
+        profile.PerAppGpuPreferences.Count + profile.DisplayTopology.Count + profile.ActiveGpuMappings.Count;
 
     private static string FormatWmiDate(object? value)
     {
@@ -156,7 +167,9 @@ public sealed class SystemProfiler
         var pageFile = Query("SELECT AutomaticManagedPagefile, PCSystemType FROM Win32_ComputerSystem", row =>
         {
             var form = Convert.ToUInt16(row["PCSystemType"] ?? 0) switch { 1 => "desktop", 2 => "laptop", 3 => "workstation", _ => "unspecified" };
-            return $"Windows-managed={row["AutomaticManagedPagefile"]}; form-factor={form}";
+            using var key = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management");
+            var entries = key?.GetValue("PagingFiles", null, RegistryValueOptions.DoNotExpandEnvironmentNames) as string[];
+            return SummarizePageFiles(Convert.ToBoolean(row["AutomaticManagedPagefile"]), entries, form);
         }).FirstOrDefault() ?? "Unavailable";
         var deviceGuard = Query(@"root\Microsoft\Windows\DeviceGuard", "SELECT VirtualizationBasedSecurityStatus FROM Win32_DeviceGuard", row =>
             Convert.ToUInt32(row["VirtualizationBasedSecurityStatus"] ?? 0) switch
@@ -189,6 +202,14 @@ public sealed class SystemProfiler
             ["ACPI thermal zones"] = thermalZones.Count == 0 ? "Unavailable" : string.Join("; ", thermalZones),
             ["Storage reliability"] = storageHealth.Count == 0 ? "Unavailable" : string.Join("; ", storageHealth)
         };
+    }
+
+    internal static string SummarizePageFiles(bool automatic, IEnumerable<string>? entries, string formFactor)
+    {
+        var modes = (entries ?? []).Select(OptimizationCatalog.ParsePageFileEntry).ToList();
+        var managed = modes.Count(entry => entry is { InitialSize: 0, MaximumSize: 0 } || entry is { InitialSize: null, MaximumSize: null });
+        var fixedSizes = modes.Count(entry => entry is { InitialSize: > 0 } || entry is { MaximumSize: > 0 });
+        return $"Windows-managed-global={automatic}; configured={modes.Count}; system-managed={managed}; fixed={fixedSizes}; form-factor={formFactor}";
     }
 
     private static Dictionary<string, string> ReadFirmwareAndMemory()
@@ -245,13 +266,17 @@ public sealed class SystemProfiler
             ["Motherboard"] = Query("SELECT Manufacturer, Product, Version FROM Win32_BaseBoard", row => $"{row["Manufacturer"]}|{row["Product"]}|{row["Version"]}").FirstOrDefault() ?? "Unavailable",
             ["BIOS"] = Query("SELECT Manufacturer, SMBIOSBIOSVersion FROM Win32_BIOS", row => $"{row["Manufacturer"]}|{row["SMBIOSBIOSVersion"]}").FirstOrDefault() ?? "Unavailable"
         };
-        var gpus = Query("SELECT Name, PNPDeviceID FROM Win32_VideoController", row =>
+        var gpus = Query("SELECT Name, PNPDeviceID, DriverVersion FROM Win32_VideoController", row =>
         {
             var parts = row["PNPDeviceID"]?.ToString()?.Split('\\') ?? [];
             var pciId = parts.Length > 1 ? parts[1] : "Unavailable";
-            return $"{pciId}|{row["Name"]?.ToString()?.Trim()}";
+            return (Identity: $"{pciId}|{row["Name"]?.ToString()?.Trim()}", Driver: $"{pciId}|{row["DriverVersion"]}");
         });
-        for (var index = 0; index < gpus.Count; index++) identities[$"GPU {index + 1} specification ID"] = gpus[index];
+        for (var index = 0; index < gpus.Count; index++)
+        {
+            identities[$"GPU {index + 1} specification ID"] = gpus[index].Identity;
+            identities[$"GPU {index + 1} driver specification ID"] = gpus[index].Driver;
+        }
 
         var modules = Query("SELECT Manufacturer, PartNumber, Capacity, ConfiguredClockSpeed FROM Win32_PhysicalMemory", row =>
         {

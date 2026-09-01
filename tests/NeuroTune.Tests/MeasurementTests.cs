@@ -30,6 +30,39 @@ public sealed class MeasurementTests
         Assert.AreEqual(ComparisonOutcome.Improvement, MeasurementService.RepeatedOutcome(100, [90, 95, 110]));
         Assert.AreEqual(ComparisonOutcome.Regression, MeasurementService.RepeatedOutcome(100, [105, 110, 90]));
         Assert.AreEqual(ComparisonOutcome.Inconclusive, MeasurementService.RepeatedOutcome(100, [90, 100, 110]));
+        Assert.AreEqual(ComparisonOutcome.Improvement, MeasurementService.RepeatedOutcome(100, [105, 110, 90], true));
+    }
+
+    [TestMethod]
+    public void PresentMon_csv_is_aggregated_locally_for_the_selected_executable()
+    {
+        var rows = Enumerable.Range(0, 121).Select(index => $"game.exe,{(index >= 119 ? 60 : 10)},Hardware Composed: Independent Flip");
+        var csv = "ProcessName,MsBetweenPresents,PresentMode\n" + string.Join('\n', rows) + "\nother.exe,1,Composed: Flip";
+
+        var result = PresentMonImporter.Parse(csv, "game");
+
+        Assert.AreEqual(121, result.SampleCount);
+        Assert.IsTrue(result.AverageFps is > 90 and < 100);
+        Assert.AreEqual(60, result.P99Milliseconds);
+        Assert.AreEqual(2, result.StutterCount);
+        Assert.AreEqual("Hardware Composed: Independent Flip", result.PresentModes.Single());
+        Assert.IsTrue(MeasurementService.FrameDurationMatches(100_000, 120_000));
+        Assert.IsFalse(MeasurementService.FrameDurationMatches(100_000, 120_001));
+    }
+
+    [TestMethod]
+    public void Repeated_comparison_produces_a_conservative_keep_or_rollback_recommendation()
+    {
+        ComparisonMetric[] improvements =
+        [
+            new("a", 100, 90, -10, ComparisonOutcome.Improvement),
+            new("b", 100, 95, -5, ComparisonOutcome.Improvement),
+            new("c", 100, 105, 5, ComparisonOutcome.Regression)
+        ];
+        Assert.AreEqual(ComparisonDecision.Keep, MeasurementService.Recommend(ComparisonLevel.Repeated, improvements).Decision);
+        Assert.AreEqual(ComparisonDecision.Rollback, MeasurementService.Recommend(ComparisonLevel.Repeated, improvements.Reverse().Select((item, index) =>
+            index < 2 ? item with { Outcome = ComparisonOutcome.Regression } : item with { Outcome = ComparisonOutcome.Improvement }).ToList()).Decision);
+        Assert.AreEqual(ComparisonDecision.InsufficientEvidence, MeasurementService.Recommend(ComparisonLevel.Exploratory, improvements).Decision);
     }
 
     [TestMethod]
@@ -118,10 +151,14 @@ public sealed class MeasurementTests
     {
         var missing = new RegistryValueSnapshot(false, "None", "", 0);
         var mask = new RegistryValueSnapshot(true, "Binary", "08", 1);
+        var dwordMask = new RegistryValueSnapshot(true, "DWord", "00000008", 4);
+        var qwordMask = new RegistryValueSnapshot(true, "QWord", "0000000000000008", 8);
         var policy = new RegistryValueSnapshot(true, "DWord", "00000004", 4);
 
         Assert.AreEqual("windowsDefault", HardwareTopologyService.PolicyState(missing, missing));
         Assert.AreEqual("configured", HardwareTopologyService.PolicyState(mask, policy));
+        Assert.AreEqual("configured", HardwareTopologyService.PolicyState(dwordMask, policy));
+        Assert.AreEqual("configured", HardwareTopologyService.PolicyState(qwordMask, policy));
         Assert.AreEqual("unsupported", HardwareTopologyService.PolicyState(new(true, "String", "", 0), policy));
         Assert.AreEqual("unsupported", HardwareTopologyService.PolicyState(new(true, "Binary", new string('F', 18), 9), policy));
     }
