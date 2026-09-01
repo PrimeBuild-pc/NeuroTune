@@ -12,7 +12,7 @@ or validation report.
 | Target | Next AI-harness alpha |
 | Branch | `codex/ai-optimization-harness-20260830` |
 | Current milestone | M9 — physical device-affinity matrix intake |
-| Last verified baseline | `fae4c79`; PR #10 CI plus committed Windows 11 build 26200 writer/recovery reports, 2026-08-31 |
+| Last verified baseline | `5186020`; 60 .NET tests, PowerShell 5.1 collector self-test, and rewritten public branch/tag verification, 2026-09-01 |
 | Distribution | unsigned NSIS plus portable ZIP, GitHub/Discord |
 | License | MIT, copyright PrimeBuild |
 | Repository visibility | public; approved history rewrite is an active privacy gate |
@@ -98,7 +98,7 @@ execution, verification, rollback, and measurement quality.
   forced-colors checks under supervised Windows runs.
 - [x] Complete automated privacy, inert export-report, offline-provider, and
   recovery-documentation checks; keep manual visual acceptance separate.
-- [ ] Complete the approved full-history author-metadata rewrite and verify
+- [x] Complete the approved full-history author-metadata rewrite and verify
   every remote branch/tag before public visibility.
 - [x] Claim performance gains only from reproducible, quality-gated repeated
   measurements tied to the exact run and machine configuration.
@@ -120,9 +120,10 @@ execution, verification, rollback, and measurement quality.
   provider/theme state, labelled icon-only destructive actions, live status
   feedback, inert text export, and no executable artifact path; UI tests,
   typecheck, lint, and production build pass.
-- The destructive author-metadata rewrite is explicitly approved. A local
-  recovery bundle, secret scan, rewritten-ref verification, and coordinated
-  force-push are mandatory before the privacy gate can close.
+- Branches and tags now contain only noreply identities and the `main` ruleset
+  was restored after the coordinated force-push. GitHub's read-only heads for
+  merged PRs #4–#9 still retain old commit objects; only GitHub Support can
+  dereference those PRs and purge cached views.
 
 ## Locked product decisions
 
@@ -171,17 +172,17 @@ execution, verification, rollback, and measurement quality.
 
 | ID | Milestone | Status | Acceptance evidence |
 |---|---|---|---|
-| M0 | Close legacy backlog, add MIT, consolidate planning | Completed | `73ad228`; issues #1–#3 closed 2026-08-02; PR #5 |
-| M1 | Structured dynamic-plan contract and goal/measurement context | Completed | `9ec9332`; 21 .NET tests, 7 Vitest tests, UI typecheck/lint/build; PR #5 |
-| M2 | Extensible reversible capability registry and first expansion | In progress | `c0acdb2`; 25 actions, 24 .NET tests, exact round-trip on Windows 11 build 26200 plus historical Windows 10 build 19045; PR #5 |
-| M3 | Verified artifact catalog and deterministic update advisor | In progress | `a7fa9a6`; empty-by-default catalogs, exact text transaction, official vendor advisor, 29 .NET tests; PR #5 |
-| M4 | Plan-focused accessible UI and script/resource review | In progress | `b1d7d11`; five labelled types, inert script copy/save, enforced high-risk confirmation; 30 .NET, 7 UI, 2 Rust tests; manual scaling/Narrator remain; PR #5 |
-| M5 | NSIS, portable ZIP, checksums, release documentation | Completed | `8416b69`; NSIS and 64,196,039-byte ZIP, checksums and Windows 11 smoke; historical Windows 10 evidence retained; PR #5 |
-| M6 | Full-history secret/privacy audit and public repository | In progress | No secrets found; destructive rewrite of reachable personal author metadata explicitly approved; rewritten refs and remote verification pending |
+| M0 | Close legacy backlog, add MIT, consolidate planning | Completed | `112eb5c`; issues #1–#3 closed 2026-08-02; PR #5 |
+| M1 | Structured dynamic-plan contract and goal/measurement context | Completed | `61da21a`; 21 .NET tests, 7 Vitest tests, UI typecheck/lint/build; PR #5 |
+| M2 | Extensible reversible capability registry and first expansion | In progress | `4ef8abb`; 25 actions, 24 .NET tests, exact round-trip on Windows 11 build 26200 plus historical Windows 10 build 19045; PR #5 |
+| M3 | Verified artifact catalog and deterministic update advisor | In progress | `976936a`; empty-by-default catalogs, exact text transaction, official vendor advisor, 29 .NET tests; PR #5 |
+| M4 | Plan-focused accessible UI and script/resource review | In progress | `1720ce3`; five labelled types, inert script copy/save, enforced high-risk confirmation; 30 .NET, 7 UI, 2 Rust tests; manual scaling/Narrator remain; PR #5 |
+| M5 | NSIS, portable ZIP, checksums, release documentation | Completed | `97bb259`; NSIS and 64,196,039-byte ZIP, checksums and Windows 11 smoke; historical Windows 10 evidence retained; PR #5 |
+| M6 | Full-history secret/privacy audit and public repository | In progress | Branches/tags clean and force-updated; ruleset restored; six GitHub-managed historical PR refs require a Support purge |
 | M7 | Optional imported benchmark evidence and researched sources | Planned | Deferred until the planner and advisor are stable |
-| M8 | ETW Measurement Alpha | In validation | `1bf387c`, `8810ab5`; three of three valid watchdog captures on Windows 11 build 26200, zero lost events, no raw ETL or WPR orphan; physical DirectX matrix remains |
-| M9 | GPU IRQ closed-loop | In progress | Read-only CPU-set/PnP topology, exact current-policy snapshot, opaque three-candidate GPU preview, and shareable redacted fleet collector implemented; writer, restart, Keep/Rollback, driver matrix, and AI candidate selection remain gated |
-| M10 | AI optimization harness | In validation | `fae4c79`, PR #10; CI passed; 60 .NET tests, 7 UI tests, 2 Rust tests, Release builds, lint/typecheck, unsigned NSIS/portable ZIP/checksums, committed Windows 11 writer/recovery reports; independent Claude Code reviews via Herdr |
+| M8 | ETW Measurement Alpha | In validation | `45746f2`, `868bf94`; three of three valid watchdog captures on Windows 11 build 26200, zero lost events, no raw ETL or WPR orphan; physical DirectX matrix remains |
+| M9 | GPU IRQ closed-loop | In progress | `5186020`; read-only CPU-set/PnP topology, exact current-policy snapshot, opaque three-candidate GPU preview, and shareable redacted fleet collector implemented; writer, restart, Keep/Rollback, driver matrix, and AI candidate selection remain gated |
+| M10 | AI optimization harness | In validation | `10e3044`, PR #10; CI passed before coordinated rewrite and retriggered afterward; 60 .NET tests, 7 UI tests, 2 Rust tests, Release builds, lint/typecheck, unsigned NSIS/portable ZIP/checksums, committed Windows 11 writer/recovery reports; independent Claude Code reviews via Herdr |
 
 ## M8 — ETW Measurement Alpha
 
