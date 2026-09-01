@@ -17,6 +17,7 @@
 | SPD/XMP/EXPO, motherboard sensors, temperatures, real HAGS | unavailable | unavailable | required |
 | PawnIO install/HVCI/uninstall | deliberately excluded | deliberately excluded | disposable dedicated PC only after approval |
 | v0.7.0-alpha.1 ETW watchdog, analysis, quality, cleanup | 3/3 valid on build 26200; 0 lost events; no ETL or WPR orphan | not required | redacted physical DirectX harness available; AMD/NVIDIA runs pending |
+| Shareable hardware collector | Windows PowerShell 5.1 self-test passed; no-admin/offline/read-only contract | not required | AMD host report passed: 1 CPU, 16 CPU sets, 1 GPU, 11 relevant interrupt devices; NVIDIA reports pending |
 
 scripts/vm-provision.ps1 creates clean Hyper-V guests and DPAPI-protected credential files. scripts/vm-validation.ps1 normally restores the clean checkpoint, copies the installer with PowerShell Direct, runs the automated matrix, and writes a redacted JSON report. `-SkipCheckpointRestore` is available for a supervised, already-running existing guest; the harness then restores every state it seeds instead of changing the checkpoint chain. Neither script prints or commits guest passwords.
 
@@ -59,6 +60,9 @@ it down and verified that its original 8 GB startup setting was restored.
 ## Manual accessibility acceptance
 
 Recorded Windows 11 result on 2026-08-02: the 100% scale pass completed without overlap or clipping. Windows blocked 150% and 200% changes because Hyper-V Connect was using an Enhanced/remote session, so those two results are not claimed. High Contrast and Reduced Motion remain optional manual follow-ups.
+The remaining supervised checks are intentionally deferred until the interface
+is closer to feature-complete; automated semantic and keyboard regressions stay
+in the regular test gate.
 
 At 100%, 150%, and 200% display scale:
 
@@ -70,3 +74,24 @@ At 100%, 150%, and 200% display scale:
 6. Print the review report and confirm interactive controls are omitted.
 
 VM automation cannot validate real sensor correctness, GPU scheduling on a passed-through GPU, or motherboard firmware state.
+
+## AMD/NVIDIA fleet intake
+
+`tools/hardware-collector/Collect-NeuroTune-HardwareReport.cmd` creates a dated
+JSON beside itself. It reads CIM, the 64-bit Registry view, and the Windows
+CPU-set API. It does not request elevation, access the network, start ETW, or
+change a setting, service, driver, device, or Registry value.
+
+Each report contains Windows/build/security status, non-serial platform model,
+CPU topology, GPU hardware/driver identity, and relevant display/network/audio/
+storage/USB-controller interrupt-policy snapshots. Raw PnP identifiers are
+replaced by random report-local device keys; user/computer names, serials,
+MAC/IP addresses, full paths, and Registry paths are excluded and checked
+before write.
+Existing interrupt masks are reduced to presence, Registry type, and byte
+length; the mask value itself is not exported.
+
+Fleet reports determine which physical fixtures deserve testing. They do not
+validate a performance gain or authorize automatic affinity changes. A device
+writer still requires exact capture/verify/restore, restart behavior, and
+repeatable 3+3 Baseline/Candidate evidence for the specific driver family.

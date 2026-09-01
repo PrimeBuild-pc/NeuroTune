@@ -89,9 +89,14 @@
   <li><strong>User-controlled plans:</strong> switch between AI recommendations, conflict fixes, and every supported reversible action; risk changes warnings, not visibility.</li>
   <li><strong>Current allowlisted actions:</strong> power, gaming, graphics, visual, memory, GPU-timeout, and legacy TCP repairs with local capture, verification, and rollback.</li>
   <li><strong>Local ETW measurements:</strong> bounded WPR captures for an already-running workload, deterministic ISR/DPC and scheduler analysis, repeated comparisons, and raw-trace deletion by default.</li>
+  <li><strong>Shareable hardware matrix collector:</strong> a transparent, no-admin, offline CMD/PowerShell bundle records redacted AMD/NVIDIA, driver, CPU-set, and current interrupt-policy facts without changing the PC.</li>
   <li><strong>Local operation history:</strong> Per-action state snapshots and rollback from the desktop interface.</li>
   <li><strong>Honest telemetry boundary:</strong> low-level capabilities remain read-only and unavailable or driver-not-approved until a separate adapter and driver trust review is complete.</li>
 </ul>
+
+<h2>Contribute an AMD/NVIDIA hardware report</h2>
+
+<p>Download or copy <code>tools/hardware-collector</code>, then double-click <code>Collect-NeuroTune-HardwareReport.cmd</code>. The dated JSON created beside it can be shared for the physical GPU/driver matrix. The collector does not require administrator rights, connect to the internet, install anything, or write system settings. Its PowerShell source and privacy exclusions are included in the same folder.</p>
 
 <h2>Requirements</h2>
 

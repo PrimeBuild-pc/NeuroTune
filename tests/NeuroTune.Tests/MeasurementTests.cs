@@ -151,10 +151,14 @@ public sealed class MeasurementTests
     {
         var missing = new RegistryValueSnapshot(false, "None", "", 0);
         var mask = new RegistryValueSnapshot(true, "Binary", "08", 1);
+        var dwordMask = new RegistryValueSnapshot(true, "DWord", "00000008", 4);
+        var qwordMask = new RegistryValueSnapshot(true, "QWord", "0000000000000008", 8);
         var policy = new RegistryValueSnapshot(true, "DWord", "00000004", 4);
 
         Assert.AreEqual("windowsDefault", HardwareTopologyService.PolicyState(missing, missing));
         Assert.AreEqual("configured", HardwareTopologyService.PolicyState(mask, policy));
+        Assert.AreEqual("configured", HardwareTopologyService.PolicyState(dwordMask, policy));
+        Assert.AreEqual("configured", HardwareTopologyService.PolicyState(qwordMask, policy));
         Assert.AreEqual("unsupported", HardwareTopologyService.PolicyState(new(true, "String", "", 0), policy));
         Assert.AreEqual("unsupported", HardwareTopologyService.PolicyState(new(true, "Binary", new string('F', 18), 9), policy));
     }
