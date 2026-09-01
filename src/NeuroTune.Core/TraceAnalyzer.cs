@@ -224,6 +224,20 @@ public sealed class TraceAnalyzer
 
 internal static class TraceReportExtensions
 {
+    public static TraceReport WithFrameTimes(this TraceReport report, FrameTimeMetrics frameTimes) => new()
+    {
+        SchemaVersion = report.SchemaVersion,
+        SessionId = report.SessionId,
+        GeneratedAtUtc = report.GeneratedAtUtc,
+        TargetExecutable = report.TargetExecutable,
+        Quality = report.Quality,
+        Interrupts = report.Interrupts,
+        Processors = report.Processors,
+        Threads = report.Threads,
+        FrameTimes = frameTimes,
+        Observations = report.Observations
+    };
+
     public static TraceReport WithObservations(this TraceReport report, IReadOnlyList<DiagnosticObservation> observations) => new()
     {
         SchemaVersion = report.SchemaVersion,
@@ -234,6 +248,7 @@ internal static class TraceReportExtensions
         Interrupts = report.Interrupts,
         Processors = report.Processors,
         Threads = report.Threads,
+        FrameTimes = report.FrameTimes,
         Observations = observations
     };
 }

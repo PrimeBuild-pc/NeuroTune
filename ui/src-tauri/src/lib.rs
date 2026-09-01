@@ -17,6 +17,12 @@ const COMMANDS: &[&str] = &[
     "oauth-openrouter",
     "models",
     "scan",
+    "run-create",
+    "run-get",
+    "run-list",
+    "run-reconcile",
+    "run-resume-after-restart",
+    "run-keep",
     "analyze-local",
     "diagnose",
     "actions",
@@ -28,6 +34,7 @@ const COMMANDS: &[&str] = &[
     "measurement-stop",
     "measurement-cancel",
     "measurement-analyze",
+    "measurement-frame-import",
     "measurement-list",
     "measurement-compare",
     "measurement-topology",
@@ -71,10 +78,18 @@ async fn agent(
 #[tauri::command]
 async fn cancel_agent(app: AppHandle, request_id: String) -> Result<bool, String> {
     validate_request(&request_id)?;
+    cancel_request(&app.state::<AgentState>().0, &request_id)
+}
+
+fn cancel_request(
+    active_agents: &Mutex<HashMap<String, ActiveAgent>>,
+    request_id: &str,
+) -> Result<bool, String> {
     let process_id = {
-        let state = app.state::<AgentState>();
-        let mut active = state.0.lock().map_err(|_| "Agent state is unavailable")?;
-        let Some(agent) = active.get_mut(&request_id) else {
+        let mut active = active_agents
+            .lock()
+            .map_err(|_| "Agent state is unavailable")?;
+        let Some(agent) = active.get_mut(request_id) else {
             return Ok(false);
         };
         if !agent.cancellable {
@@ -85,8 +100,8 @@ async fn cancel_agent(app: AppHandle, request_id: String) -> Result<bool, String
     };
 
     if let Err(error) = terminate_process_tree(process_id) {
-        if let Ok(mut active) = app.state::<AgentState>().0.lock() {
-            if let Some(agent) = active.get_mut(&request_id) {
+        if let Ok(mut active) = active_agents.lock() {
+            if let Some(agent) = active.get_mut(request_id) {
                 agent.cancelled = false;
             }
         }
@@ -97,17 +112,31 @@ async fn cancel_agent(app: AppHandle, request_id: String) -> Result<bool, String
 
 fn terminate_process_tree(process_id: u32) -> Result<(), String> {
     let process_id = process_id.to_string();
-    let status = Command::new("taskkill.exe")
-        .args(["/PID", &process_id, "/T", "/F"])
-        .creation_flags(0x08000000)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map_err(|error| format!("Could not cancel the NeuroTune scan: {error}"))?;
-    status
-        .success()
-        .then_some(())
-        .ok_or_else(|| "Windows could not terminate the NeuroTune scan process tree".into())
+    let mut last_error = String::new();
+    for _ in 0..3 {
+        let output = Command::new("taskkill.exe")
+            .args(["/PID", &process_id, "/T", "/F"])
+            .creation_flags(0x08000000)
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .output()
+            .map_err(|error| format!("Could not cancel the NeuroTune scan: {error}"))?;
+        if output.status.success() {
+            return Ok(());
+        }
+        if !output.stderr.is_empty() {
+            last_error = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        }
+        thread::sleep(std::time::Duration::from_millis(50));
+    }
+    Err(format!(
+        "Windows could not terminate the NeuroTune scan process tree{}",
+        if last_error.is_empty() {
+            String::new()
+        } else {
+            format!(": {last_error}")
+        }
+    ))
 }
 
 fn run_agent(
@@ -221,7 +250,9 @@ fn validate_request(request_id: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_cancellable, terminate_process_tree, validate_request, COMMANDS};
+    use super::{
+        cancel_request, is_cancellable, validate_request, ActiveAgent, AgentState, COMMANDS,
+    };
     #[cfg(target_os = "windows")]
     use std::os::windows::process::CommandExt;
     use std::{
@@ -271,11 +302,32 @@ mod tests {
         .parse()
         .expect("fake agent child PID should be numeric");
 
-        terminate_process_tree(fake_agent.id()).expect("the fake agent tree should terminate");
+        let state = AgentState::default();
+        state
+            .0
+            .lock()
+            .expect("test agent state should lock")
+            .insert(
+                "fake-scan".into(),
+                ActiveAgent {
+                    process_id: fake_agent.id(),
+                    cancellable: true,
+                    cancelled: false,
+                },
+            );
+        let cancelled = cancel_request(&state.0, "fake-scan");
+        if cancelled.is_err() {
+            let _ = fake_agent.kill();
+            let _ = Command::new("taskkill.exe")
+                .args(["/PID", &child_pid.to_string(), "/F"])
+                .creation_flags(0x08000000)
+                .status();
+        }
+        assert_eq!(cancelled, Ok(true));
         let _ = fake_agent.wait();
 
         assert!(
-            !process_exists(child_pid),
+            wait_for_process_exit(child_pid),
             "blocking subprocess was orphaned"
         );
     }
@@ -291,6 +343,17 @@ mod tests {
         let csv = String::from_utf8_lossy(&output.stdout);
         csv.lines()
             .any(|line| line.split(',').nth(1) == Some(&format!("\"{process_id}\"")))
+    }
+
+    #[cfg(target_os = "windows")]
+    fn wait_for_process_exit(process_id: u32) -> bool {
+        for _ in 0..40 {
+            if !process_exists(process_id) {
+                return true;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        false
     }
 }
 

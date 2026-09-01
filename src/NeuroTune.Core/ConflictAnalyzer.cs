@@ -133,12 +133,13 @@ public static class ConflictAnalyzer
                 "Longer timeout values can conceal an unstable tune and turn a recoverable driver reset into a longer freeze; software presence alone does not prove an active overclock.",
                 [OptimizationPriority.Fps, OptimizationPriority.SystemLatency, OptimizationPriority.Balanced], "High", ["graphics.tdr-default"]);
 
-        Add("manual-pagefile", "Manual page-file policy replaces Windows sizing", ConflictKind.Conditional,
+        Add("manual-pagefile", "Fixed page-file sizing replaces Windows sizing", ConflictKind.Conditional,
             ["hardware:Page file and system type", "system:memory", R(@"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\DisablePagingExecutive")],
-            values => values[0].Contains("Windows-managed=False", StringComparison.OrdinalIgnoreCase),
-            "Windows reports that automatic page-file management is disabled.",
+            values => !values[0].Contains("Windows-managed-global=True", StringComparison.OrdinalIgnoreCase) &&
+                !values[0].Contains("fixed=0", StringComparison.OrdinalIgnoreCase),
+            "At least one configured page file uses fixed sizes rather than global or per-volume Windows management.",
             "A fixed page-file policy can under-provision commit for the installed memory and workload; the scan does not expose enough detail to prescribe a size.",
-            [OptimizationPriority.Fps, OptimizationPriority.SystemLatency, OptimizationPriority.Balanced], "Medium", []);
+            [OptimizationPriority.Fps, OptimizationPriority.SystemLatency, OptimizationPriority.Balanced], "Medium", ["system.pagefile-managed-sizes"]);
 
         Add("mobile-high-performance", "High-performance power plan on a mobile system", ConflictKind.Conditional,
             ["system:active-power-plan", "hardware:Page file and system type", "hardware:Battery", "hardware:ACPI thermal zones"],

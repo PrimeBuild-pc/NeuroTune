@@ -1,6 +1,7 @@
 using Microsoft.Win32;
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -57,7 +58,7 @@ public sealed class OptimizationCatalog
 
     public OptimizationCatalog()
     {
-        var actions = new[]
+        var actions = new List<OptimizationAction>
         {
             PowerPlan("system.high-performance", "Use the High Performance power plan",
                 "Reduces power-saving delays at the cost of higher energy use.", HighPerformanceGuid, "SCHEME_MIN", "High performance"),
@@ -152,7 +153,10 @@ public sealed class OptimizationCatalog
                 "Removes CPU-count and memory-limit overrides from the active Windows boot entry.",
                 ["numproc", "truncatememory", "removememory"])
         };
-        if (actions.Select(action => action.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count() != actions.Length)
+        actions.Add(PageFileManagedSizes());
+        actions.Add(CoreParkingOff());
+        foreach (var target in GameGpuTargetStore.Load()) actions.AddRange(PerAppGpuPreferences(target));
+        if (actions.Select(action => action.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count() != actions.Count)
             throw new InvalidOperationException("The capability registry contains duplicate action IDs.");
         foreach (var action in actions) action.Definition.Validate();
         _actions = actions.ToDictionary(x => x.Id, StringComparer.OrdinalIgnoreCase);
@@ -166,6 +170,147 @@ public sealed class OptimizationCatalog
         : throw new InvalidOperationException($"Action is not allowlisted: {id}");
 
     public bool Contains(string id) => _actions.ContainsKey(id);
+
+    private static OptimizationAction PageFileManagedSizes()
+    {
+        const string path = @"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management";
+        const string valueName = "PagingFiles";
+        string[] Current()
+        {
+            using var key = Registry.LocalMachine.OpenSubKey(path);
+            var value = key?.GetValue(valueName, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
+            return value as string[] ?? throw new InvalidOperationException("PagingFiles is missing or is not REG_MULTI_SZ.");
+        }
+        string[] Desired() => Current().Select(entry =>
+        {
+            var parsed = ParsePageFileEntry(entry);
+            return parsed.InitialSize is null ? entry : $"{parsed.Path} 0 0";
+        }).ToArray();
+        bool IsManaged() => Current().All(entry =>
+        {
+            var parsed = ParsePageFileEntry(entry);
+            return parsed.InitialSize is null || parsed is { InitialSize: 0, MaximumSize: 0 };
+        });
+        ActionAvailability Inspect()
+        {
+            try
+            {
+                if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000)) return ActionAvailability.Unavailable("Requires Windows 11");
+                var current = Current();
+                if (current.Length == 0) return ActionAvailability.Unavailable("No configured page file was found");
+                return IsManaged() ? ActionAvailability.Applied("All configured page files use Windows-managed sizes")
+                    : ActionAvailability.Ready("One or more page files use fixed sizes");
+            }
+            catch (Exception exception) { return ActionAvailability.Unavailable(exception.Message); }
+        }
+        void Apply()
+        {
+            var desired = Desired();
+            using var key = Registry.LocalMachine.CreateSubKey(path, true)
+                ?? throw new InvalidOperationException("The page-file policy key is unavailable.");
+            key.SetValue(valueName, desired, RegistryValueKind.MultiString);
+        }
+        return new("system.pagefile-managed-sizes", "Use Windows-managed page-file sizes",
+            "Preserves every configured page-file volume and lets Windows size each one instead of retaining fixed limits.",
+            "System", RiskLevel.Medium, true, @"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management",
+            Inspect, () => JsonSerializer.Serialize(CaptureRegistryValue(RegistryHive.LocalMachine, path, valueName)), Apply,
+            state => RestoreRegistryValue(RegistryHive.LocalMachine, path, valueName, DeserializeRegistrySnapshot(state)), IsManaged,
+            evidenceRequirements: ["Exact local PagingFiles REG_MULTI_SZ value; at least one existing page-file entry"],
+            sources: ["Microsoft Win32_PageFileSetting mapping and documented zero/zero per-volume system-managed sizing"],
+            sideEffects: ["Takes effect after restart; page-file volumes remain unchanged but Windows may grow or shrink their files"]);
+    }
+
+    internal static PageFileEntry ParsePageFileEntry(string value)
+    {
+        var match = Regex.Match(value.Trim(), @"^(?<path>.+?)\s+(?<initial>\d+)\s+(?<maximum>\d+)$");
+        return match.Success && uint.TryParse(match.Groups["initial"].Value, CultureInfo.InvariantCulture, out var initial) &&
+            uint.TryParse(match.Groups["maximum"].Value, CultureInfo.InvariantCulture, out var maximum)
+            ? new(match.Groups["path"].Value, initial, maximum) : new(value.Trim(), null, null);
+    }
+
+    private static OptimizationAction CoreParkingOff()
+    {
+        const string subgroup = "54533251-82be-4824-96c1-47b60b740d00";
+        const string setting = "0cc5b647-c1df-4637-891a-dec35c318583";
+        int Current() => ReadAcPowerSetting(Guid.Parse(subgroup), Guid.Parse(setting));
+        ActionAvailability Inspect()
+        {
+            try
+            {
+                if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000)) return ActionAvailability.Unavailable("Requires Windows 11");
+                if (SystemProfiler.Query("SELECT Name FROM Win32_Battery", row => row["Name"]?.ToString() ?? "").Count > 0)
+                    return ActionAvailability.Unavailable("Core-parking override is limited to AC-only desktop validation");
+                var current = Current();
+                return current == 100 ? ActionAvailability.Applied("AC minimum unparked cores: 100%")
+                    : ActionAvailability.Ready($"AC minimum unparked cores: {current}%");
+            }
+            catch (Exception exception) { return ActionAvailability.Unavailable(exception.Message); }
+        }
+        void Set(int value)
+        {
+            RunPowerCfg("/setacvalueindex", "SCHEME_CURRENT", subgroup, setting,
+                value.ToString(CultureInfo.InvariantCulture));
+            RunPowerCfg("/setactive", "SCHEME_CURRENT");
+        }
+        return new("system.core-parking-off", "Disable core parking on AC power",
+            "Keeps every logical core available in the active desktop power scheme; compare repeated measurements because this can increase power and heat.",
+            "Power", RiskLevel.Medium, false, null, Inspect,
+            () => Current().ToString(CultureInfo.InvariantCulture), () => Set(100),
+            state => Set(int.Parse(state, CultureInfo.InvariantCulture)), () => Current() == 100,
+            supportedHardware: ["AC-powered desktop with a power scheme exposing the Windows core-parking minimum-cores setting"],
+            evidenceRequirements: ["Exact active-scheme AC CPMINCORES value and no detected battery"],
+            sources: ["Microsoft powercfg command contract and exact local power-setting GUID inspection"],
+            sideEffects: ["May increase idle power, temperature, and fan noise; does not change the DC value"]);
+    }
+
+    internal static IEnumerable<OptimizationAction> PerAppGpuPreferences(GameGpuTarget target)
+    {
+        yield return PerAppGpuPreference(target, "high", "High performance", "GpuPreference=2;");
+        yield return PerAppGpuPreference(target, "saving", "Power saving", "GpuPreference=1;");
+        yield return PerAppGpuPreference(target, "default", "Windows default", null);
+    }
+
+    private static OptimizationAction PerAppGpuPreference(GameGpuTarget target, string suffix, string label, string? desired)
+    {
+        const string path = @"Software\Microsoft\DirectX\UserGpuPreferences";
+        string? Current()
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(path);
+            var value = key?.GetValue(target.ExecutablePath, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
+            return value is null ? null : value as string
+                ?? throw new InvalidOperationException("The existing per-app GPU preference has an unsupported Registry type.");
+        }
+        ActionAvailability Inspect()
+        {
+            try
+            {
+                if (!File.Exists(target.ExecutablePath)) return ActionAvailability.Unavailable("The detected executable no longer exists");
+                var current = Current();
+                var currentLabel = current is null ? "Windows default" : current.Contains("GpuPreference=2", StringComparison.OrdinalIgnoreCase)
+                    ? "High performance" : current.Contains("GpuPreference=1", StringComparison.OrdinalIgnoreCase) ? "Power saving" : "Custom/unknown";
+                return current == desired ? ActionAvailability.Applied(currentLabel) : ActionAvailability.Ready(currentLabel);
+            }
+            catch (Exception exception) { return ActionAvailability.Unavailable(exception.Message); }
+        }
+        void Apply()
+        {
+            using var key = Registry.CurrentUser.CreateSubKey(path, true)
+                ?? throw new InvalidOperationException("The per-app GPU preference key is unavailable.");
+            if (desired is null) key.DeleteValue(target.ExecutablePath, false);
+            else key.SetValue(target.ExecutablePath, desired, RegistryValueKind.String);
+        }
+        var display = $"{target.ExecutableName} [{target.Id[..6]}]";
+        return new($"gaming.gpu-{target.Id}.{suffix}", $"{label} GPU for {display}",
+            $"Sets the detected executable to {label.ToLowerInvariant()} in the Windows per-app graphics preference.",
+            "Gaming", RiskLevel.Low, false, @"HKCU\Software\Microsoft\DirectX\UserGpuPreferences", Inspect,
+            () => JsonSerializer.Serialize(CaptureRegistryValue(RegistryHive.CurrentUser, path, target.ExecutablePath)), Apply,
+            state => RestoreRegistryValue(RegistryHive.CurrentUser, path, target.ExecutablePath, DeserializeRegistrySnapshot(state)),
+            () => Current() == desired,
+            supportedHardware: ["Detected local executable and a Windows 11 graphics stack exposing per-app GPU preferences"],
+            evidenceRequirements: [$"Durable detected-target ID {target.Id}; exact Registry value kind and content"],
+            sources: ["Windows 11 per-app Graphics settings plus exact local UserGpuPreferences inspection"],
+            sideEffects: ["Changes only the selected executable preference; Windows and the graphics driver choose the physical adapter"]);
+    }
 
     private static OptimizationAction PowerPlan(string id, string name, string description, string targetGuid,
         string targetAlias, string targetLabel)
@@ -465,6 +610,22 @@ public sealed class OptimizationCatalog
     private static string RunPowerCfg(params string[] arguments)
         => RunExecutable("powercfg.exe", arguments);
 
+    private static int ReadAcPowerSetting(Guid subgroup, Guid setting)
+    {
+        var status = NativePower.PowerGetActiveScheme(IntPtr.Zero, out var schemePointer);
+        if (status != 0 || schemePointer == IntPtr.Zero)
+            throw new InvalidOperationException($"The active power scheme could not be read (Win32 {status}).");
+        try
+        {
+            var scheme = Marshal.PtrToStructure<Guid>(schemePointer);
+            status = NativePower.PowerReadACValueIndex(IntPtr.Zero, ref scheme, ref subgroup, ref setting, out var value);
+            if (status != 0)
+                throw new InvalidOperationException($"The active AC power setting could not be read (Win32 {status}).");
+            return checked((int)value);
+        }
+        finally { NativePower.LocalFree(schemePointer); }
+    }
+
     private static string RunExecutable(string executable, params string[] arguments)
     {
         var start = new ProcessStartInfo(executable)
@@ -485,4 +646,18 @@ public sealed class OptimizationCatalog
     }
 
     internal sealed record RegistryValueSnapshot(bool Exists, RegistryValueKind Kind, string? Value);
+    internal sealed record PageFileEntry(string Path, uint? InitialSize, uint? MaximumSize);
+
+    private static class NativePower
+    {
+        [DllImport("powrprof.dll")]
+        internal static extern uint PowerGetActiveScheme(IntPtr userRootPowerKey, out IntPtr activePolicyGuid);
+
+        [DllImport("powrprof.dll")]
+        internal static extern uint PowerReadACValueIndex(IntPtr rootPowerKey, ref Guid schemeGuid,
+            ref Guid subgroupOfPowerSettingsGuid, ref Guid powerSettingGuid, out uint acValueIndex);
+
+        [DllImport("kernel32.dll")]
+        internal static extern IntPtr LocalFree(IntPtr memory);
+    }
 }

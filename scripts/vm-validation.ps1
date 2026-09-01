@@ -6,6 +6,7 @@ param(
     [ValidateSet('NeuroTune-W11')]
     [string[]]$VmNames = @('NeuroTune-W11'),
     [string]$CheckpointName = 'Clean-NeuroTune-Alpha2',
+    [switch]$SkipCheckpointRestore,
     [string]$ReportPath
 )
 
@@ -35,10 +36,12 @@ function Get-CredentialPath([string]$VmName) {
 
 $results = foreach ($vmName in $VmNames) {
     $vm = Get-VM -Name $vmName -ErrorAction Stop
-    $snapshot = Get-VMSnapshot -VMName $vmName -Name $CheckpointName -ErrorAction Stop
-    if ($vm.State -ne 'Off') { Stop-VM -Name $vmName -TurnOff }
-    Restore-VMSnapshot -VMSnapshot $snapshot -Confirm:$false
-    Start-VM -Name $vmName | Out-Null
+    if (-not $SkipCheckpointRestore) {
+        $snapshot = Get-VMSnapshot -VMName $vmName -Name $CheckpointName -ErrorAction Stop
+        if ($vm.State -ne 'Off') { Stop-VM -Name $vmName -TurnOff }
+        Restore-VMSnapshot -VMSnapshot $snapshot -Confirm:$false
+        Start-VM -Name $vmName | Out-Null
+    }
 
     $credentialPath = Get-CredentialPath $vmName
     if (-not (Test-Path -LiteralPath $credentialPath)) { throw "Credential file not found: $credentialPath" }
@@ -55,6 +58,7 @@ $results = foreach ($vmName in $VmNames) {
 
     $session = New-PSSession -VMName $vmName -Credential $credential
     try {
+        Invoke-Command -Session $session -ScriptBlock { New-Item -ItemType Directory -Force C:\NeuroTuneTest | Out-Null }
         Copy-Item -LiteralPath $InstallerPath -Destination 'C:\NeuroTuneTest\NeuroTune-setup.exe' -ToSession $session
         Invoke-Command -Session $session -ScriptBlock {
             $ErrorActionPreference = 'Stop'
@@ -73,6 +77,7 @@ $results = foreach ($vmName in $VmNames) {
                 Select-Object -First 1 -ExpandProperty FullName
             if (-not $agent -or -not $app) { throw 'Installed app or agent executable not found.' }
             if (Get-Service -Name PawnIO -ErrorAction SilentlyContinue) { throw 'PawnIO service was unexpectedly installed.' }
+            $dataRoot = Join-Path $env:LOCALAPPDATA 'NeuroTune'
 
             function Invoke-Agent([string]$Command, [object]$Body = @{}) {
                 $start = [Diagnostics.ProcessStartInfo]::new($agent, $Command)
@@ -92,6 +97,28 @@ $results = foreach ($vmName in $VmNames) {
                 if (-not $response.ok) { throw "Agent $Command rejected: $($response.error)" }
                 $response.data
             }
+
+            function New-ValidationRun {
+                if (-not $script:validationProfile) { $script:validationProfile = (Invoke-Agent scan).profile }
+                $run = Invoke-Agent run-create @{ profile = $script:validationProfile; goals = @{} }
+                $path = Join-Path $dataRoot "runs\$($run.id)\run.json"
+                $journal = [IO.File]::ReadAllText($path)
+                $journal = [regex]::Replace($journal, '"State":\s*1', '"State": 5', 1)
+                $journal = $journal.Replace('"Diagnosis": null', '"Diagnosis": {"Summary":"Deterministic VM writer validation.","Findings":[],"Recommendations":[],"Conflicts":[],"ConsentQuestion":"Apply the selected registered actions?"}')
+                $journal = $journal.Replace('"PlannerStopReason": ""', '"PlannerStopReason": "vm-validation-fixture"')
+                $journal = $journal.Replace('"BaselineSessionIds": []', '"BaselineSessionIds": ["' + [guid]::NewGuid().ToString('D') + '"]')
+                $temporary = "$path.vmtest.tmp"
+                [IO.File]::WriteAllText($temporary, $journal, [Text.UTF8Encoding]::new($false))
+                Move-Item -LiteralPath $temporary -Destination $path -Force
+                $prepared = Invoke-Agent run-get @{ runId = $run.id }
+                if ($prepared.state -ne 'baselineReady' -or -not $prepared.diagnosis -or @($prepared.baselineSessionIds).Count -ne 1) {
+                    throw 'The deterministic VM run fixture did not reach BaselineReady.'
+                }
+                $prepared
+            }
+
+            $activeRuns = @(Invoke-Agent run-list | Where-Object state -notin @('completed', 'failed'))
+            if ($activeRuns.Count) { throw 'Finish or recover the existing optimization run before VM validation.' }
 
             function Set-KnownInitialState {
                 powercfg.exe /setactive SCHEME_MIN | Out-Null
@@ -115,6 +142,65 @@ $results = foreach ($vmName in $VmNames) {
                 }
             }
 
+            $knownStateTargets = @(
+                @('HKCU:\Software\Microsoft\GameBar','AutoGameModeEnabled'),
+                @('HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers','HwSchMode'),
+                @('HKCU:\System\GameConfigStore','GameDVR_Enabled'),
+                @('HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects','VisualFXSetting'),
+                @('HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management','LargeSystemCache'),
+                @('HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management','DisablePagingExecutive'),
+                @('HKLM:\SOFTWARE\Microsoft\Windows\Dwm','OverlayTestMode'),
+                @('HKCU:\Software\Microsoft\Windows\CurrentVersion\GameDVR','AppCaptureEnabled'),
+                @('HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers','TdrDelay'),
+                @('HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers','TdrDdiDelay'),
+                @('HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers','TdrLevel'),
+                @('HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers','TdrDebugMode'),
+                @('HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters','TcpTimedWaitDelay'),
+                @('HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters','MaxUserPort'),
+                @('HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters','DefaultTTL'),
+                @('HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters','Tcp1323Opts'),
+                @('HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters','EnablePMTUDiscovery'),
+                @('HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters','DisableTaskOffload'),
+                @('HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters','EnableTCPChimney'),
+                @('HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters','EnableRSS'),
+                @('HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters','EnableDCA'),
+                @('HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters','SackOpts'),
+                @('HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters','GlobalMaxTcpWindowSize'),
+                @('HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters','TcpWindowSize'),
+                @('HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters','KeepAliveTime'),
+                @('HKLM:\SYSTEM\CurrentControlSet\Control\Power\PowerThrottling','PowerThrottlingOff')
+            )
+
+            function Capture-TestState {
+                $scheme = [regex]::Match(((& powercfg.exe /getactivescheme) -join ' '), '[0-9a-fA-F-]{36}').Value
+                $values = foreach ($target in $knownStateTargets) {
+                    $key = Get-Item -LiteralPath $target[0] -ErrorAction SilentlyContinue
+                    if (-not $key -or $null -eq $key.GetValue($target[1], $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)) {
+                        [pscustomobject]@{ Path=$target[0]; Name=$target[1]; Exists=$false; Kind=$null; Value=$null }
+                    } else {
+                        $kind = $key.GetValueKind($target[1])
+                        if ($kind -in @([Microsoft.Win32.RegistryValueKind]::None, [Microsoft.Win32.RegistryValueKind]::Unknown)) {
+                            throw "Unsupported existing Registry kind for $($target[1]): $kind"
+                        }
+                        [pscustomobject]@{ Path=$target[0]; Name=$target[1]; Exists=$true; Kind=$kind; Value=$key.GetValue($target[1], $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames) }
+                    }
+                }
+                [pscustomobject]@{ PowerScheme=$scheme; Values=@($values) }
+            }
+
+            function Restore-TestState([object]$Snapshot) {
+                foreach ($item in $Snapshot.Values) {
+                    if (-not (Test-Path -LiteralPath $item.Path)) { New-Item -Path $item.Path | Out-Null }
+                    if ($item.Exists) {
+                        New-ItemProperty -LiteralPath $item.Path -Name $item.Name -Value $item.Value `
+                            -PropertyType $item.Kind.ToString() -Force | Out-Null
+                    } else {
+                        Remove-ItemProperty -LiteralPath $item.Path -Name $item.Name -ErrorAction SilentlyContinue
+                    }
+                }
+                & powercfg.exe /setactive $Snapshot.PowerScheme | Out-Null
+            }
+
             function Start-AgentForCrash([string]$Command, [object]$Body) {
                 $start = [Diagnostics.ProcessStartInfo]::new($agent, $Command)
                 $start.UseShellExecute = $false
@@ -129,6 +215,21 @@ $results = foreach ($vmName in $VmNames) {
                 $process
             }
 
+            function Assert-ActionState([object[]]$Expected, [string]$Stage) {
+                $actual = @(Invoke-Agent actions)
+                foreach ($item in $Expected) {
+                    $match = $actual | Where-Object id -eq $item.id
+                    if (-not $match -or $item.availability.currentValue -ne $match.availability.currentValue) {
+                        throw "$Stage state mismatch for $($item.id)"
+                    }
+                }
+            }
+
+            $originalState = Capture-TestState
+            $gpuStore = Join-Path $dataRoot 'game-gpu-targets.json'
+            $gpuStoreExisted = Test-Path -LiteralPath $gpuStore
+            $gpuStoreOriginal = if ($gpuStoreExisted) { [IO.File]::ReadAllText($gpuStore) } else { $null }
+            try {
             $version = [Diagnostics.FileVersionInfo]::GetVersionInfo($app).ProductVersion
             Write-Host 'stage: ui smoke'
             $ui = Start-Process -FilePath $app -PassThru
@@ -139,8 +240,8 @@ $results = foreach ($vmName in $VmNames) {
             Set-KnownInitialState
             Write-Host 'stage: apply verify rollback'
             $before = Invoke-Agent actions
-            $restoreBefore = @(Get-ComputerRestorePoint).Count
-            $applied = Invoke-Agent apply @{ actionIds = $using:actionIds; highRiskConfirmed = $true }
+            $run = New-ValidationRun
+            $applied = Invoke-Agent apply @{ actionIds = $using:actionIds; highRiskConfirmed = $true; runId = $run.Id }
             if ($applied.status -ne 'Completed' -or @($applied.actions).Count -ne 12 -or @($applied.actions | Where-Object { -not $_.applied }).Count) {
                 throw 'All-action Apply/Verify did not complete.'
             }
@@ -148,40 +249,47 @@ $results = foreach ($vmName in $VmNames) {
                 Where-Object { (Get-Content -Raw $_.FullName | ConvertFrom-Json).id -eq $applied.id } |
                 Select-Object -First 1 -ExpandProperty FullName
             if (-not (Test-Path -LiteralPath $manifest)) { throw 'Operation manifest missing.' }
-            if (@(Get-ComputerRestorePoint).Count -le $restoreBefore) { throw 'Apply restore point was not created.' }
-            Invoke-Agent rollback @{ operationId = $applied.id } | Out-Null
+            $restorePoint = "NeuroTune $(([guid]$applied.id).ToString('N'))"
+            if (-not (Get-ComputerRestorePoint | Where-Object Description -eq $restorePoint)) {
+                throw 'Apply restore point was not created.'
+            }
+            Invoke-Agent rollback @{ operationId = $applied.id; runId = $run.Id } | Out-Null
             $rolled = (Invoke-Agent history | Where-Object id -eq $applied.id)
             if ($rolled.status -ne 'Rollback completed' -or @($rolled.actions | Where-Object { -not $_.rolledBack }).Count) {
                 throw 'All-action rollback did not complete.'
             }
-            $after = Invoke-Agent actions
-            for ($i = 0; $i -lt $before.Count; $i++) {
-                if ($before[$i].id -ne $after[$i].id -or $before[$i].availability.currentValue -ne $after[$i].availability.currentValue) {
-                    throw "Rollback state mismatch for $($before[$i].id)"
-                }
-            }
+            Assert-ActionState $before 'Rollback'
 
             Set-KnownInitialState
             Write-Host 'stage: crash apply recovery'
-            $crashApply = Start-AgentForCrash apply @{ actionIds = $using:actionIds; highRiskConfirmed = $true }
+            $beforeCrashApply = @(Invoke-Agent actions)
+            $crashRun = New-ValidationRun
+            $crashApply = Start-AgentForCrash apply @{ actionIds = $using:actionIds; highRiskConfirmed = $true; runId = $crashRun.Id }
             $operations = Join-Path $env:LOCALAPPDATA 'NeuroTune\operations'
             $deadline = (Get-Date).AddSeconds(20)
             do {
                 $candidate = Get-ChildItem -Path $operations -Filter manifest.json -Recurse -ErrorAction SilentlyContinue |
-                    Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+                    Sort-Object LastWriteTimeUtc -Descending | Where-Object {
+                        (Get-Content -Raw $_.FullName | ConvertFrom-Json).optimizationRunId -eq $crashRun.Id
+                    } | Select-Object -First 1
                 $state = if ($candidate) { Get-Content -Raw $candidate.FullName | ConvertFrom-Json } else { $null }
-                if (-not $state -or $state.status -ne 'Applying') { Start-Sleep -Milliseconds 20 }
-            } until (($state -and $state.status -eq 'Applying') -or (Get-Date) -gt $deadline)
-            if (-not $state -or $state.status -ne 'Applying') { throw 'Could not capture Applying state.' }
+                $writeStarted = $state -and @($state.actions | Where-Object { $_.attempted -or $_.applied }).Count -gt 0
+                if (-not $writeStarted) { Start-Sleep -Milliseconds 20 }
+            } until ($writeStarted -or (Get-Date) -gt $deadline)
+            if (-not $writeStarted) { throw 'Could not capture an interrupted Apply after its first journaled write.' }
             Stop-Process -Id $crashApply.Id -Force
+            Invoke-Agent run-reconcile @{ runId = $crashRun.Id } | Out-Null
             $pendingApply = Invoke-Agent history | Where-Object id -eq $state.id
             if (-not $pendingApply) { throw 'Interrupted Apply was not recovered from history.' }
-            Invoke-Agent rollback @{ operationId = $state.id } | Out-Null
+            Invoke-Agent rollback @{ operationId = $state.id; runId = $crashRun.Id } | Out-Null
+            Assert-ActionState $beforeCrashApply 'Interrupted Apply recovery'
 
             Set-KnownInitialState
             Write-Host 'stage: crash rollback recovery'
-            $forRollback = Invoke-Agent apply @{ actionIds = $using:actionIds; highRiskConfirmed = $true }
-            $crashRollback = Start-AgentForCrash rollback @{ operationId = $forRollback.id }
+            $beforeCrashRollback = @(Invoke-Agent actions)
+            $rollbackRun = New-ValidationRun
+            $forRollback = Invoke-Agent apply @{ actionIds = $using:actionIds; highRiskConfirmed = $true; runId = $rollbackRun.Id }
+            $crashRollback = Start-AgentForCrash rollback @{ operationId = $forRollback.id; runId = $rollbackRun.Id }
             $deadline = (Get-Date).AddSeconds(20)
             do {
                 $rolling = Invoke-Agent history | Where-Object id -eq $forRollback.id
@@ -189,9 +297,11 @@ $results = foreach ($vmName in $VmNames) {
             } until (($rolling -and $rolling.status -eq 'Rolling back') -or (Get-Date) -gt $deadline)
             if (-not $rolling -or $rolling.status -ne 'Rolling back') { throw 'Could not capture Rolling back state.' }
             Stop-Process -Id $crashRollback.Id -Force
-            Invoke-Agent rollback @{ operationId = $forRollback.id } | Out-Null
+            Invoke-Agent run-reconcile @{ runId = $rollbackRun.Id } | Out-Null
+            Invoke-Agent rollback @{ operationId = $forRollback.id; runId = $rollbackRun.Id } | Out-Null
             $recovered = Invoke-Agent history | Where-Object id -eq $forRollback.id
             if ($recovered.status -ne 'Rollback completed') { throw 'Interrupted rollback recovery failed.' }
+            Assert-ActionState $beforeCrashRollback 'Interrupted Rollback recovery'
 
             $orphanNames = 'NeuroTune.Agent','powercfg','netsh','bcdedit','fsutil','fltmc','netcfg'
             $orphans = Get-Process -Name $orphanNames -ErrorAction SilentlyContinue
@@ -225,6 +335,14 @@ $results = foreach ($vmName in $VmNames) {
                 uninstall = 'passed'
                 defender = 'no-detection'
                 hvciConfigured = [int]$hvciConfigured
+            }
+            } finally {
+                Restore-TestState $originalState
+                if ($gpuStoreExisted) {
+                    [IO.File]::WriteAllText($gpuStore, $gpuStoreOriginal, [Text.UTF8Encoding]::new($false))
+                } elseif (Test-Path -LiteralPath $gpuStore) {
+                    Remove-Item -LiteralPath $gpuStore -Force
+                }
             }
         }
     }

@@ -1,0 +1,187 @@
+{
+    "generatedAt":  "2026-08-30T22:38:19.1620921+00:00",
+    "vmName":  "NeuroTune-W11",
+    "checkpoint":  "Clean-NeuroTune-Alpha2",
+    "installerSha256":  "8D33E53E0CDEBA56C09303C8E082F1BB68DDEDD25AAD06D96F80D1F829B79465",
+    "status":  "passed",
+    "results":  [
+                    {
+                        "actionId":  "system.high-performance",
+                        "inspectBefore":  "ready",
+                        "applyAndVerify":  "passed",
+                        "rawAppliedState":  "passed",
+                        "registryExport":  "not-applicable",
+                        "applyRestorePoint":  "passed",
+                        "rollbackValueAndKind":  "passed",
+                        "rollbackRestorePoint":  "passed",
+                        "manifest":  "Rollback completed"
+                    },
+                    {
+                        "actionId":  "system.core-parking-off",
+                        "inspectBefore":  "ready",
+                        "applyAndVerify":  "passed",
+                        "rawAppliedState":  "passed",
+                        "registryExport":  "not-applicable",
+                        "applyRestorePoint":  "passed",
+                        "rollbackValueAndKind":  "passed",
+                        "rollbackRestorePoint":  "passed",
+                        "manifest":  "Rollback completed"
+                    },
+                    {
+                        "actionId":  "system.pagefile-managed-sizes",
+                        "inspectBefore":  "ready",
+                        "applyAndVerify":  "passed",
+                        "rawAppliedState":  "passed",
+                        "registryExport":  "passed",
+                        "applyRestorePoint":  "passed",
+                        "rollbackValueAndKind":  "passed",
+                        "rollbackRestorePoint":  "passed",
+                        "manifest":  "Rollback completed"
+                    },
+                    {
+                        "actionId":  "gaming.gpu-d0194ba1de1971e0.high",
+                        "inspectBefore":  "ready",
+                        "applyAndVerify":  "passed",
+                        "rawAppliedState":  "passed",
+                        "registryExport":  "passed",
+                        "applyRestorePoint":  "passed",
+                        "rollbackValueAndKind":  "passed",
+                        "rollbackRestorePoint":  "passed",
+                        "manifest":  "Rollback completed"
+                    },
+                    {
+                        "actionId":  "gaming.gpu-d0194ba1de1971e0.default",
+                        "inspectBefore":  "ready",
+                        "applyAndVerify":  "passed",
+                        "rawAppliedState":  "passed",
+                        "registryExport":  "passed",
+                        "applyRestorePoint":  "passed",
+                        "rollbackValueAndKind":  "passed",
+                        "rollbackRestorePoint":  "passed",
+                        "manifest":  "Rollback completed"
+                    },
+                    {
+                        "actionId":  "gaming.game-mode",
+                        "inspectBefore":  "ready",
+                        "applyAndVerify":  "passed",
+                        "rawAppliedState":  "passed",
+                        "registryExport":  "passed",
+                        "applyRestorePoint":  "passed",
+                        "rollbackValueAndKind":  "passed",
+                        "rollbackRestorePoint":  "passed",
+                        "manifest":  "Rollback completed"
+                    },
+                    {
+                        "actionId":  "gaming.hags",
+                        "inspectBefore":  "ready",
+                        "applyAndVerify":  "passed",
+                        "rawAppliedState":  "passed",
+                        "registryExport":  "passed",
+                        "applyRestorePoint":  "passed",
+                        "rollbackValueAndKind":  "passed",
+                        "rollbackRestorePoint":  "passed",
+                        "manifest":  "Rollback completed"
+                    },
+                    {
+                        "actionId":  "gaming.game-dvr-off",
+                        "inspectBefore":  "ready",
+                        "applyAndVerify":  "passed",
+                        "rawAppliedState":  "passed",
+                        "registryExport":  "passed",
+                        "applyRestorePoint":  "passed",
+                        "rollbackValueAndKind":  "passed",
+                        "rollbackRestorePoint":  "passed",
+                        "manifest":  "Rollback completed"
+                    },
+                    {
+                        "actionId":  "system.visual-effects",
+                        "inspectBefore":  "ready",
+                        "applyAndVerify":  "passed",
+                        "rawAppliedState":  "passed",
+                        "registryExport":  "passed",
+                        "applyRestorePoint":  "passed",
+                        "rollbackValueAndKind":  "passed",
+                        "rollbackRestorePoint":  "passed",
+                        "manifest":  "Rollback completed"
+                    },
+                    {
+                        "actionId":  "system.large-cache-default",
+                        "inspectBefore":  "ready",
+                        "applyAndVerify":  "passed",
+                        "rawAppliedState":  "passed",
+                        "registryExport":  "passed",
+                        "applyRestorePoint":  "passed",
+                        "rollbackValueAndKind":  "passed",
+                        "rollbackRestorePoint":  "passed",
+                        "manifest":  "Rollback completed"
+                    },
+                    {
+                        "actionId":  "system.paging-executive-default",
+                        "inspectBefore":  "ready",
+                        "applyAndVerify":  "passed",
+                        "rawAppliedState":  "passed",
+                        "registryExport":  "passed",
+                        "applyRestorePoint":  "passed",
+                        "rollbackValueAndKind":  "passed",
+                        "rollbackRestorePoint":  "passed",
+                        "manifest":  "Rollback completed"
+                    },
+                    {
+                        "actionId":  "graphics.mpo-default",
+                        "inspectBefore":  "ready",
+                        "applyAndVerify":  "passed",
+                        "rawAppliedState":  "passed",
+                        "registryExport":  "passed",
+                        "applyRestorePoint":  "passed",
+                        "rollbackValueAndKind":  "passed",
+                        "rollbackRestorePoint":  "passed",
+                        "manifest":  "Rollback completed"
+                    },
+                    {
+                        "actionId":  "gaming.app-capture-off",
+                        "inspectBefore":  "ready",
+                        "applyAndVerify":  "passed",
+                        "rawAppliedState":  "passed",
+                        "registryExport":  "passed",
+                        "applyRestorePoint":  "passed",
+                        "rollbackValueAndKind":  "passed",
+                        "rollbackRestorePoint":  "passed",
+                        "manifest":  "Rollback completed"
+                    },
+                    {
+                        "actionId":  "graphics.tdr-default",
+                        "inspectBefore":  "ready",
+                        "applyAndVerify":  "passed",
+                        "rawAppliedState":  "passed",
+                        "registryExport":  "passed",
+                        "applyRestorePoint":  "passed",
+                        "rollbackValueAndKind":  "passed",
+                        "rollbackRestorePoint":  "passed",
+                        "manifest":  "Rollback completed"
+                    },
+                    {
+                        "actionId":  "network.tcp-default",
+                        "inspectBefore":  "ready",
+                        "applyAndVerify":  "passed",
+                        "rawAppliedState":  "passed",
+                        "registryExport":  "passed",
+                        "applyRestorePoint":  "passed",
+                        "rollbackValueAndKind":  "passed",
+                        "rollbackRestorePoint":  "passed",
+                        "manifest":  "Rollback completed"
+                    },
+                    {
+                        "actionId":  "system.power-throttling-default",
+                        "inspectBefore":  "ready",
+                        "applyAndVerify":  "passed",
+                        "rawAppliedState":  "passed",
+                        "registryExport":  "passed",
+                        "applyRestorePoint":  "passed",
+                        "rollbackValueAndKind":  "passed",
+                        "rollbackRestorePoint":  "passed",
+                        "manifest":  "Rollback completed"
+                    }
+                ],
+    "cleanup":  "action rollback completed; checkpoint restore skipped",
+    "error":  null
+}

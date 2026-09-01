@@ -9,13 +9,121 @@ or validation report.
 
 | Field | Value |
 |---|---|
-| Target | `v0.7.0-alpha.1` |
-| Branch | `main` |
-| Current milestone | M9 — GPU IRQ closed-loop validation |
-| Last verified baseline | `8810ab5`; Windows 11 build 26200 ETW smoke report, 2026-08-14 |
+| Target | Next AI-harness alpha |
+| Branch | `codex/ai-optimization-harness-20260830` |
+| Current milestone | M9 — physical device-affinity matrix intake |
+| Last verified baseline | `5186020`; 60 .NET tests, PowerShell 5.1 collector self-test, and rewritten public branch/tag verification, 2026-09-01 |
 | Distribution | unsigned NSIS plus portable ZIP, GitHub/Discord |
 | License | MIT, copyright PrimeBuild |
-| Repository visibility | private until the full-history privacy/secret audit passes |
+| Repository visibility | public; approved history rewrite is an active privacy gate |
+
+## AI optimization harness TODO
+
+NeuroTune's core product is an AI harness for evidence-led gaming optimization,
+not a generic tweak pack with an AI summary. The model chooses bounded next
+steps and explains hypotheses; local typed code owns inspection, approval,
+execution, verification, rollback, and measurement quality.
+
+### P0 — closed-loop run contract
+
+- [x] Persist one `OptimizationRun` linking goals, sanitized system evidence,
+  diagnosis, requested probes, approved actions, measurement sessions,
+  comparisons, decisions, and recovery state.
+- [x] Enforce a state machine for Scan → Diagnose/propose → Measure baseline →
+  Approve → Apply → optional verified restart → Measure candidate → Evaluate →
+  Keep/Rollback. P1 may later split hypothesis and proposal into separate turns.
+- [x] Resume safely after restart or process failure without repeating a write.
+- [x] Stabilize the Tauri process-tree cancellation test and prove no child
+  process survives cancellation.
+
+### P1 — bounded AI tool loop
+
+- [x] Replace the single-pass diagnosis-only flow with a bounded multi-turn
+  planner that may request only registered read-only probes and measurements.
+- [x] Keep every write behind a local capability ID, compatibility inspection,
+  explicit approval, backup, verification, and rollback.
+- [x] Record every model request, accepted/rejected tool proposal, evidence ID,
+  and stop reason without storing credentials or raw private evidence.
+- [x] Add deterministic limits for turns, payload size, repeated requests, and
+  provider failure; fall back to the local conflict graph.
+
+### P2 — measurement-led gaming evaluation
+
+- [x] Make ETW Baseline/Candidate sessions part of the same optimization run
+  and generate an automatic Keep/Rollback recommendation from valid repeated
+  comparisons.
+- [x] Add local PresentMon-compatible frame-time evidence for FPS, 1% low,
+  stutter, and present mode without sending raw traces to a provider.
+- [x] Detect and reject changed workloads, hardware, configuration, duration,
+  thermal state, or invalid capture quality before claiming a result.
+- [x] Keep input-latency claims manual/unverified unless supported measurement
+  hardware is explicitly integrated.
+
+### P3 — detected gaming and hardware context
+
+- [x] Detect installed launchers, games, executables, graphics API signals,
+  per-game Windows GPU preferences, display topology, and active GPU mapping.
+- [x] Add a reviewed optional low-level telemetry adapter for temperatures,
+  clocks, throttling, utilization, power, and memory-profile evidence without
+  silent driver installation.
+- [x] Expand exact component baselines and return `baseline unavailable` for
+  every unmatched CPU, GPU, DIMM, board, BIOS, or driver.
+- [x] Keep official version comparison deterministic offline: injected exact/error
+  fixtures and `ComparisonUnavailable` fallback; never infer an update from an
+  unpinned web result.
+
+### P4 — reversible capability and recipe coverage
+
+- [x] Complete typed per-app GPU targets, Windows 11-version-qualified
+  Windows-managed page-file handling, and platform-qualified power/core-parking
+  capabilities.
+- [x] Surface overlay/startup conflicts contextually, but keep intervention
+  manual and the per-game recipe catalog empty until exact detection,
+  compatibility, destination, and rollback exist.
+- [x] Keep repository PowerShell files as developer validation tooling rather
+  than bundled optimizations; executable optimizations use typed Inspect,
+  Capture, Apply, Verify, and Restore capabilities, while model-generated
+  scripts remain inert artifacts.
+- [x] Keep GPU IRQ affinity read-only until the AMD/NVIDIA physical matrix,
+  restart/resume flow, exact restore, and supervised Keep/Rollback pass.
+
+### P5 — validation and release gates
+
+- [ ] Pass every supported writer through disposable Windows 11
+  Inspect/Apply/Verify/Rollback and interrupted-operation recovery.
+- [ ] Complete repeated physical DirectX validation on supported AMD and
+  NVIDIA hosts and publish the scoped support matrix. The read-only fleet
+  collector is complete; third-party reports and benchmark runs remain.
+- [ ] Complete 100/150/200% scaling, keyboard-only, Narrator, and
+  forced-colors checks under supervised Windows runs.
+- [x] Complete automated privacy, inert export-report, offline-provider, and
+  recovery-documentation checks; keep manual visual acceptance separate.
+- [x] Complete the approved full-history author-metadata rewrite and verify
+  every remote branch/tag before public visibility.
+- [x] Claim performance gains only from reproducible, quality-gated repeated
+  measurements tied to the exact run and machine configuration.
+
+### Current validation blockers
+
+- The existing `NeuroTune-W11` VM on `D:` was repaired and registered in place
+  without copying its disks or modifying its AVHDX/checkpoint chain. On Windows
+  11 build 26200, 16 targeted writer round trips passed, including page file,
+  core parking, and per-app GPU high/default; interrupted Apply and Rollback
+  recovery also passed with the exact run ID. P5 remains open for the complete
+  current-action sweep and per-app GPU power-saving case.
+- Physical repeated DirectX validation still needs supported AMD and NVIDIA
+  hosts. The shareable collector now gathers redacted GPU/driver, CPU-set, and
+  interrupt-policy facts without admin, network access, or system writes; it
+  deliberately does not claim performance evidence.
+- Scaling, Narrator, forced-colors, keyboard-only, and final recovery UX checks
+  require supervised manual runs. Static UI contract now exposes selected
+  provider/theme state, labelled icon-only destructive actions, live status
+  feedback, inert text export, and no executable artifact path; UI tests,
+  typecheck, lint, and production build pass.
+- Branches and tags now contain only noreply identities and the `main` ruleset
+  was restored after the coordinated force-push. GitHub's read-only heads for
+  merged PRs #4–#9 still retain old commit objects; only GitHub Support can
+  dereference those PRs and purge cached views.
 
 ## Locked product decisions
 
@@ -45,6 +153,14 @@ or validation report.
 - The first measurement release is read-only. GPU IRQ affinity and every later
   device writer remain gated on repeated physical-host validation and exact
   rollback evidence.
+- Driver/device affinity means Windows interrupt routing. Service affinity is
+  process affinity, may affect a shared service host, and is not persisted or
+  automated until NeuroTune can prove a dedicated process and repeatable gain.
+- The fleet collector is source-visible, offline, no-admin, and read-only. It
+  exports no user/computer name, serial, MAC/IP, full path, Registry path, raw
+  PnP instance ID, stable cross-report device key, or interrupt-mask value.
+- DEVICE-TWEAKER is design input only. NeuroTune does not import its backend,
+  force MSI mode, change RSS/NDIS, use RWEverything, or write PCI state.
 - TraceProcessing 1.12.10 was not selected because its redistribution terms add
   obligations beyond the repository's MIT grant. The stable application
   contracts use the MIT-licensed TraceEvent 3.2.5 fallback.
@@ -56,16 +172,17 @@ or validation report.
 
 | ID | Milestone | Status | Acceptance evidence |
 |---|---|---|---|
-| M0 | Close legacy backlog, add MIT, consolidate planning | Completed | `73ad228`; issues #1–#3 closed 2026-08-02; PR #5 |
-| M1 | Structured dynamic-plan contract and goal/measurement context | Completed | `9ec9332`; 21 .NET tests, 7 Vitest tests, UI typecheck/lint/build; PR #5 |
-| M2 | Extensible reversible capability registry and first expansion | In progress | `c0acdb2`; 25 actions, 24 .NET tests, exact round-trip on Windows 11 build 26200 plus historical Windows 10 build 19045; PR #5 |
-| M3 | Verified artifact catalog and deterministic update advisor | In progress | `a7fa9a6`; empty-by-default catalogs, exact text transaction, official vendor advisor, 29 .NET tests; PR #5 |
-| M4 | Plan-focused accessible UI and script/resource review | In progress | `b1d7d11`; five labelled types, inert script copy/save, enforced high-risk confirmation; 30 .NET, 7 UI, 2 Rust tests; manual scaling/Narrator remain; PR #5 |
-| M5 | NSIS, portable ZIP, checksums, release documentation | Completed | `8416b69`; NSIS and 64,196,039-byte ZIP, checksums and Windows 11 smoke; historical Windows 10 evidence retained; PR #5 |
-| M6 | Full-history secret/privacy audit and public repository | Blocked | `32fd2aa`; no secrets; reachable personal Gmail author metadata requires PrimeBuild accept/rewrite/private decision; PR #5 |
+| M0 | Close legacy backlog, add MIT, consolidate planning | Completed | `112eb5c`; issues #1–#3 closed 2026-08-02; PR #5 |
+| M1 | Structured dynamic-plan contract and goal/measurement context | Completed | `61da21a`; 21 .NET tests, 7 Vitest tests, UI typecheck/lint/build; PR #5 |
+| M2 | Extensible reversible capability registry and first expansion | In progress | `4ef8abb`; 25 actions, 24 .NET tests, exact round-trip on Windows 11 build 26200 plus historical Windows 10 build 19045; PR #5 |
+| M3 | Verified artifact catalog and deterministic update advisor | In progress | `976936a`; empty-by-default catalogs, exact text transaction, official vendor advisor, 29 .NET tests; PR #5 |
+| M4 | Plan-focused accessible UI and script/resource review | In progress | `1720ce3`; five labelled types, inert script copy/save, enforced high-risk confirmation; 30 .NET, 7 UI, 2 Rust tests; manual scaling/Narrator remain; PR #5 |
+| M5 | NSIS, portable ZIP, checksums, release documentation | Completed | `97bb259`; NSIS and 64,196,039-byte ZIP, checksums and Windows 11 smoke; historical Windows 10 evidence retained; PR #5 |
+| M6 | Full-history secret/privacy audit and public repository | In progress | Branches/tags clean and force-updated; ruleset restored; six GitHub-managed historical PR refs require a Support purge |
 | M7 | Optional imported benchmark evidence and researched sources | Planned | Deferred until the planner and advisor are stable |
-| M8 | ETW Measurement Alpha | In validation | `1bf387c`, `8810ab5`; three of three valid watchdog captures on Windows 11 build 26200, zero lost events, no raw ETL or WPR orphan; physical DirectX matrix remains |
-| M9 | GPU IRQ closed-loop | In progress | Read-only CPU-set/PnP topology, exact current-policy snapshot, and opaque three-candidate preview implemented; writer, restart, Keep/Rollback, driver matrix, and AI candidate selection remain gated |
+| M8 | ETW Measurement Alpha | In validation | `45746f2`, `868bf94`; three of three valid watchdog captures on Windows 11 build 26200, zero lost events, no raw ETL or WPR orphan; physical DirectX matrix remains |
+| M9 | GPU IRQ closed-loop | In progress | `5186020`; read-only CPU-set/PnP topology, exact current-policy snapshot, opaque three-candidate GPU preview, and shareable redacted fleet collector implemented; writer, restart, Keep/Rollback, driver matrix, and AI candidate selection remain gated |
+| M10 | AI optimization harness | In validation | `10e3044`, PR #10; CI passed before coordinated rewrite and retriggered afterward; 60 .NET tests, 7 UI tests, 2 Rust tests, Release builds, lint/typecheck, unsigned NSIS/portable ZIP/checksums, committed Windows 11 writer/recovery reports; independent Claude Code reviews via Herdr |
 
 ## M8 — ETW Measurement Alpha
 
@@ -99,15 +216,19 @@ or validation report.
   overlap. Expose opaque `candidateId` values and validated masks as a
   read-only preview.
 - Inspect `AssignmentSetOverride` and `DevicePolicy` through the 64-bit local
-  Registry view. For the expected Binary/DWord types, preserve existence,
-  type, byte length, and hex value locally; reject unexpected types as
-  non-restorable and never include the snapshot in provider evidence.
+  Registry view. Preserve the documented Binary/DWord/QWord affinity-mask
+  forms plus the DWord policy with exact existence, type, byte length, and hex
+  value locally; reject unexpected types as non-restorable and never include
+  the snapshot in provider evidence.
 - Keep every candidate `ApplyEnabled=false` until AMD/NVIDIA driver fixtures,
   exact capture/verify/restore, restart handling, and the physical-host matrix
   pass. Only then add the supervised writer and AI selection by candidate ID.
 - Run `scripts/physical-gpu-measurement.ps1` against a repeatable DirectX scene
   to collect three quality-gated Baselines and a redacted read-only candidate
   report for each validated GPU/driver combination.
+- Use `tools/hardware-collector` to gather the broader AMD/NVIDIA and device
+  inventory first. Fleet JSON establishes which fixtures to build; it cannot
+  unlock a writer without repeated Baseline/Candidate performance evidence.
 
 ## M1 — dynamic plan foundation
 
