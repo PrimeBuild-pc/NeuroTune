@@ -41,6 +41,8 @@ const COMMANDS: &[&str] = &[
     "measurement-gpu-candidates",
     "measurement-gpu-affinity-inspect",
     "measurement-delete",
+    "power-plan-list",
+    "power-plan-stage",
 ];
 
 #[derive(Default)]

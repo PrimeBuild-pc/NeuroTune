@@ -571,6 +571,68 @@ public sealed class CoreTests
     }
 
     [TestMethod]
+    public void Planner_receives_effective_memory_power_and_network_state_immediately()
+    {
+        var profile = new SystemProfile
+        {
+            WindowsSettings = new()
+            {
+                ["MMAgent MemoryCompression"] = "False",
+                ["Power policy processor EPP"] = "AC=0%; DC=50%"
+            },
+            HardwareCapabilities = new() { ["Memory pressure sample"] = "available=16000 MB; committed=35%; pages-input=0/s; page-reads=0/s" },
+            NetworkSettings = new() { ["Effective RSS settings"] = "Not exposed for active adapters" }
+        };
+
+        var facts = LlmClient.BuildEvidenceFacts(profile);
+        var provided = LlmClient.SelectInitialEvidence(facts, []);
+
+        Assert.AreEqual("False", provided["windows:MMAgent MemoryCompression"]);
+        Assert.AreEqual("AC=0%; DC=50%", provided["windows:Power policy processor EPP"]);
+        Assert.IsTrue(provided.ContainsKey("hardware:Memory pressure sample"));
+        Assert.IsTrue(provided.ContainsKey("network:Effective RSS settings"));
+    }
+
+    [TestMethod]
+    public void Mmagent_json_is_split_into_exact_evidence_values()
+    {
+        var values = SystemProfiler.ParseMemoryManagerSettings("""{"ApplicationLaunchPrefetching":true,"ApplicationPreLaunch":true,"MaxOperationAPIFiles":512,"MemoryCompression":false,"OperationAPI":true,"PageCombining":false}""");
+
+        Assert.AreEqual("False", values["MMAgent MemoryCompression"]);
+        Assert.AreEqual("512", values["MMAgent MaxOperationAPIFiles"]);
+        Assert.IsTrue(SystemProfiler.ParseMemoryManagerSettings("Unavailable").Values.All(value => value == "Unavailable"));
+    }
+
+    [TestMethod]
+    public void Custom_power_plans_are_staged_by_hash_as_high_risk_actions()
+    {
+        var root = Path.Combine(Path.GetTempPath(), $"neurotune-power-{Guid.NewGuid():N}");
+        var source = Path.Combine(root, "source");
+        var staged = Path.Combine(root, "staged");
+        Directory.CreateDirectory(source);
+        try
+        {
+            var path = Path.Combine(source, "Example low latency.pow");
+            File.WriteAllBytes(path, [1, 2, 3, 4]);
+            File.WriteAllText(Path.Combine(source, "ignore.txt"), "not a plan");
+            var store = new PowerPlanStore(staged);
+
+            var listed = store.ListSource(source).Single();
+            var imported = store.Stage(listed.Path);
+            var action = OptimizationCatalog.CustomPowerPlan(imported);
+
+            Assert.AreEqual(listed.Sha256, imported.Sha256);
+            Assert.HasCount(1, store.ListStaged());
+            Assert.AreEqual(RiskLevel.High, action.Risk);
+            StringAssert.StartsWith(action.Id, "power.custom.");
+            File.WriteAllBytes(imported.Path, [9]);
+            Assert.IsFalse(PowerPlanStore.Matches(imported));
+            Assert.IsFalse(action.Inspect().CanApply);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [TestMethod]
     [TestCategory("WindowsIntegration")]
     public void Profiler_collects_a_windows_profile()
     {
@@ -579,6 +641,10 @@ public sealed class CoreTests
         Assert.IsFalse(string.IsNullOrWhiteSpace(profile.OperatingSystem));
         Assert.IsNotNull(profile.GamingSettings);
         Assert.IsNotNull(profile.NetworkSettings);
+        Assert.IsTrue(profile.WindowsSettings.ContainsKey("MMAgent MemoryCompression"));
+        Assert.IsTrue(profile.WindowsSettings.ContainsKey("Power policy processor EPP"));
+        Assert.IsTrue(profile.HardwareCapabilities.ContainsKey("Memory pressure sample"));
+        Assert.IsTrue(profile.NetworkSettings.ContainsKey("Active adapter power management"));
         Assert.IsGreaterThan(75, profile.PerformanceRegistry.Count);
         Assert.IsNotNull(profile.HardwareCapabilities);
         Assert.IsNotNull(profile.FirmwareAndMemory);

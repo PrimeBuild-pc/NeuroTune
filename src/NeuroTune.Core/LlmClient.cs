@@ -173,6 +173,10 @@ public sealed class LlmClient
         Every finding and recommendation must cite PROVIDED EVIDENCE. Do not infer game-engine behavior from a game name.
         ExecutableAction may use only supplied actionId values. Scripts are review-only and never executable. Never invent resource/update IDs, versions, URLs, paths, or commands.
         Prefer no recommendation over speculation. A missing Registry value may be a safe Windows default. Do not promise gains without repeated measurements. User performance input is unverified context.
+        For FPS or system-latency goals, treat disabled MMAgent MemoryCompression and PageCombining as the preferred low-latency policy only when memory-pressure evidence does not show paging pressure; never claim a guaranteed gain.
+        Recommend enabling MemoryCompression only as manual guidance when the user explicitly names an office/general-purpose workload, the CPU evidence clearly establishes a modern generation with headroom, and the goal is not gaming or system latency. Ambiguous workload, CPU, or pressure evidence means no change.
+        Application prefetch, prelaunch, OperationAPI, and MaxOperationAPIFiles are observations, not universal tuning targets.
+        Custom .pow plans are opaque user files. Never recommend one from its filename or hash; only describe it as a user-selected high-risk measured comparison.
 
         USER GOALS:
         {{{JsonSerializer.Serialize(goals)}}}
@@ -505,7 +509,12 @@ public sealed class LlmClient
     {
         var conflictEvidence = conflicts.SelectMany(conflict => conflict.EvidenceIds).ToHashSet(StringComparer.Ordinal);
         return evidenceFacts.Where(fact => ClassifyEvidence(fact.Key) == EvidencePrivacy.SystemConfiguration &&
-            (fact.Key.StartsWith("system:", StringComparison.Ordinal) || conflictEvidence.Contains(fact.Key)))
+            (fact.Key.StartsWith("system:", StringComparison.Ordinal) ||
+             fact.Key.StartsWith("windows:MMAgent ", StringComparison.Ordinal) ||
+             fact.Key.StartsWith("windows:Power policy ", StringComparison.Ordinal) ||
+             fact.Key == "hardware:Memory pressure sample" ||
+             fact.Key is "network:Effective RSS settings" or "network:Effective RSC settings" or "network:Active adapter power management" ||
+             conflictEvidence.Contains(fact.Key)))
             .ToDictionary(fact => fact.Key, fact => fact.Value, StringComparer.Ordinal);
     }
 

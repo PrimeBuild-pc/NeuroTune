@@ -74,6 +74,13 @@ export interface OptimizationAction {
   availability: Availability;
 }
 
+export interface CustomPowerPlanFile {
+  name: string;
+  path: string;
+  sizeBytes: number;
+  sha256: string;
+}
+
 export type PlanRecommendationKind = 'executableAction' | 'manualGuidance' | 'scriptArtifact' | 'externalResource' | 'updateNotice';
 export type RiskProfile = 'safe' | 'balanced' | 'aggressive';
 

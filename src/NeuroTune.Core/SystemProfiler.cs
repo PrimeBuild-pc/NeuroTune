@@ -132,12 +132,60 @@ public sealed class SystemProfiler
         });
     }
 
-    private static Dictionary<string, string> ReadWindowsSettings() => new()
+    private static Dictionary<string, string> ReadWindowsSettings()
     {
-        ["Telemetry policy"] = ReadRegistry(Registry.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\DataCollection", "AllowTelemetry"),
-        ["Power throttling"] = ReadRegistry(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Power\PowerThrottling", "PowerThrottlingOff"),
-        ["Visual effects"] = ReadRegistry(Registry.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects", "VisualFXSetting")
+        var settings = new Dictionary<string, string>
+        {
+            ["Telemetry policy"] = ReadRegistry(Registry.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\DataCollection", "AllowTelemetry"),
+            ["Power throttling"] = ReadRegistry(Registry.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Power\PowerThrottling", "PowerThrottlingOff"),
+            ["Visual effects"] = ReadRegistry(Registry.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects", "VisualFXSetting")
+        };
+        foreach (var fact in ReadMemoryManagerSettings()) settings[fact.Key] = fact.Value;
+        foreach (var fact in ReadPowerPolicy()) settings[fact.Key] = fact.Value;
+        return settings;
+    }
+
+    private static Dictionary<string, string> ReadMemoryManagerSettings()
+    {
+        const string command = "$x=Get-MMAgent -ErrorAction Stop; [ordered]@{ApplicationLaunchPrefetching=$x.ApplicationLaunchPrefetching;ApplicationPreLaunch=$x.ApplicationPreLaunch;MaxOperationAPIFiles=$x.MaxOperationAPIFiles;MemoryCompression=$x.MemoryCompression;OperationAPI=$x.OperationAPI;PageCombining=$x.PageCombining}|ConvertTo-Json -Compress";
+        return ParseMemoryManagerSettings(Run("powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command));
+    }
+
+    internal static Dictionary<string, string> ParseMemoryManagerSettings(string json)
+    {
+        var names = new[] { "ApplicationLaunchPrefetching", "ApplicationPreLaunch", "MaxOperationAPIFiles", "MemoryCompression", "OperationAPI", "PageCombining" };
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            return names.ToDictionary(name => $"MMAgent {name}", name => document.RootElement.GetProperty(name).ToString(), StringComparer.Ordinal);
+        }
+        catch { return names.ToDictionary(name => $"MMAgent {name}", _ => "Unavailable", StringComparer.Ordinal); }
+    }
+
+    private static Dictionary<string, string> ReadPowerPolicy() => new(StringComparer.Ordinal)
+    {
+        ["Power policy core parking minimum"] = PowerSetting("54533251-82be-4824-96c1-47b60b740d00", "0cc5b647-c1df-4637-891a-dec35c318583", value => $"{value}%"),
+        ["Power policy processor idle"] = PowerSetting("54533251-82be-4824-96c1-47b60b740d00", "5d76a2ca-e8c0-402f-a133-2158492d58ad", value => value == 0 ? "Enabled" : value == 1 ? "Disabled" : value.ToString()),
+        ["Power policy minimum processor state"] = PowerSetting("54533251-82be-4824-96c1-47b60b740d00", "893dee8e-2bef-41e0-89c6-b55d0929964c", value => $"{value}%"),
+        ["Power policy maximum processor state"] = PowerSetting("54533251-82be-4824-96c1-47b60b740d00", "bc5038f7-23e0-4960-96da-33abaf5935ec", value => $"{value}%"),
+        ["Power policy processor EPP"] = PowerSetting("54533251-82be-4824-96c1-47b60b740d00", "36687f9e-e3a5-4dbf-b1dc-15eb381c6863", value => $"{value}%"),
+        ["Power policy processor boost mode"] = PowerSetting("54533251-82be-4824-96c1-47b60b740d00", "be337238-0d82-4146-a960-4f3749d470c7", value => value switch { 0 => "Disabled", 1 => "Enabled", 2 => "Aggressive", 3 => "Efficient enabled", 4 => "Efficient aggressive", 5 => "Aggressive at guaranteed", 6 => "Efficient aggressive at guaranteed", _ => value.ToString() }),
+        ["Power policy processor increase"] = PowerSetting("54533251-82be-4824-96c1-47b60b740d00", "465e1f50-b610-473a-ab58-00d1077dc418", value => value switch { 0 => "Ideal", 1 => "Single", 2 => "Rocket", 3 => "Ideal aggressive", _ => value.ToString() }),
+        ["Power policy PCIe link state"] = PowerSetting("501a4d13-42af-4429-9fd1-a8218c268e20", "ee12f906-d277-404b-b6da-e5fa1a576df5", value => value switch { 0 => "Off", 1 => "Moderate power savings", 2 => "Maximum power savings", _ => value.ToString() }),
+        ["Power policy USB selective suspend"] = PowerSetting("2a737441-1930-4402-8d77-b2bebba308a3", "48e6b7a6-50f5-4782-a5d4-53bb8f07e226", value => value == 0 ? "Disabled" : value == 1 ? "Enabled" : value.ToString()),
+        ["Power policy AHCI link state"] = PowerSetting("0012ee47-9041-4b5d-9b77-535fba8b1442", "0b2d69d7-a2a1-449c-9680-f91c70521c60", value => value switch { 0 => "Active", 1 => "HIPM", 2 => "HIPM+DIPM", 3 => "DIPM", 4 => "Lowest", _ => value.ToString() }),
+        ["Power policy NVMe NOPPME"] = PowerSetting("0012ee47-9041-4b5d-9b77-535fba8b1442", "fc7372b6-ab2d-43ee-8797-15e9841f2cca", value => value == 0 ? "Off" : value == 1 ? "On" : value.ToString())
     };
+
+    private static string PowerSetting(string subgroup, string setting, Func<uint, string> format)
+    {
+        try
+        {
+            var value = OptimizationCatalog.ReadPowerSetting(Guid.Parse(subgroup), Guid.Parse(setting));
+            return $"AC={format(value.Ac)}; DC={format(value.Dc)}";
+        }
+        catch { return "Unavailable"; }
+    }
 
     private static Dictionary<string, string> ReadGamingSettings()
     {
@@ -181,6 +229,9 @@ public sealed class SystemProfiler
             }).FirstOrDefault() ?? "Unavailable";
         var cpuClock = Query("SELECT Name, ProcessorFrequency, PercentofMaximumFrequency, PercentProcessorPerformance FROM Win32_PerfFormattedData_Counters_ProcessorInformation WHERE Name='_Total'",
             row => $"sampled={row["ProcessorFrequency"]} MHz; maximum-frequency={row["PercentofMaximumFrequency"]}%; performance={row["PercentProcessorPerformance"]}%").FirstOrDefault() ?? "Unavailable";
+        var memoryPressure = Query("SELECT AvailableMBytes, PercentCommittedBytesInUse, PagesInputPersec, PageReadsPersec FROM Win32_PerfFormattedData_PerfOS_Memory",
+            row => $"available={row["AvailableMBytes"]} MB; committed={row["PercentCommittedBytesInUse"]}%; pages-input={row["PagesInputPersec"]}/s; page-reads={row["PageReadsPersec"]}/s")
+            .FirstOrDefault() ?? "Unavailable";
         var thermalZones = Query(@"root\WMI", "SELECT InstanceName, CurrentTemperature FROM MSAcpi_ThermalZoneTemperature", row =>
         {
             var celsius = (Convert.ToDouble(row["CurrentTemperature"] ?? 0) / 10d) - 273.15d;
@@ -198,6 +249,7 @@ public sealed class SystemProfiler
             ["Page file and system type"] = pageFile,
             ["Virtualization-based security status"] = deviceGuard,
             ["CPU clock sample"] = cpuClock,
+            ["Memory pressure sample"] = memoryPressure,
             ["Performance counter"] = $"high-resolution={Stopwatch.IsHighResolution}; frequency={Stopwatch.Frequency} Hz",
             ["ACPI thermal zones"] = thermalZones.Count == 0 ? "Unavailable" : string.Join("; ", thermalZones),
             ["Storage reliability"] = storageHealth.Count == 0 ? "Unavailable" : string.Join("; ", storageHealth)
@@ -454,7 +506,7 @@ public sealed class SystemProfiler
             return NetworkInterface.GetAllNetworkInterfaces()
                 .Where(x => x.OperationalStatus == OperationalStatus.Up &&
                             x.NetworkInterfaceType is not NetworkInterfaceType.Loopback)
-                .Select(x => $"{x.Description} — {x.Speed / 1_000_000d:0} Mbps — {x.GetIPProperties().DnsAddresses.Count} DNS")
+                .Select(x => $"{x.Name}: {x.Description} — {x.Speed / 1_000_000d:0} Mbps — {x.GetIPProperties().DnsAddresses.Count} DNS")
                 .ToList();
         }
         catch { return []; }
@@ -483,18 +535,53 @@ public sealed class SystemProfiler
         }
         catch { }
 
+        HashSet<string> activeAdapters;
+        try
+        {
+            activeAdapters = NetworkInterface.GetAllNetworkInterfaces().Where(adapter => adapter.OperationalStatus == OperationalStatus.Up &&
+                adapter.NetworkInterfaceType is not NetworkInterfaceType.Loopback)
+                .Select(adapter => adapter.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+        catch { activeAdapters = new(StringComparer.OrdinalIgnoreCase); }
         var advanced = Query(@"root\StandardCimv2", "SELECT InterfaceDescription, DisplayName, DisplayValue FROM MSFT_NetAdapterAdvancedPropertySettingData",
             row => $"{row["InterfaceDescription"]}: {row["DisplayName"]}={row["DisplayValue"]}")
             .Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.OrdinalIgnoreCase).Take(160);
+        var rssValues = Query(@"root\StandardCimv2", "SELECT Name, Enabled, Profile, BaseProcessorNumber, MaxProcessorNumber, MaxProcessors, NumberOfReceiveQueues FROM MSFT_NetAdapterRssSettingData",
+            row => (Name: row["Name"]?.ToString() ?? "", Value: $"{row["Name"]}: enabled={row["Enabled"]}; profile={row["Profile"]}; processors={row["BaseProcessorNumber"]}-{row["MaxProcessorNumber"]}; max={row["MaxProcessors"]}; queues={row["NumberOfReceiveQueues"]}"))
+            .Where(row => activeAdapters.Contains(row.Name)).ToDictionary(row => row.Name, row => row.Value, StringComparer.OrdinalIgnoreCase);
+        var rscValues = Query(@"root\StandardCimv2", "SELECT Name, IPv4Enabled, IPv6Enabled, IPv4Operational, IPv6Operational FROM MSFT_NetAdapterRscSettingData",
+            row => (Name: row["Name"]?.ToString() ?? "", Value: $"{row["Name"]}: IPv4 enabled={row["IPv4Enabled"]}, operational={row["IPv4Operational"]}; IPv6 enabled={row["IPv6Enabled"]}, operational={row["IPv6Operational"]}"))
+            .Where(row => activeAdapters.Contains(row.Name)).ToDictionary(row => row.Name, row => row.Value, StringComparer.OrdinalIgnoreCase);
+        var powerValues = Query(@"root\StandardCimv2", "SELECT Name, AllowComputerToTurnOffDevice, WakeOnMagicPacket, WakeOnPattern, DeviceSleepOnDisconnect FROM MSFT_NetAdapterPowerManagementSettingData",
+            row => (Name: row["Name"]?.ToString() ?? "", Value: $"{row["Name"]}: turn-off={NetFeature(row["AllowComputerToTurnOffDevice"])}; wake-magic={NetFeature(row["WakeOnMagicPacket"])}; wake-pattern={NetFeature(row["WakeOnPattern"])}; sleep-disconnect={NetFeature(row["DeviceSleepOnDisconnect"])}"))
+            .Where(row => activeAdapters.Contains(row.Name)).ToDictionary(row => row.Name, row => row.Value, StringComparer.OrdinalIgnoreCase);
+        var rss = Effective(rssValues);
+        var rsc = Effective(rscValues);
+        var power = Effective(powerValues);
         return new()
         {
             ["Latency to 1.1.1.1"] = latency,
             ["Nagle overrides"] = $"{nagleOverrides} interfaces",
             ["Global TCP settings"] = Run("netsh.exe", "interface", "tcp", "show", "global"),
             ["Adapter advanced properties"] = string.Join("\n", advanced),
+            ["Effective RSS settings"] = string.Join("\n", rss),
+            ["Effective RSC settings"] = string.Join("\n", rsc),
+            ["Active adapter power management"] = string.Join("\n", power),
             ["Installed network components"] = Run("netcfg.exe", "-s", "n"),
             ["WinHTTP proxy"] = Run("netsh.exe", "winhttp", "show", "proxy")
         };
+
+        static string NetFeature(object? value) => Convert.ToUInt32(value ?? 0) switch
+        {
+            0 => "Unsupported",
+            1 => "Disabled",
+            2 => "Enabled",
+            3 => "Inactive",
+            _ => "Unknown"
+        };
+
+        List<string> Effective(Dictionary<string, string> values) => activeAdapters.Count == 0 ? ["No active adapter detected"] :
+            activeAdapters.Order(StringComparer.OrdinalIgnoreCase).Select(name => values.GetValueOrDefault(name) ?? $"{name}: Not exposed").ToList();
     }
 
     private static List<string> ReadTopProcesses()

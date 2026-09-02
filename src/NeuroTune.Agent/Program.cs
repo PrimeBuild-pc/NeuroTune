@@ -55,6 +55,8 @@ try
         "measurement-gpu-candidates" => new MeasurementService().GpuAffinityCandidates(Read<GpuCandidateRequest>(input)),
         "measurement-gpu-affinity-inspect" => new MeasurementService().GpuAffinityPolicy(Read<GpuAffinityInspectRequest>(input)),
         "measurement-delete" => DeleteMeasurement(Read<MeasurementIdRequest>(input)),
+        "power-plan-list" => ListPowerPlans(ReadOptional<PowerPlanDirectoryRequest>(input)),
+        "power-plan-stage" => StagePowerPlan(Read<PowerPlanPathRequest>(input)),
         _ => throw new InvalidOperationException($"Unknown agent command: {command}")
     };
     Write(new AgentResponse(true, result, null));
@@ -266,6 +268,18 @@ object Actions(OptimizationCatalog actionCatalog) => actionCatalog.All.Select(ac
     availability = action.Inspect()
 }).ToList();
 
+object ListPowerPlans(PowerPlanDirectoryRequest? request)
+{
+    var directory = string.IsNullOrWhiteSpace(request?.Directory) ? PowerPlanStore.SuggestedSourceDirectory : request.Directory.Trim();
+    return new { directory, plans = new PowerPlanStore().ListSource(directory) };
+}
+
+object StagePowerPlan(PowerPlanPathRequest request)
+{
+    var plan = new PowerPlanStore().Stage(request.Path);
+    return new { plan, actions = Actions(new OptimizationCatalog()) };
+}
+
 async Task<OperationManifest> Apply(ApplyRequest request, OptimizationCatalog actionCatalog, BackupService backupService)
 {
     var runService = new OptimizationRunService();
@@ -375,3 +389,5 @@ sealed record RollbackRequest(Guid OperationId, Guid? RunId = null);
 sealed record ScanRequest(bool OptionalTelemetryConsent);
 sealed record RunCreateRequest(SystemProfile? Profile, TuningGoals? Goals, List<Guid>? MeasurementSessionIds = null);
 sealed record RunIdRequest(Guid RunId);
+sealed record PowerPlanDirectoryRequest(string Directory);
+sealed record PowerPlanPathRequest(string Path);
