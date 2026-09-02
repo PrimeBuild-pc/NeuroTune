@@ -10,7 +10,7 @@ import { agent, cancelAgent, newRequestId } from './agent';
 import { planKindLabel, scriptArtifactFilename, selectActionIdsForProfile } from './plan';
 import { applyTheme, loadThemePreference } from './theme';
 import type {
-  ConflictPattern, Diagnosis, OperationManifest, OptimizationAction, OptimizationRun, ProviderKind, ProviderSettings,
+  ConflictPattern, CustomPowerPlanFile, Diagnosis, OperationManifest, OptimizationAction, OptimizationRun, ProviderKind, ProviderSettings,
   GpuAffinityPolicySnapshot, GpuCandidateSet, MachineTopology, MeasurementComparison, MeasurementLabel, MeasurementSession, MeasurementWorkload, Recommendation,
   RiskProfile, ScanResult, ThemePreference, TuningGoals,
 } from './types';
@@ -320,7 +320,7 @@ function App() {
           {page === 'measurements' && <MeasurementsPage evidenceIds={measurementEvidenceIds} onEvidenceIds={setMeasurementEvidenceIds} optimizationRun={activeRun} onRun={setActiveRun}/>}
           {page === 'review' && <ReviewPage diagnosis={diagnosis} actions={actions} recommendations={recommendations} selected={selected} riskProfile={goals.riskProfile} canApply={activeRun?.state === 'baselineReady'} onToggle={id => setSelected(current => toggle(current, id))} onPreset={applyPreset} onApply={applyChanges}/>}
           {page === 'activity' && <ActivityPage history={history} onRefresh={async () => setHistory(await agent<OperationManifest[]>('history'))} onRollback={rollback}/>}
-          {page === 'settings' && <SettingsPage theme={theme} onTheme={setTheme} telemetryConsent={telemetryConsent} onTelemetryConsent={value => {
+          {page === 'settings' && <SettingsPage theme={theme} onTheme={setTheme} telemetryConsent={telemetryConsent} onActions={setActions} onTelemetryConsent={value => {
             setTelemetryConsent(value);
             localStorage.setItem('neurotune.optionalTelemetryConsent', String(value));
           }}/>}
@@ -600,8 +600,32 @@ function ActivityPage({ history, onRefresh, onRollback }: { history: OperationMa
   return <div className="stack-lg"><div className="page-actions"><div><span className="eyebrow">Operation journal</span><h2>Every attempted change remains traceable</h2></div><button className="secondary" onClick={onRefresh}><RefreshCw size={16}/>Refresh</button></div>{history.length ? <div className="history-list">{history.map(item => <article className="history-card" key={item.id}><div className="history-icon"><Activity size={19}/></div><div className="history-main"><div><strong>{item.status}</strong><span>{new Date(item.createdAt).toLocaleString()}</span></div><p>{item.actions.length} journaled actions · {item.id}</p>{item.error && <small className="error-text">{item.error}</small>}</div><button className="secondary" disabled={!item.actions.some(action => (action.applied || action.attempted) && !action.rolledBack)} onClick={() => onRollback(item.id)}><RotateCcw size={15}/>Restore</button></article>)}</div> : <EmptyState icon={Activity} title="No operations yet" text="Completed and interrupted operations will appear here with their rollback state."/>}</div>;
 }
 
-function SettingsPage({ theme, onTheme, telemetryConsent, onTelemetryConsent }: { theme: ThemePreference; onTheme: (value: ThemePreference) => void; telemetryConsent: boolean; onTelemetryConsent: (value: boolean) => void }) {
-  return <div className="settings-grid"><section className="section-card"><div className="section-heading"><div><span className="eyebrow">Appearance</span><h3>Theme</h3></div><Palette size={22}/></div><p className="muted-copy">Follow the Windows appearance automatically, or keep a manual override.</p><div className="theme-options"><ThemeOption active={theme === 'system'} icon={MonitorCog} title="Use Windows setting" text="Switch automatically with the operating system" onClick={() => onTheme('system')}/><ThemeOption active={theme === 'light'} icon={Sun} title="Light" text="High-contrast light surfaces" onClick={() => onTheme('light')}/><ThemeOption active={theme === 'dark'} icon={Moon} title="Dark" text="Low-glare dark surfaces" onClick={() => onTheme('dark')}/></div></section><section className="section-card"><div className="section-heading"><div><span className="eyebrow">Security posture</span><h3>Local enforcement</h3></div><ShieldCheck size={22}/></div><div className="settings-lines"><div><LockKeyhole size={18}/><span><strong>Credentials</strong><small>Encrypted with Windows DPAPI for this user</small></span></div><div><TerminalSquare size={18}/><span><strong>Model output</strong><small>Cannot introduce executable commands or unknown action IDs</small></span></div><div><RotateCcw size={18}/><span><strong>Recovery</strong><small>Verified restore point, Registry exports, and action journal</small></span></div></div><label className="consent-toggle"><input type="checkbox" checked={telemetryConsent} onChange={event => onTelemetryConsent(event.target.checked)}/><span><strong>Query isolated optional telemetry</strong><small>Runs a no-network helper only during a scan. PawnIO remains blocked: no driver is installed or loaded.</small></span></label></section></div>;
+function SettingsPage({ theme, onTheme, telemetryConsent, onTelemetryConsent, onActions }: { theme: ThemePreference; onTheme: (value: ThemePreference) => void; telemetryConsent: boolean; onTelemetryConsent: (value: boolean) => void; onActions: (value: OptimizationAction[]) => void }) {
+  const [directory, setDirectory] = useState('');
+  const [plans, setPlans] = useState<CustomPowerPlanFile[]>([]);
+  const [selectedPath, setSelectedPath] = useState('');
+  const [message, setMessage] = useState('');
+  const loadPlans = async (requested?: string) => {
+    setMessage('Reading .pow files…');
+    try {
+      const result = await agent<{ directory: string; plans: CustomPowerPlanFile[] }>('power-plan-list', requested ? { directory: requested } : undefined);
+      setDirectory(result.directory);
+      setPlans(result.plans);
+      setSelectedPath(result.plans[0]?.path ?? '');
+      setMessage(`${result.plans.length} power plans found.`);
+    } catch (error) { setMessage(String(error)); }
+  };
+  useEffect(() => { void loadPlans(); }, []);
+  const selectedPlan = plans.find(plan => plan.path === selectedPath);
+  const stagePlan = async () => {
+    if (!selectedPlan || !window.confirm(`Stage ${selectedPlan.name} as an opaque high-risk power-plan action?`)) return;
+    try {
+      const result = await agent<{ plan: CustomPowerPlanFile; actions: OptimizationAction[] }>('power-plan-stage', { path: selectedPlan.path });
+      onActions(result.actions);
+      setMessage(`${result.plan.name} staged. It can only be activated through a measured optimization run.`);
+    } catch (error) { setMessage(String(error)); }
+  };
+  return <div className="settings-grid"><section className="section-card"><div className="section-heading"><div><span className="eyebrow">Appearance</span><h3>Theme</h3></div><Palette size={22}/></div><p className="muted-copy">Follow the Windows appearance automatically, or keep a manual override.</p><div className="theme-options"><ThemeOption active={theme === 'system'} icon={MonitorCog} title="Use Windows setting" text="Switch automatically with the operating system" onClick={() => onTheme('system')}/><ThemeOption active={theme === 'light'} icon={Sun} title="Light" text="High-contrast light surfaces" onClick={() => onTheme('light')}/><ThemeOption active={theme === 'dark'} icon={Moon} title="Dark" text="Low-glare dark surfaces" onClick={() => onTheme('dark')}/></div></section><section className="section-card"><div className="section-heading"><div><span className="eyebrow">Security posture</span><h3>Local enforcement</h3></div><ShieldCheck size={22}/></div><div className="settings-lines"><div><LockKeyhole size={18}/><span><strong>Credentials</strong><small>Encrypted with Windows DPAPI for this user</small></span></div><div><TerminalSquare size={18}/><span><strong>Model output</strong><small>Cannot introduce executable commands or unknown action IDs</small></span></div><div><RotateCcw size={18}/><span><strong>Recovery</strong><small>Verified restore point, Registry exports, and action journal</small></span></div></div><label className="consent-toggle"><input type="checkbox" checked={telemetryConsent} onChange={event => onTelemetryConsent(event.target.checked)}/><span><strong>Query isolated optional telemetry</strong><small>Runs a no-network helper only during a scan. PawnIO remains blocked: no driver is installed or loaded.</small></span></label></section><section className="section-card"><div className="section-heading"><div><span className="eyebrow">Custom power plans</span><h3>Stage a .pow file</h3></div><HardDrive size={22}/></div><p className="muted-copy">Files are copied into NeuroTune with their SHA-256. Their contents remain opaque, so activation is a high-risk action requiring a Baseline, separate confirmation, and rollback journal.</p><div className="form-grid"><label className="wide"><span>Power-plan folder</span><input value={directory} onChange={event => setDirectory(event.target.value)} /></label><label className="wide"><span>Plan</span><select value={selectedPath} onChange={event => setSelectedPath(event.target.value)}>{plans.map(plan => <option key={plan.path} value={plan.path}>{plan.name}</option>)}</select></label></div>{selectedPlan && <p className="muted-copy"><code>{selectedPlan.sha256}</code><br/>{formatBytes(selectedPlan.sizeBytes)}</p>}<div className="button-row"><button className="secondary" onClick={() => void loadPlans(directory)}><RefreshCw size={16}/>Read folder</button><button className="primary" disabled={!selectedPlan} onClick={() => void stagePlan()}><Download size={16}/>Stage selected plan</button></div>{message && <p className="muted-copy" role="status">{message}</p>}</section></div>;
 }
 
 function Metric({ icon: Icon, label, value, tone }: { icon: typeof Bot; label: string; value: string; tone?: string }) { return <article className="metric-card"><div className={`metric-icon ${tone ?? ''}`}><Icon size={19}/></div><div><span>{label}</span><strong>{value}</strong></div></article>; }
