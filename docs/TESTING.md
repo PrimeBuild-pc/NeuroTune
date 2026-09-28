@@ -73,8 +73,9 @@ Repeat while **Rolling back** and confirm the retry is idempotent.
 
 ## 6. ETW Measurements
 
-1. Open **Measurements**, start a workload yourself, refresh the process list,
-   and select that already-running process.
+1. Open **Measurements**. For diagnostics, leave **Monitor the entire system**
+   enabled. For workload comparisons, disable it, start a workload yourself,
+   refresh the process list, and select that already-running process.
 2. Record a 30-second Baseline. Close the UI during a second capture and verify
    that the internal watchdog still saves it at the deadline without leaving a
    named WPR session active.
@@ -97,6 +98,26 @@ Repeat while **Rolling back** and confirm the retry is idempotent.
    Confirm it returns at most three distinct physical cores, uses the Windows
    group/SMT/efficiency/cache-cluster labels verbatim, and exposes no Apply
    control. Confirm WPR reports no active session before and after this step.
+10. Confirm live per-core counters include group/LP and the actual sample
+    window; after analysis verify busy/idle ms, separate DPC/ISR distributions,
+    all driver pages, the 50-longest-event timeline and hard pagefaults.
+    Legacy reports must label unavailable counters/fault tracing rather than
+    display a measured zero. System-wide captures cannot unlock a writer.
+11. In **Settings → BIOS / UEFI inspection**, verify that reading is initially
+    disabled. Opt in and read firmware, then run a new scan. Opt out and verify
+    a subsequent scan omits BIOS details. Existing saved reports stay intact.
+    The presence of MSI WMI methods must not be presented as readable settings
+    or writable firmware.
+
+For unattended, read-only physical desktop diagnostics (no game required):
+
+```powershell
+.\scripts\local-latency-validation.ps1 -AgentDirectory .\ui\src-tauri\target\release\agent -DurationSeconds 30 -Count 3
+```
+
+The report records binary/profile hashes, actual capture quality, all per-core
+and driver aggregates, hard-fault summary, live counter samples and firmware
+read support. These background snapshots do not replace the DirectX 3+3 matrix.
 
 ## Reporting
 
@@ -124,10 +145,17 @@ powershell -ExecutionPolicy Bypass -File .\scripts\physical-gpu-measurement.ps1 
 
 The harness records three Baselines, rejects lost or incomplete traces,
 inspects the current GPU IRQ policy, verifies candidates remain read-only,
-deletes all created sessions, and writes a redacted report to
-`artifacts/physical-gpu-measurement.json`. Use `-GpuName` when the host exposes
+retains completed sessions in history, and writes a redacted report plus a
+complete local report to `artifacts/physical-gpu-measurement-<timestamp>.json`
+and `.json.local.json`. Cleanup touches only session IDs created by this
+invocation; incomplete sessions are cancelled/deleted. Use `-GpuName` when the host exposes
 more than one physical AMD/NVIDIA adapter. A successful run validates only
 that exact GPU, driver, game, tester-declared graphics API, and Windows build.
+Graphics API defaults to `Unverified`; capture success alone does not verify
+the scene/API or any optimization benefit. For guided selection, run
+`scripts/Avvia-misure-gioco.cmd` as administrator with the game already open.
+The script asks for the process and scene/settings, then allows 30 seconds
+to return to the game.
 
 For the slower per-action integrity pass, run scripts/vm-action-integrity.ps1
 with InstallerPath set to the same final installer. It creates real restore

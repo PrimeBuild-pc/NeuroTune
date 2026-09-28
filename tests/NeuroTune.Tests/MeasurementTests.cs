@@ -27,6 +27,7 @@ public sealed class MeasurementTests
     [TestMethod]
     public void Repeated_comparison_requires_two_of_three_on_same_side()
     {
+        Assert.AreEqual(ComparisonOutcome.Inconclusive, MeasurementService.RepeatedOutcome(100, [90]));
         Assert.AreEqual(ComparisonOutcome.Improvement, MeasurementService.RepeatedOutcome(100, [90, 95, 110]));
         Assert.AreEqual(ComparisonOutcome.Regression, MeasurementService.RepeatedOutcome(100, [105, 110, 90]));
         Assert.AreEqual(ComparisonOutcome.Inconclusive, MeasurementService.RepeatedOutcome(100, [90, 100, 110]));
@@ -59,7 +60,9 @@ public sealed class MeasurementTests
             new("b", 100, 95, -5, ComparisonOutcome.Improvement),
             new("c", 100, 105, 5, ComparisonOutcome.Regression)
         ];
-        Assert.AreEqual(ComparisonDecision.Keep, MeasurementService.Recommend(ComparisonLevel.Repeated, improvements).Decision);
+        Assert.AreEqual(ComparisonDecision.Rollback, MeasurementService.Recommend(ComparisonLevel.Repeated, improvements).Decision);
+        Assert.AreEqual(ComparisonDecision.Keep, MeasurementService.Recommend(ComparisonLevel.Repeated, improvements.Take(2).ToList()).Decision);
+        Assert.AreEqual(ComparisonDecision.InsufficientEvidence, MeasurementService.Recommend(ComparisonLevel.Repeated, []).Decision);
         Assert.AreEqual(ComparisonDecision.Rollback, MeasurementService.Recommend(ComparisonLevel.Repeated, improvements.Reverse().Select((item, index) =>
             index < 2 ? item with { Outcome = ComparisonOutcome.Regression } : item with { Outcome = ComparisonOutcome.Improvement }).ToList()).Decision);
         Assert.AreEqual(ComparisonDecision.InsufficientEvidence, MeasurementService.Recommend(ComparisonLevel.Exploratory, improvements).Decision);
@@ -161,5 +164,127 @@ public sealed class MeasurementTests
         Assert.AreEqual("configured", HardwareTopologyService.PolicyState(qwordMask, policy));
         Assert.AreEqual("unsupported", HardwareTopologyService.PolicyState(new(true, "String", "", 0), policy));
         Assert.AreEqual("unsupported", HardwareTopologyService.PolicyState(new(true, "Binary", new string('F', 18), 9), policy));
+    }
+
+    [TestMethod]
+    public void Interrupt_completion_and_nested_intervals_do_not_shift_or_double_count_overlap()
+    {
+        Assert.AreEqual(8, TraceAnalyzer.InterruptStartMilliseconds(10, 2));
+        Assert.AreEqual(0, TraceAnalyzer.InterruptStartMilliseconds(1, 2));
+        TimeInterval[] ready = [new(0, 10, 0), new(2, 8, 0)];
+        TimeInterval[] interrupts = [new(5, 9, 0), new(6, 7, 0), new(0, 10, 1)];
+        Assert.AreEqual(4000, TraceAnalyzer.OverlapMicroseconds(ready, interrupts, 0));
+    }
+
+    [TestMethod]
+    public void Processor_counter_delta_uses_actual_window_and_rejects_reset_or_missing_coordinates()
+    {
+        var before = new PerformanceSnapshotService.ProcessorCounters(100_000_000, 20_000_000, 100_000, 200_000);
+        var after = new PerformanceSnapshotService.ProcessorCounters(120_000_000, 25_000_000, 120_000, 210_000);
+        var sample = PerformanceSnapshotService.ProcessorDelta("1,3", before, after)!;
+        Assert.AreEqual((ushort)1, sample.ProcessorGroup);
+        Assert.AreEqual((byte)3, sample.LogicalProcessor);
+        Assert.AreEqual(2000, sample.WindowMilliseconds);
+        Assert.AreEqual(1500, sample.BusyMilliseconds);
+        Assert.AreEqual(500, sample.IdleMilliseconds);
+        Assert.AreEqual(2, sample.DpcMilliseconds);
+        Assert.AreEqual(1, sample.IsrMilliseconds);
+        Assert.IsNull(PerformanceSnapshotService.ProcessorDelta("_Total", before, after));
+        Assert.IsNull(PerformanceSnapshotService.ProcessorDelta("0,0", after, before));
+        Assert.IsNull(PerformanceSnapshotService.ProcessorDelta("0,0", before, before));
+    }
+
+    [TestMethod]
+    public void New_trace_evidence_survives_frame_import_and_does_not_export_fault_process_names()
+    {
+        var report = new TraceReport
+        {
+            SchemaVersion = 2,
+            HardFaults = [new("process-1", "private-application.exe", new(2, 1, 8, 4, 4, 4, 4))],
+            LongestSpikes = [new("dpc", "test.sys", 0, 8, 2000)],
+            Limitations = ["Interrupt-to-process latency unavailable"]
+        };
+        report = report.WithObservations([]).WithFrameTimes(new("test", 1, 1, 1, 1, 1, 1, 1, 0, []));
+        Assert.HasCount(1, report.HardFaults);
+        Assert.HasCount(1, report.LongestSpikes);
+        Assert.HasCount(1, report.Limitations);
+        var facts = MeasurementService.BuildNormalizedEvidence([new MeasurementSession
+        {
+            Id = Guid.NewGuid(), SystemWide = true, HardFaultsEnabled = true,
+            State = MeasurementSessionState.Completed, Report = report
+        }]);
+        Assert.IsTrue(facts.Keys.Any(key => key.EndsWith(":fault:process-1:count")));
+        Assert.DoesNotContain("private-application", string.Join(" ", facts));
+    }
+
+    [TestMethod]
+    public void Firmware_read_opt_out_returns_no_facts_or_interfaces()
+    {
+        var result = FirmwareInspection.Read(false);
+        Assert.IsFalse(result.ReadEnabled);
+        Assert.IsFalse(result.WriteSupported);
+        Assert.HasCount(0, result.Facts);
+        Assert.HasCount(0, result.Interfaces);
+        Assert.AreEqual("https://download.msi.com/archive/mnu_exe/mb/E7C37v1.1.pdf",
+            FirmwareInspection.GuidanceUrl("Micro-Star International Co., Ltd. MPG X570 GAMING EDGE WIFI (MS-7C37) 1.0"));
+        Assert.DoesNotContain("E7C37", FirmwareInspection.GuidanceUrl("MSI MPG X570 GAMING PLUS (MS-7C37)"));
+    }
+
+    [TestMethod]
+    public void Driver_inspection_accepts_only_module_names_and_local_windows_driver_paths()
+    {
+        DriverInspection.ValidateModule("dxgkrnl.sys");
+        foreach (var invalid in new[] { @"..\gpu.sys", "../gpu.sys", @"\\host\gpu.sys", "gpu.sys:stream", "gpu.sys --flag", "Unknown", "..sys" })
+            Assert.ThrowsExactly<ArgumentException>(() => DriverInspection.ValidateModule(invalid));
+        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        Assert.AreEqual(Path.Combine(windows, @"System32\drivers\dxgkrnl.sys"), DriverInspection.ResolveLocalDriverPath(@"\SystemRoot\System32\drivers\dxgkrnl.sys"));
+        Assert.IsNull(DriverInspection.ResolveLocalDriverPath(@"\\host\share\gpu.sys"));
+        Assert.IsNull(DriverInspection.ResolveLocalDriverPath(@"\??\UNC\host\gpu.sys"));
+        Assert.IsNull(DriverInspection.ResolveLocalDriverPath(@"\SystemRoot\..\outside.sys"));
+    }
+
+    [TestMethod]
+    public void Reused_identities_and_changed_kernel_ranges_are_not_misattributed()
+    {
+        var start = Microsoft.Diagnostics.Tracing.TraceEventOpcode.Start;
+        var stop = Microsoft.Diagnostics.Tracing.TraceEventOpcode.Stop;
+        var initial = Microsoft.Diagnostics.Tracing.TraceEventOpcode.DataCollectionStart;
+        var final = Microsoft.Diagnostics.Tracing.TraceEventOpcode.DataCollectionStop;
+        Assert.IsFalse(TraceAnalyzer.IdentityWasReused([(initial, 0), (final, 100)]));
+        Assert.IsFalse(TraceAnalyzer.IdentityWasReused([(start, 5), (stop, 20)]));
+        Assert.IsTrue(TraceAnalyzer.IdentityWasReused([(initial, 0), (stop, 20), (start, 30)]));
+        Assert.IsTrue(TraceAnalyzer.IdentityWasReused([(stop, 20), (start, 30)]));
+        Assert.IsTrue(TraceAnalyzer.IdentityWasReused([(start, 5), (start, 30)]));
+        TraceAnalyzer.ImageRange[] stable = [new(100, 200, "gpu.sys"), new(100, 200, "GPU.sys")];
+        Assert.AreEqual("GPU.sys", TraceAnalyzer.ResolveModule(stable, 150));
+        Assert.AreEqual("Unknown", TraceAnalyzer.ResolveModule(stable, 200));
+        Assert.AreEqual("Unknown", TraceAnalyzer.ResolveModule([.. stable, new(120, 180, "other.sys")], 150));
+        Assert.AreEqual("Unknown", TraceAnalyzer.ResolveModule([.. stable, new(100, 200, "gpu.sys", true)], 150));
+    }
+
+    [TestMethod]
+    public void Comparison_uses_captured_duration_and_includes_threads_beyond_top_ten()
+    {
+        var sessions = new[] { Session(180_000), Session(180_000), Session(30_000) };
+        Assert.IsFalse(MeasurementService.CapturedDurationsMatch(sessions));
+        Assert.IsTrue(MeasurementService.CapturedDurationsMatch([Session(180_000), Session(181_000)]));
+        Assert.IsFalse(MeasurementService.CapturedDurationsMatch([Session(double.NaN)]));
+        var report = new TraceReport
+        {
+            Threads = Enumerable.Range(0, 11).Select(index => new ThreadSchedulingMetrics($"thread-{index}", 10,
+                TraceAnalyzer.Describe([index == 10 ? 1000 : 1], 1000), index, new Dictionary<int, double>())).ToList(),
+            Interrupts = [new("dpc", "gpu.sys", 0, TraceAnalyzer.Describe([10], 1000)),
+                new("dpc", "gpu.sys", 1, TraceAnalyzer.Describe([20], 1000))]
+        };
+        var metrics = MeasurementService.SessionMetrics(new MeasurementSession { Report = report });
+        Assert.AreEqual(1000, metrics["target:worst_thread_ready_p99_us"]);
+        Assert.AreEqual(55, metrics["target:migrations"]);
+        Assert.AreEqual(20, metrics["interrupt:dpc:gpu.sys:worst_core_p99_us"]);
+
+        static MeasurementSession Session(double duration) => new()
+        {
+            DurationSeconds = 180,
+            Report = new TraceReport { Quality = new(duration, 1, 0, [], 100, true) }
+        };
     }
 }

@@ -14,6 +14,7 @@
         <Keyword Value="ReadyThread" />
         <Keyword Value="DPC" />
         <Keyword Value="Interrupt" />
+        <Keyword Value="HardFaults" />
       </Keywords>
     </SystemProvider>
     <Profile Id="NeuroTuneLatency.Light.Memory" Name="NeuroTuneLatency" Description="NeuroTune scheduling and interrupt measurement" LoggingMode="Memory" DetailLevel="Light">

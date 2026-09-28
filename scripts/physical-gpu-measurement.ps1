@@ -1,22 +1,23 @@
 #Requires -RunAsAdministrator
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)]
-    [string]$AgentDirectory,
-    [Parameter(Mandatory)]
-    [ValidateRange(5, 2147483647)]
-    [int]$ProcessId,
-    [ValidateSet('DirectX11', 'DirectX12')]
-    [string]$GraphicsApi = 'DirectX12',
+    [string]$AgentDirectory = (Join-Path $PSScriptRoot '..\ui\src-tauri\target\release\agent'),
+    [ValidateRange(0, 2147483647)]
+    [int]$ProcessId = 0,
+    [ValidateSet('Unverified', 'DirectX11', 'DirectX12')]
+    [string]$GraphicsApi = 'Unverified',
     [ValidateRange(30, 600)]
     [int]$DurationSeconds = 180,
+    [ValidateRange(0, 300)]
+    [int]$PreparationSeconds = 30,
+    [string]$Scene,
     [string]$GpuName,
     [string]$ReportPath
 )
 
 $ErrorActionPreference = 'Stop'
 if ([string]::IsNullOrWhiteSpace($ReportPath)) {
-    $ReportPath = Join-Path $PSScriptRoot '..\artifacts\physical-gpu-measurement.json'
+    $ReportPath = Join-Path $PSScriptRoot ("..\artifacts\physical-gpu-measurement-{0}.json" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
 }
 $agentDirectoryPath = [IO.Path]::GetFullPath($AgentDirectory)
 $agentPath = Join-Path $agentDirectoryPath 'NeuroTune.Agent.exe'
@@ -32,17 +33,19 @@ function Invoke-Agent([string]$Command, [object]$Body = @{}) {
     $start.RedirectStandardError = $true
     $start.CreateNoWindow = $true
     $process = [Diagnostics.Process]::Start($start)
-    $process.StandardInput.Write(($Body | ConvertTo-Json -Compress -Depth 8))
-    $process.StandardInput.Close()
-    $stdout = $process.StandardOutput.ReadToEnd()
-    $stderr = $process.StandardError.ReadToEnd()
-    $process.WaitForExit()
-    $response = if ($stdout) { $stdout | ConvertFrom-Json } else { $null }
-    if ($process.ExitCode -ne 0 -or -not $response -or -not $response.ok) {
-        $reason = if ($response.error) { $response.error } else { $stderr.Trim() }
-        throw "Agent command '$Command' failed: $reason"
+    try {
+        $process.StandardInput.Write(($Body | ConvertTo-Json -Compress -Depth 8))
+        $process.StandardInput.Close()
+        $stdout = $process.StandardOutput.ReadToEndAsync()
+        $stderr = $process.StandardError.ReadToEndAsync()
+        if (-not $process.WaitForExit(120000)) { $process.Kill(); throw "Agent timed out: $Command" }
+        $response = $stdout.GetAwaiter().GetResult() | ConvertFrom-Json
+        if ($process.ExitCode -ne 0 -or -not $response -or -not $response.ok) {
+            throw "Agent command '$Command' failed: $($response.error) $($stderr.GetAwaiter().GetResult())"
+        }
+        $response.data
     }
-    $response.data
+    finally { $process.Dispose() }
 }
 
 function Assert-NoNeuroTuneWprSession {
@@ -51,14 +54,24 @@ function Assert-NoNeuroTuneWprSession {
     }
 }
 
-$initialIds = @()
 $sessionIds = @()
-$cleanupReady = $false
+$completed = @()
 $report = $null
 try {
     Assert-NoNeuroTuneWprSession
-    $initialIds = @(Invoke-Agent 'measurement-list' | ForEach-Object { [string]$_.id })
-    $cleanupReady = $true
+    if ($ProcessId -eq 0) {
+        $windowIds = @(Get-Process | Where-Object { $_.MainWindowHandle -ne 0 } | ForEach-Object Id)
+        $choices = @(Invoke-Agent 'measurement-workloads' | Where-Object { $windowIds -contains $_.processId })
+        if ($choices.Count -eq 0) { throw 'Apri prima il gioco e carica una scena ripetibile.' }
+        for ($choice = 0; $choice -lt $choices.Count; $choice++) { Write-Host ("{0}. {1} (PID {2})" -f ($choice + 1), $choices[$choice].name, $choices[$choice].processId) }
+        $selection = 0
+        if (-not [int]::TryParse((Read-Host 'Numero del gioco da misurare'), [ref]$selection) -or $selection -lt 1 -or $selection -gt $choices.Count) {
+            throw 'Selezione non valida. Nessuna cattura avviata.'
+        }
+        $ProcessId = [int]$choices[$selection - 1].processId
+    }
+    if ([string]::IsNullOrWhiteSpace($Scene)) { $Scene = Read-Host 'Descrivi scena, risoluzione, preset e limite FPS (salvati solo localmente)' }
+    if ([string]::IsNullOrWhiteSpace($Scene) -or $Scene.Length -gt 2000) { throw 'Scene description is required (maximum 2000 characters).' }
     $workload = @(Invoke-Agent 'measurement-workloads' | Where-Object processId -eq $ProcessId)
     if ($workload.Count -ne 1) { throw 'The selected process is unavailable. Start the DirectX workload and use its current PID.' }
 
@@ -71,6 +84,9 @@ try {
     $gpu = $gpus[0]
     $policy = Invoke-Agent 'measurement-gpu-affinity-inspect' @{ deviceKey = $gpu.deviceKey }
     if (-not $policy.restorable -or $policy.applyEnabled) { throw 'The current GPU IRQ policy is not safely restorable or the read-only gate was violated.' }
+
+    Write-Host "Torna nel gioco entro $PreparationSeconds secondi. Mantieni la stessa scena per tre catture da $DurationSeconds secondi."
+    if ($PreparationSeconds -gt 0) { Start-Sleep -Seconds $PreparationSeconds }
 
     $sessions = 1..3 | ForEach-Object {
         Write-Host "Recording baseline $_/3 for $DurationSeconds seconds. Keep the workload scene repeatable."
@@ -90,6 +106,8 @@ try {
         if ($captured.Count -ne 1 -or $captured[0].state -ne 'captured') { throw "Baseline $_ was not captured before its deadline." }
 
         $analyzed = Invoke-Agent 'measurement-analyze' @{ sessionId = $capture.id }
+        # Retain every completed report locally, including rejected traces, for diagnosis and later comparisons.
+        $completed += $analyzed
         $quality = $analyzed.report.quality
         if ($analyzed.state -ne 'completed' -or -not $quality.isValid -or [long]$quality.eventsLost -ne 0 -or @($quality.missingProviders).Count -ne 0) {
             throw "Baseline $_ failed the deterministic trace quality gate."
@@ -98,6 +116,8 @@ try {
         if (Test-Path -LiteralPath $etl) { throw 'A raw ETL remained without consent.' }
         Assert-NoNeuroTuneWprSession
         [pscustomobject]@{
+            sessionId = [string]$capture.id
+            analyzerSchemaVersion = [int]$analyzed.report.schemaVersion
             durationMilliseconds = [double]$quality.durationMilliseconds
             etlBytes = [long]$quality.etlBytes
             eventsLost = [long]$quality.eventsLost
@@ -119,6 +139,7 @@ try {
     $os = Get-CimInstance Win32_OperatingSystem
     $report = [ordered]@{
         schemaVersion = 1
+        scope = 'Read-only collection; graphics API and workload scene are user-declared, not independently verified. No optimization gain established.'
         generatedAt = [DateTimeOffset]::UtcNow.ToString('o')
         windows = [ordered]@{ caption = $os.Caption; build = $os.BuildNumber }
         workload = [ordered]@{ executable = $workload[0].name; declaredGraphicsApi = $GraphicsApi; durationSeconds = $DurationSeconds }
@@ -141,16 +162,30 @@ try {
     }
 }
 finally {
-    if ($cleanupReady) {
+    if ($sessionIds.Count -gt 0) {
+        $cleanupError = $null
         try {
             foreach ($item in @(Invoke-Agent 'measurement-list')) {
-                if ($initialIds -contains [string]$item.id -or [int]$item.processId -ne $ProcessId) { continue }
+                if ($sessionIds -notcontains [string]$item.id) { continue }
                 if ($item.state -eq 'recording') { Invoke-Agent 'measurement-cancel' @{ sessionId = $item.id } | Out-Null }
-                else { Invoke-Agent 'measurement-delete' @{ sessionId = $item.id } | Out-Null }
+                elseif ($item.state -ne 'completed') { Invoke-Agent 'measurement-delete' @{ sessionId = $item.id } | Out-Null }
             }
             Assert-NoNeuroTuneWprSession
         }
-        catch { throw "Automatic measurement cleanup failed: $($_.Exception.Message)" }
+        catch { $cleanupError = $_.Exception.Message }
+        finally {
+            $localPath = [IO.Path]::GetFullPath($ReportPath) + '.local.json'
+            New-Item -ItemType Directory -Force -Path ([IO.Path]::GetDirectoryName($localPath)) | Out-Null
+            $local = [ordered]@{
+                schemaVersion = 1; generatedAtUtc = [DateTimeOffset]::UtcNow.ToString('o')
+                scope = 'User-declared scene; not independently verified. Local process names included.'
+                scene = $Scene; requestedSessionIds = @($sessionIds); completedSessions = @($completed)
+                validationCompleted = ($null -ne $report); writesApplied = $false
+            }
+            [IO.File]::WriteAllText($localPath, ($local | ConvertTo-Json -Depth 30), [Text.UTF8Encoding]::new($false))
+            Write-Host "Misure mantenute nella cronologia NeuroTune. Report locale: $localPath"
+        }
+        if ($cleanupError) { throw "Automatic measurement cleanup failed: $cleanupError" }
     }
 }
 

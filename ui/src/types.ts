@@ -270,12 +270,16 @@ export interface DistributionMetrics {
 }
 
 export interface TraceReport {
+  schemaVersion?: number;
   sessionId: string;
   generatedAtUtc: string;
   targetExecutable: string;
   quality: { durationMilliseconds: number; etlBytes: number; eventsLost: number; missingProviders: string[]; targetPresencePercent: number; isValid: boolean };
   interrupts: Array<{ kind: string; module: string; logicalProcessor: number; distribution: DistributionMetrics }>;
-  processors: Array<{ logicalProcessor: number; interruptSharePercent: number; targetRunningMilliseconds: number; readyOverlapMicroseconds: number }>;
+  processors: Array<{ logicalProcessor: number; interruptSharePercent: number; targetRunningMilliseconds: number; readyOverlapMicroseconds: number; scheduledBusyMilliseconds?: number | null; scheduledIdleMilliseconds?: number | null; unobservedMilliseconds?: number | null; dpc?: DistributionMetrics; isr?: DistributionMetrics }>;
+  hardFaults?: Array<{ processKey: string; processName: string; resolution: DistributionMetrics }>;
+  longestSpikes?: Array<{ kind: string; source: string; logicalProcessor: number; startMilliseconds: number; durationMicroseconds: number }>;
+  limitations?: string[];
   threads: Array<{ threadKey: string; runningMilliseconds: number; readyTime: DistributionMetrics; migrations: number; residencyMilliseconds: Record<string, number> }>;
   frameTimes?: {
     source: string; sampleCount: number; capturedDurationMilliseconds: number; averageFps: number;
@@ -286,6 +290,8 @@ export interface TraceReport {
 }
 
 export interface MeasurementSession {
+  systemWide?: boolean;
+  hardFaultsEnabled?: boolean;
   id: string;
   optimizationRunId?: string;
   processId: number;

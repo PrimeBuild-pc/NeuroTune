@@ -17,7 +17,8 @@
 | SPD/XMP/EXPO, motherboard sensors, temperatures, real HAGS | unavailable | unavailable | required |
 | PawnIO install/HVCI/uninstall | deliberately excluded | deliberately excluded | disposable dedicated PC only after approval |
 | v0.7.0-alpha.1 ETW watchdog, analysis, quality, cleanup | 3/3 valid on build 26200; 0 lost events; no ETL or WPR orphan | not required | redacted physical DirectX harness available; AMD/NVIDIA runs pending |
-| Shareable hardware collector | Windows PowerShell 5.1 self-test passed; no-admin/offline/read-only contract | not required | AMD host report passed: 1 CPU, 16 CPU sets, 1 GPU, 11 relevant interrupt devices; NVIDIA reports pending |
+| Shareable hardware collector | Windows PowerShell 5.1 self-test passed; no-admin/offline/read-only contract | not required | Fleet intake now includes RX 7900 XT (8 CPU sets/11 devices), RTX 5060 Ti (16/9), RTX 5080 (16/14), and RTX 3070 on Intel (12/7); inventory only, physical performance/rollback validation pending |
+| M11 system-wide latency and M12 firmware inspection | separate VM coverage pending | not required | 2026-09-07: 3/3 final desktop captures on Ryzen 5800X3D / RX 6950 XT, 16 processors, zero lost events and raw ETL deleted; MSI BIOS interface detected without usable setup values; [report](LOCAL_LATENCY_VALIDATION.md) |
 
 scripts/vm-provision.ps1 creates clean Hyper-V guests and DPAPI-protected credential files. scripts/vm-validation.ps1 normally restores the clean checkpoint, copies the installer with PowerShell Direct, runs the automated matrix, and writes a redacted JSON report. `-SkipCheckpointRestore` is available for a supervised, already-running existing guest; the harness then restores every state it seeds instead of changing the checkpoint chain. Neither script prints or commits guest passwords.
 
@@ -75,7 +76,7 @@ At 100%, 150%, and 200% display scale:
 
 VM automation cannot validate real sensor correctness, GPU scheduling on a passed-through GPU, or motherboard firmware state.
 
-## AMD/NVIDIA fleet intake
+## AMD-NVIDIA fleet intake
 
 `tools/hardware-collector/Collect-NeuroTune-HardwareReport.cmd` creates a dated
 JSON beside itself. It reads CIM, the 64-bit Registry view, and the Windows
@@ -95,3 +96,90 @@ Fleet reports determine which physical fixtures deserve testing. They do not
 validate a performance gain or authorize automatic affinity changes. A device
 writer still requires exact capture/verify/restore, restart behavior, and
 repeatable 3+3 Baseline/Candidate evidence for the specific driver family.
+
+### Inventory received through 2026-09-15
+
+Folders are classified by GPU vendor, not CPU vendor. The reports received on
+2026-09-07 contain NVIDIA GPUs with AMD CPUs; the 2026-09-15 NVIDIA report uses
+an Intel CPU. The existing AMD report is retained under `amd/`. All four use
+schema 1 / collector 0.1.0 and report Windows 11 Pro build 26200, a single
+processor group (0), and `hypervisorPresent=false`.
+These are reported snapshots, not independent certification of a physical host.
+
+| Report | GPU / Windows driver version | CPU / observed topology | Board / BIOS | GPU interrupt policy | Intake status |
+|---|---|---|---|---|---|
+| [AMD, 2026-09-03](validation/hardware-fleet/amd/NeuroTune-HardwareReport-20260903-182946.json) | RX 7900 XT / `32.0.31041.1004` | Ryzen 7 7800X3D; 8 physical / 8 logical | ASUS TUF GAMING B850-PLUS WIFI, Rev 1.xx / `1681` | `windowsDefault`; mask and DevicePolicy absent | 11 devices: 2 configured, 9 default; no collector warnings |
+| [NVIDIA, 2026-09-06 21:17:59](validation/hardware-fleet/nvidia/NeuroTune-HardwareReport-20260906-211759.json) | RTX 5060 Ti / `32.0.16.1664` | Ryzen 7 9700X; 8 physical / 16 logical | SAPPHIRE NITRO+ B850M WIFI, AM50L301R27 / `AM50L301R27` | `windowsDefault`; mask and DevicePolicy absent | 9 devices: 4 configured, 5 default; Secure Boot unavailable |
+| [NVIDIA, 2026-09-06 22:03:39](validation/hardware-fleet/nvidia/NeuroTune-HardwareReport-20260906-220339.json) | RTX 5080 / `32.0.16.1664` | Ryzen 7 9800X3D; 8 physical / 16 logical | ASUS TUF GAMING X870E-PLUS WIFI7, Rev 1.xx / `2402` | `configured`; Binary mask, 1 byte, value redacted; DWord DevicePolicy `4` | 14 devices: 10 configured, 4 default; Secure Boot unavailable |
+| [NVIDIA, 2026-09-15](validation/hardware-fleet/nvidia/NeuroTune-HardwareReport-20260915-134216.json) | RTX 3070 / `32.0.16.1692` | Intel Core i5-10600K; 6 physical / 12 logical | MSI MPG Z490 GAMING PLUS (MS-7C75), v2.0 / `A.F1` | `windowsDefault`; mask and DevicePolicy absent | 7 devices: 2 configured, 5 default; Secure Boot unavailable |
+
+Exact GPU hardware IDs, respectively:
+
+- RX 7900 XT: `PCI\VEN_1002&DEV_744C&SUBSYS_05ED1043&REV_CC`.
+- RTX 5060 Ti: `PCI\VEN_10DE&DEV_2D04&SUBSYS_F3301569&REV_A1`.
+- RTX 5080: `PCI\VEN_10DE&DEV_2C02&SUBSYS_53151462&REV_A1`.
+- RTX 3070: `PCI\VEN_10DE&DEV_2484&SUBSYS_146B10DE&REV_A1`.
+
+### What these reports change
+
+- NVIDIA inventory is no longer missing. The RTX 5060 Ti and RTX 5080 exercise
+  different initial states despite the same reported driver version: absent
+  GPU policy and an existing one-byte Binary mask with DevicePolicy 4. Test
+  exact restore of absence and preservation of existing type/length/value
+  locally; the redacted mask cannot identify the selected core or restore that
+  machine. The RTX 3070 adds a second NVIDIA driver version with default policy.
+- The RTX 5080 snapshot contains configured policies on 10 of 14 devices,
+  including GPU, audio, network, storage, and USB. Treat its measured starting
+  state as already configured, not factory defaults or proof those settings
+  help. Isolate one change per experiment and restore the captured state.
+- The AMD case adds 8 observed logical processors; the two 2026-09-06 NVIDIA
+  cases add 16 across 8 physical cores. Exercise topology-derived candidate
+  selection with and without observed SMT siblings. The report alone does not
+  establish why the AMD system exposes 8 logical processors or prove a BIOS
+  SMT value.
+- The RTX 3070 case adds the first Intel CPU and Z490 fixture: 12 logical
+  processors map to 6 physical cores with two CPU sets per core. It broadens
+  homogeneous Intel/SMT coverage but does not cover hybrid P/E cores. Its GPU
+  remains on the Windows default policy while SATA AHCI and NVMe each report
+  DevicePolicy 5; preserve those starting states locally and do not generalize
+  them into recommendations for other storage controllers.
+- All three NVIDIA reports have `secureBoot=null` and the explicit unavailable warning.
+  Preserve Unknown; do not infer disabled, a defect, or a recommended change.
+  BIOS manufacturer/version identifies firmware, not its current setup values.
+- All four GPU snapshots contain an `msiSupported` DWord value of 1. That is
+  Registry evidence only; it does not prove effective interrupt routing under
+  load, latency, or justify forcing MSI or copying affinities between machines.
+- Fleet observations stay in this validation matrix. Do not promote observed
+  clocks, BIOS versions, or driver dates into official component baselines or
+  a latest-version catalog without exact vendor specifications and provenance.
+
+### Remaining physical acceptance
+
+- [ ] Collect three valid matching DirectX Baselines per listed GPU/driver with
+  `scripts/physical-gpu-measurement.ps1`; record lost events, workload, duration,
+  thermal/configuration fingerprints, and the read-only candidate preview.
+- [ ] Implement and validate the supervised M9 writer, then collect three
+  Candidate runs, actual routing verification, restart/resume and exact restore
+  evidence per case. An existing configured mask does not satisfy this gate.
+- [ ] Add physical coverage for other driver versions/families, hybrid CPUs,
+  multiple processor groups, multi-GPU, VBS/HVCI-enabled configurations,
+  and unavailable/unsupported policies before making those support claims.
+- [ ] Validate M11's complete per-core/system metrics, driver/service mapping,
+  hard pagefaults and interrupt-to-process probe; these inventory files contain
+  no ETW sessions, busy time, DPC spike durations, or benchmark results.
+- [ ] Validate M12 BIOS guidance against exact board/firmware manuals and test
+  optional OEM access separately; none of these reports proves settings access.
+
+### Intake integrity
+
+Reports are preserved byte-for-byte. JSON parsing, inventory/topology/device
+links, privacy exclusions and empty exported affinity-mask values were checked
+for the original intake on 2026-09-07 and the RTX 3070 intake on 2026-09-26.
+SHA-256 identifies the supplied bytes, not their authenticity:
+
+| Report filename | SHA-256 |
+|---|---|
+| `NeuroTune-HardwareReport-20260903-182946.json` | `2F76E39618B2A448C7C1757D18F17A420C8CAC9D10B0C8981B4AF6D0F92F2C16` |
+| `NeuroTune-HardwareReport-20260906-211759.json` | `280EE102E5CAB28C70DCF127D8BF5FC384CDED16F05FD5788B124212698C1768` |
+| `NeuroTune-HardwareReport-20260906-220339.json` | `14AAA74A6E6198878E998C370414DF4AFCB8C78D8BD7676CBE7A5B13ABBB3554` |
+| `NeuroTune-HardwareReport-20260915-134216.json` | `0BB7D0190281CDFEB183919D5E97CD38E83D05627EA57A8DD88C0AD15B765803` |

@@ -10,7 +10,7 @@ namespace NeuroTune;
 public sealed class SystemProfiler
 {
     public SystemProfile Collect(Action<string>? progress = null, bool optionalTelemetryConsent = false,
-        bool registerGameTargets = false)
+        bool registerGameTargets = false, bool firmwareReadConsent = false)
     {
         var profile = new SystemProfile();
         RunPhase("Hardware and firmware", () =>
@@ -22,8 +22,8 @@ public sealed class SystemProfiler
             profile.Memory = ReadMemory();
             profile.Disks = ReadDisks();
             profile.HardwareCapabilities = ReadHardwareCapabilities();
-            profile.FirmwareAndMemory = ReadFirmwareAndMemory();
-            profile.ComponentIdentities = ReadComponentIdentities();
+            profile.FirmwareAndMemory = firmwareReadConsent ? ReadFirmwareAndMemory() : new() { ["BIOS reading"] = "Disabled by user preference" };
+            profile.ComponentIdentities = ReadComponentIdentities(firmwareReadConsent);
             profile.FactoryBaselines = ComponentBaselineCatalog.Compare(profile.ComponentIdentities);
             profile.TelemetryCapabilities = TelemetryProcessClient.QueryCapabilities(optionalTelemetryConsent);
         });
@@ -264,7 +264,7 @@ public sealed class SystemProfiler
         return $"Windows-managed-global={automatic}; configured={modes.Count}; system-managed={managed}; fixed={fixedSizes}; form-factor={formFactor}";
     }
 
-    private static Dictionary<string, string> ReadFirmwareAndMemory()
+    internal static Dictionary<string, string> ReadFirmwareAndMemory()
     {
         var facts = new Dictionary<string, string>
         {
@@ -309,14 +309,14 @@ public sealed class SystemProfiler
         }
     }
 
-    private static Dictionary<string, string> ReadComponentIdentities()
+    private static Dictionary<string, string> ReadComponentIdentities(bool firmwareReadConsent)
     {
         var identities = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["CPU specification ID"] = ReadCpuSpecificationId(),
             ["CPU model"] = Query("SELECT Name FROM Win32_Processor", row => row["Name"]?.ToString()?.Trim() ?? "").FirstOrDefault(value => value.Length > 0) ?? "Unavailable",
             ["Motherboard"] = Query("SELECT Manufacturer, Product, Version FROM Win32_BaseBoard", row => $"{row["Manufacturer"]}|{row["Product"]}|{row["Version"]}").FirstOrDefault() ?? "Unavailable",
-            ["BIOS"] = Query("SELECT Manufacturer, SMBIOSBIOSVersion FROM Win32_BIOS", row => $"{row["Manufacturer"]}|{row["SMBIOSBIOSVersion"]}").FirstOrDefault() ?? "Unavailable"
+            ["BIOS"] = firmwareReadConsent ? Query("SELECT Manufacturer, SMBIOSBIOSVersion FROM Win32_BIOS", row => $"{row["Manufacturer"]}|{row["SMBIOSBIOSVersion"]}").FirstOrDefault() ?? "Unavailable" : "Reading disabled"
         };
         var gpus = Query("SELECT Name, PNPDeviceID, DriverVersion FROM Win32_VideoController", row =>
         {

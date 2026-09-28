@@ -88,7 +88,8 @@
   <li><strong>Exact local baselines:</strong> versioned CPU and memory references match exact component identifiers; unknown hardware reports <code>baseline unavailable</code>.</li>
   <li><strong>User-controlled plans:</strong> switch between AI recommendations, conflict fixes, and every supported reversible action; risk changes warnings, not visibility.</li>
   <li><strong>Current allowlisted actions:</strong> power, gaming, graphics, visual, memory, GPU-timeout, and legacy TCP repairs with local capture, verification, and rollback.</li>
-  <li><strong>Local ETW measurements:</strong> bounded WPR captures for an already-running workload, deterministic ISR/DPC and scheduler analysis, repeated comparisons, and raw-trace deletion by default.</li>
+  <li><strong>Local latency diagnostics:</strong> bounded system-wide or workload WPR captures, live per-core times, complete ISR/DPC aggregates, hard pagefaults and local spike timelines. Repeated workload comparisons and raw-trace deletion remain built in; interrupt-to-process latency is not yet measured.</li>
+  <li><strong>Optional BIOS inspection:</strong> opt-in firmware and memory facts, local MSI interface detection, and explicit unavailable setup values. Firmware writing is not enabled.</li>
   <li><strong>Shareable hardware matrix collector:</strong> a transparent, no-admin, offline CMD/PowerShell bundle records redacted AMD/NVIDIA, driver, CPU-set, and current interrupt-policy facts without changing the PC.</li>
   <li><strong>Local operation history:</strong> Per-action state snapshots and rollback from the desktop interface.</li>
   <li><strong>Honest telemetry boundary:</strong> low-level capabilities remain read-only and unavailable or driver-not-approved until a separate adapter and driver trust review is complete.</li>
