@@ -67,7 +67,13 @@ public sealed class OptimizationRunTests
         try
         {
             var service = new OptimizationRunService(directory);
-            var run = service.Create(Profile(), new TuningGoals());
+            var run = service.Create(Profile(), new TuningGoals(), [new MeasurementSession
+            {
+                Id = Guid.NewGuid(), SystemWide = true, Label = MeasurementLabel.Baseline,
+                State = MeasurementSessionState.Completed,
+                Report = new TraceReport { Quality = new(30_000, 1, 0, [], 0, true) }
+            }]);
+            Assert.HasCount(0, run.BaselineSessionIds);
             service.BeginDiagnosis(run.Id);
             run = service.RecordDiagnosis(run.Id, Outcome());
 

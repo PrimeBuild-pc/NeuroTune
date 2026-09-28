@@ -10,9 +10,10 @@ or validation report.
 | Field | Value |
 |---|---|
 | Target | Next AI-harness alpha |
-| Branch | `codex/ai-optimization-harness-20260830` |
-| Current milestone | M9 — physical device-affinity matrix intake |
+| Branch | `feat/system-scan-custom-power-plans` |
+| Current milestone | M11/M12 — local system latency capture and BIOS read capability implementation; M9 writer remains gated |
 | Last verified baseline | `5186020`; 60 .NET tests, PowerShell 5.1 collector self-test, and rewritten public branch/tag verification, 2026-09-01 |
+| Latest working-tree validation | 2026-09-28: after the watchdog-pipe fix, 70 .NET, 10 UI and 2 Rust tests passed with .NET format/build, UI typecheck/lint/build, Rust fmt/clippy and native Tauri Release build; privileged Start/live/Cancel smoke remains |
 | Distribution | unsigned NSIS plus portable ZIP, GitHub/Discord |
 | License | MIT, copyright PrimeBuild |
 | Repository visibility | public; approved history rewrite is an active privacy gate |
@@ -93,7 +94,9 @@ execution, verification, rollback, and measurement quality.
   Inspect/Apply/Verify/Rollback and interrupted-operation recovery.
 - [ ] Complete repeated physical DirectX validation on supported AMD and
   NVIDIA hosts and publish the scoped support matrix. The read-only fleet
-  collector is complete; third-party reports and benchmark runs remain.
+  collector is complete; four third-party inventory reports are catalogued
+  in [the fleet matrix](VALIDATION_MATRIX.md#amd-nvidia-fleet-intake).
+  Repeated physical benchmark and rollback runs remain.
 - [ ] Complete 100/150/200% scaling, keyboard-only, Narrator, and
   forced-colors checks under supervised Windows runs.
 - [x] Complete automated privacy, inert export-report, offline-provider, and
@@ -112,9 +115,10 @@ execution, verification, rollback, and measurement quality.
   recovery also passed with the exact run ID. P5 remains open for the complete
   current-action sweep and per-app GPU power-saving case.
 - Physical repeated DirectX validation still needs supported AMD and NVIDIA
-  hosts. The shareable collector now gathers redacted GPU/driver, CPU-set, and
-  interrupt-policy facts without admin, network access, or system writes; it
-  deliberately does not claim performance evidence.
+  runs. Inventory intake now covers RX 7900 XT, RTX 5060 Ti, RTX 5080, and
+  RTX 3070 on an Intel i5-10600K/Z490 fixture;
+  the RTX 5080 already has a configured GPU interrupt policy. These offline
+  reports establish test cases, not latency, effective routing, or a gain.
 - Scaling, Narrator, forced-colors, keyboard-only, and final recovery UX checks
   require supervised manual runs. Static UI contract now exposes selected
   provider/theme state, labelled icon-only destructive actions, live status
@@ -127,6 +131,11 @@ execution, verification, rollback, and measurement quality.
 
 ## Locked product decisions
 
+- Product scope includes replacing LatencyMon's diagnostic workflow and then
+  optimizing from measured evidence: monitor → attribute → propose → approve
+  → change → remeasure → keep/restore. M11 closes measurement and remediation
+  gaps; M12 adds board-specific BIOS guidance and optional supported access.
+  Existing ETW support is partial coverage, not a claim of LatencyMon parity.
 - NeuroTune builds a contextual plan from the local profile, game/workload,
   user objective, symptoms, and optional user-provided measurements. It does
   not ship generic optimization packs.
@@ -142,6 +151,10 @@ execution, verification, rollback, and measurement quality.
   rollback. No executable, driver, firmware, or model-supplied URL is accepted.
 - Driver, chipset, and BIOS advice uses exact hardware identity and official
   sources. NeuroTune links to manual updates and never installs or flashes them.
+  BIOS setting changes are a separate planned M12 capability: optional reads,
+  separately enabled writes through a documented supported OEM interface,
+  explicit per-change approval, and hardware-specific recovery validation.
+  Enabling access does not authorize arbitrary firmware writes or flashing.
 - Defender, Firewall, UAC, and forced HPET/platform-timer changes are not
   executable performance capabilities. A future VBS/HVCI capability may be
   Aggressive only after dedicated capture, rollback, and validation.
@@ -183,6 +196,8 @@ execution, verification, rollback, and measurement quality.
 | M8 | ETW Measurement Alpha | In validation | `45746f2`, `868bf94`; three of three valid watchdog captures on Windows 11 build 26200, zero lost events, no raw ETL or WPR orphan; physical DirectX matrix remains |
 | M9 | GPU IRQ closed-loop | In progress | `5186020`; read-only CPU-set/PnP topology, exact current-policy snapshot, opaque three-candidate GPU preview, and shareable redacted fleet collector implemented; writer, restart, Keep/Rollback, driver matrix, and AI candidate selection remain gated |
 | M10 | AI optimization harness | In validation | `10e3044`, PR #10; CI passed before coordinated rewrite and retriggered afterward; 60 .NET tests, 7 UI tests, 2 Rust tests, Release builds, lint/typecheck, unsigned NSIS/portable ZIP/checksums, committed Windows 11 writer/recovery reports; independent Claude Code reviews via Herdr |
+| M11 | LatencyMon replacement and measured system remediation | In progress | 2026-09-28: system-wide WPR mode, live per-core Windows counters, complete interrupt aggregates, corrected completion timestamps/overlap, kernel image rundown, hard pagefaults and UI implemented; 70 .NET/10 UI/2 Rust tests and native Release pass; interrupt-to-process probe, causal attribution and writers remain |
+| M12 | BIOS guidance and optional OEM settings access | In progress | 2026-09-28: opt-in local firmware inspection and scan consent implemented and gated; MSI read interface detected on MS-7C37 BIOS 1.S1, but the read probe returned no setup value; exact settings/menu support and writes remain unavailable |
 
 ## M8 — ETW Measurement Alpha
 
@@ -229,6 +244,93 @@ execution, verification, rollback, and measurement quality.
 - Use `tools/hardware-collector` to gather the broader AMD/NVIDIA and device
   inventory first. Fleet JSON establishes which fixtures to build; it cannot
   unlock a writer without repeated Baseline/Candidate performance evidence.
+- Intake on 2026-09-07 adds two NVIDIA reports to the existing AMD report,
+  organized by GPU vendor under `docs/validation/hardware-fleet`. Prioritize
+  default-policy and existing one-byte Binary-mask restore cases; see the
+  [fleet matrix](VALIDATION_MATRIX.md#amd-nvidia-fleet-intake) for exact identities,
+  hashes, limitations, and outstanding physical checks.
+
+## M11 — LatencyMon replacement and measured system remediation
+
+Reuse `MeasurementService`, `TraceAnalyzer`, `HardwareTopologyService`, the
+planner's registered probes, `OptimizationRun`, and the reversible action
+registry. Extend their versioned evidence and UI; do not build a second engine.
+
+| Requirement | Current evidence | Remaining acceptance |
+|---|---|---|
+| Start/stop system monitoring, optionally focus a workload | System-wide mode without a target, 30–600 s deadline, watchdog/status polling and live per-core counter summaries | Quantify observer overhead and broader physical workload coverage; system-wide snapshots deliberately cannot satisfy optimization Baselines |
+| Time spent on every logical processor, grouped by physical core | All trace processors, scheduled busy/idle ms and separate DPC/ISR distributions; live Windows busy/idle/DPC/ISR counter deltas use the actual sample window and group/LP identity | Validate multiple processor groups and physical-core grouping in the report; no-switch scheduling intervals stay Unavailable; scheduled time and interrupt time are not additive |
+| DPC/ISR spikes by driver | Complete per-module/core aggregates with paginated UI and the 50 longest interrupts; kernel image rundown fixes previously Unknown modules; end timestamps and nested-overlap union corrected | Driver version/device mapping and causal attribution; retain Unknown for unresolvable modules |
+| Interrupt-to-user-process latency | Not implemented; scheduler Ready Time is a different metric | Implement and validate a bounded dedicated probe with current/max/distribution; expose Unavailable until measured, including timer/stall diagnostic limitations |
+| Hard pagefaults | WPR HardFaults enabled; count/rate, resolution totals/percentiles/maxima per captured PID with local process names; legacy captures explicitly Unavailable | Full process-lifetime separation and hard-fault timeline correlation with memory/storage pressure and affected workloads |
+| Driver/device/service attribution | Static inventory and temporal observations exist | Link spike evidence to devices, driver stacks, process lifetime, and hosted services; a framework module or shared host alone is insufficient to name a culprit |
+| Evidence-led affinity and remediation | GPU candidate ranking exists, always `ApplyEnabled=false` | Complete M9; add separately validated process/dedicated-service affinity and device/service actions only when exact targeting and rollback exist |
+
+The reference coverage comes from [Resplendence's measurement guide](https://www.resplendence.com/latencymon_using)
+and [interrupt-to-process methodology](https://www.resplendence.com/latencymon_interrupt2process).
+This is functional coverage, not identical instrumentation or interchangeable
+numbers. Validate instrument differences on repeated matched workloads before
+claiming parity; report unsupported measurements explicitly.
+
+The current implementation uses Windows ETW and the already installed TraceEvent
+library; it does not automate or redistribute LatencyMon. No documented public
+LatencyMon telemetry API was found in the reviewed official material. See
+[local validation](LOCAL_LATENCY_VALIDATION.md) for captured results and remaining
+limits. The analyzer rejects ETL larger than 512 MiB or more than two million
+interrupts / one million hard faults rather than silently truncating statistics.
+Comparisons reject mixed analyzer versions, use metrics present in every run,
+and never recommend Keep with no improvement or a reproducible regression.
+Interrupt-share redistribution no longer counts as a performance improvement.
+
+- [ ] Show the user the measured problem, affected core/driver/process,
+  hypothesis, proposed change, expected tradeoff, and verification workload.
+  Do not treat one maximum spike or the least occupied core as sufficient proof.
+- [ ] Rank affinity using repeated core occupancy, Ready Time, DPC/ISR burden,
+  workload contention, and topology (SMT siblings, processor groups, efficiency
+  class, cache/NUMA). IRQ routing and process affinity stay distinct actions.
+- [ ] Add device power/configuration or non-critical service interventions
+  incrementally through Inspect/Capture/Apply/Verify/Restore. Check dependencies
+  and dedicated process identity before service changes; never pin an entire
+  shared service host on behalf of one service. Driver updates remain official
+  manual guidance unless a separately reviewed installation capability exists.
+- [ ] Use the existing run to test one hypothesis at a time with 3+3 matched
+  Baseline/Candidate captures, restart/resume where needed, and exact rollback.
+  Keep requires a repeatable gain without workload, stability, thermal, or
+  functional regression; inconclusive results must not become automatic Keep.
+- [ ] Add deterministic trace checks for unit conversions, totals/window
+  boundaries, Unknown attribution, process reuse/shared hosts, hard faults,
+  missing/lost events, and CPU groups. Validate physical audio, gaming, network,
+  storage, and USB workloads; zero events can be valid idle evidence and must
+  be distinguished from a missing provider. Keep raw paths/traces local.
+
+## M12 — BIOS guidance and optional OEM settings access
+
+- [x] Add off-by-default BIOS reading consent, an on-demand local inspection,
+  and consent-aware firmware collection during scans. Show MSI provider
+  detection separately from usable settings and expose no write command.
+- [ ] Offer separate settings for BIOS/UEFI reading and writing, with advanced
+  access off by default. Reading permission never enables writing; writes also
+  require reads, a supported exact platform, and approval of the concrete diff.
+  Align existing automatic SMBIOS inventory with the user's read preference.
+- [ ] Detect board vendor/model/revision and BIOS version, then use exact
+  official manuals to explain applicable enable/disable choices, menu paths,
+  expected effects, and how to undo them. Mark current settings Unknown unless
+  actually read; label user-entered values and heuristics. No universal list of
+  BIOS tweaks or blanket disabling of C-states, SMT, or security features.
+- [ ] Reuse `SystemProfiler` and the official-source advisor. Add setting reads
+  only through documented OEM interfaces qualified by board/firmware version;
+  unsupported machines retain manual guidance. SMBIOS identity is not a dump
+  of BIOS setup values ([Win32_BIOS](https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-bios)).
+- [ ] Evaluate the first setting writer only on hardware with a documented OEM
+  interface, readable original state, allowed values, exact restore and a tested
+  recovery procedure if Windows cannot boot. Generic
+  [UEFI variable writes](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-setfirmwareenvironmentvariablew)
+  are not a universal BIOS setup API. Do not invent NVRAM offsets or flash BIOS.
+- [ ] Test read disabled, read only, write unsupported, permission/authentication
+  failure, firmware-version mismatch, reboot readback, rollback, and failed-boot
+  recovery. A Windows restore point alone does not establish firmware recovery.
+  Never collect BIOS passwords into logs/provider evidence. Keep a setting only
+  after the same repeated workload evaluation used for Windows changes.
 
 ## M1 — dynamic plan foundation
 

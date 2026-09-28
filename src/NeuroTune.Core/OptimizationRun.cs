@@ -102,7 +102,7 @@ public sealed class OptimizationRunService
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(goals);
         goals.Validate();
-        baselineSessions = (baselineSessions ?? []).Where(session => session.Label == MeasurementLabel.Baseline &&
+        baselineSessions = (baselineSessions ?? []).Where(session => !session.SystemWide && session.Label == MeasurementLabel.Baseline &&
             session.State == MeasurementSessionState.Completed && session.Report?.Quality.IsValid == true).ToList();
         var evidence = LlmClient.MergeEvidenceFacts(LlmClient.BuildEvidenceFacts(profile),
             MeasurementService.BuildNormalizedEvidence(baselineSessions));
@@ -175,7 +175,7 @@ public sealed class OptimizationRunService
     {
         ArgumentNullException.ThrowIfNull(session);
         var run = LoadCore(id);
-        if (session.OptimizationRunId != id || session.State != MeasurementSessionState.Completed ||
+        if (session.SystemWide || session.OptimizationRunId != id || session.State != MeasurementSessionState.Completed ||
             session.Report?.Quality.IsValid != true)
             throw new InvalidOperationException("The linked measurement is not a completed, quality-valid session from this optimization run.");
         if (session.Label == MeasurementLabel.Baseline)

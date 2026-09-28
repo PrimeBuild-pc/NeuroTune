@@ -44,6 +44,9 @@ try
         "history" => backup.LoadHistory(),
         "rollback" => await Rollback(Read<RollbackRequest>(input), catalog, backup),
         "measurement-workloads" => new MeasurementService().Workloads(),
+        "measurement-live" => await new PerformanceSnapshotService().CollectProcessorsAsync(),
+        "measurement-driver-details" => DriverInspection.Read(Read<DriverInspectionRequest>(input).Module),
+        "firmware-read" => FirmwareInspection.Read(Read<FirmwareReadRequest>(input).ReadConsent),
         "measurement-start" => StartMeasurement(Read<MeasurementStartRequest>(input)),
         "measurement-stop" => new MeasurementService().Stop(Read<MeasurementIdRequest>(input).SessionId),
         "measurement-cancel" => new MeasurementService().Cancel(Read<MeasurementIdRequest>(input).SessionId),
@@ -110,7 +113,7 @@ async Task<object> Models(SettingsService service, OptimizationCatalog actionCat
 async Task<object> Scan(OptimizationCatalog actionCatalog, SettingsService settingsService, ScanRequest? request)
 {
     var profileTask = Task.Run(() => new SystemProfiler().Collect(
-        phase => Console.Error.WriteLine(phase), request?.OptionalTelemetryConsent == true, true));
+        phase => Console.Error.WriteLine(phase), request?.OptionalTelemetryConsent == true, true, request?.FirmwareReadConsent == true));
     var snapshotTask = Task.Run(() => new PerformanceSnapshotService().Collect());
     await Task.WhenAll(profileTask, snapshotTask);
     var profile = await profileTask;
@@ -250,11 +253,16 @@ void StartWatchdog(Guid sessionId)
     {
         UseShellExecute = false,
         CreateNoWindow = true,
-        WindowStyle = ProcessWindowStyle.Hidden
+        WindowStyle = ProcessWindowStyle.Hidden,
+        // The detached watchdog must not inherit the caller's response pipes: UI readers wait for EOF.
+        RedirectStandardInput = true,
+        RedirectStandardOutput = true,
+        RedirectStandardError = true
     };
     start.ArgumentList.Add("measurement-watchdog");
     start.ArgumentList.Add(sessionId.ToString("D"));
-    Process.Start(start)?.Dispose();
+    using var watchdog = Process.Start(start) ?? throw new InvalidOperationException("The measurement watchdog could not be started.");
+    watchdog.StandardInput.Close();
 }
 
 object Actions(OptimizationCatalog actionCatalog) => actionCatalog.All.Select(action => new
@@ -386,7 +394,7 @@ sealed record SaveProviderRequest(UserSettings Settings, string? ApiKey);
 sealed record DiagnoseRequest(SystemProfile? Profile, TuningGoals? Goals, List<Guid>? MeasurementSessionIds = null, Guid? RunId = null);
 sealed record ApplyRequest(List<string> ActionIds, bool HighRiskConfirmed, Guid RunId);
 sealed record RollbackRequest(Guid OperationId, Guid? RunId = null);
-sealed record ScanRequest(bool OptionalTelemetryConsent);
+sealed record ScanRequest(bool OptionalTelemetryConsent, bool FirmwareReadConsent = false);
 sealed record RunCreateRequest(SystemProfile? Profile, TuningGoals? Goals, List<Guid>? MeasurementSessionIds = null);
 sealed record RunIdRequest(Guid RunId);
 sealed record PowerPlanDirectoryRequest(string Directory);
