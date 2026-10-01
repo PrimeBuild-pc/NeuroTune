@@ -69,7 +69,7 @@ public sealed class SystemOneTests
         finally { Directory.Delete(temporary, true); }
     }
     [TestMethod]
-    public async Task Native_worker_roundtrips_unicode_without_admin_or_parent_secret_environment_or_refuses_headless_elevation()
+    public async Task Native_worker_roundtrips_unicode_without_admin_or_parent_secret_environment_or_refuses_unavailable_token()
     {
         var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
         var script = "[Console]::InputEncoding=[Text.Encoding]::UTF8; [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); $v=[Console]::In.ReadToEnd(); [Console]::Write($v); $p=[Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent()); [Console]::Write('|admin='+$p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator).ToString().ToLower()+'|secret='+$env:NEUROTUNE_TEST_SECRET)";
@@ -80,11 +80,10 @@ public sealed class SystemOneTests
             var execution = OptionalWorkerProcess.RunAsync(Path.Combine(windows, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
                 ["-NoProfile", "-NonInteractive", "-EncodedCommand", Convert.ToBase64String(Encoding.Unicode.GetBytes(script))], Path.GetTempPath(), "hello àè世界",
                 new Dictionary<string, string> { ["SystemRoot"] = windows, ["WINDIR"] = windows }, TimeSpan.FromSeconds(20), null, CancellationToken.None);
-            if (LogService.IsAdministrator() && !Environment.UserInteractive)
+            if (WorkerTokenUnavailable())
             {
                 var error = await Assert.ThrowsAsync<InvalidOperationException>(() => execution);
-                Assert.Contains("elevated non-interactive Windows session", error.Message);
-                Assert.Contains("administrator fallback is forbidden", error.Message);
+                Assert.AreEqual(OptionalWorkerProcess.TokenUnavailable, error.Message);
             }
             else Assert.AreEqual("hello àè世界|admin=false|secret=", await execution);
         }
@@ -99,7 +98,7 @@ public sealed class SystemOneTests
         Assert.ThrowsExactly<InvalidOperationException>(() => LlmClient.ParseComparisonExplanation("""{"summary":""}"""));
     }
     [TestMethod]
-    public async Task Optional_worker_deadline_stops_its_process_tree_or_refuses_headless_elevation()
+    public async Task Optional_worker_deadline_stops_its_process_tree_or_refuses_unavailable_token()
     {
         var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
         var script = "Start-Sleep -Seconds 30";
@@ -107,12 +106,30 @@ public sealed class SystemOneTests
         var execution = OptionalWorkerProcess.RunAsync(Path.Combine(windows, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
             ["-NoProfile", "-NonInteractive", "-EncodedCommand", Convert.ToBase64String(Encoding.Unicode.GetBytes(script))], Path.GetTempPath(), "",
             new Dictionary<string, string> { ["SystemRoot"] = windows }, TimeSpan.FromMilliseconds(700), null, CancellationToken.None);
-        if (LogService.IsAdministrator() && !Environment.UserInteractive)
+        if (WorkerTokenUnavailable())
         {
             var error = await Assert.ThrowsAsync<InvalidOperationException>(() => execution);
-            Assert.Contains("elevated non-interactive Windows session", error.Message);
+            Assert.AreEqual(OptionalWorkerProcess.TokenUnavailable, error.Message);
         }
         else await Assert.ThrowsAsync<OperationCanceledException>(() => execution);
         Assert.IsTrue(started.Elapsed < TimeSpan.FromSeconds(10));
+    }
+    private static bool WorkerTokenUnavailable()
+    {
+        try
+        {
+            using var token = OptionalWorkerProcess.NonAdminToken();
+            if (token is not null)
+            {
+                using var identity = new System.Security.Principal.WindowsIdentity(token.DangerousGetHandle());
+                Assert.IsFalse(new System.Security.Principal.WindowsPrincipal(identity).IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator));
+            }
+            return false;
+        }
+        catch (InvalidOperationException error) when (error.Message == OptionalWorkerProcess.TokenUnavailable)
+        {
+            Console.WriteLine("No verified UAC token: checking refusal before process creation, not desktop inference.");
+            return true;
+        }
     }
 }
