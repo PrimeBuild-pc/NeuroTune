@@ -103,3 +103,66 @@ vulnerability check passed; it was not repeated because dependency-feed access
 was not authorized in this session. UI coverage includes server-rendered
 evidence/escaping/pagination checks; privileged Start/live/Cancel and
 interactive visual/scaling acceptance remain separate.
+
+## User acceptance and follow-up — 2026-09-30
+
+The user completed elevated Start/live/Cancel, Stop/Analyze, Refresh, firmware
+opt-in, Tab navigation and 150% scaling. Functionality worked, but recorder
+operations lacked prominent feedback and reports were hard to read. BIOS setup
+values were still unavailable; the manual link incorrectly suggested exact setup
+coverage.
+
+Follow-up changes:
+
+- Prominent local-operation status with elapsed waiting time and bounded real
+  agent progress messages. Refresh now has feedback/error handling too. No fake
+  progress percentage and no AI request during recorder operations.
+- Recording timestamps are persisted after WPR startup, inside the capture lock.
+  Returned Start/Stop/Cancel states reach the UI before the extra history refresh.
+- GPU topology loads on demand instead of blocking initial measurement setup.
+  The countdown updates only its own component; idle pages no longer rerender
+  their full reports every second. Recording-history polling pauses during UI
+  operations and ignores responses superseded by a newer operation.
+- Accessible, labelled bar charts for live busy percentage, per-core interrupt
+  totals, top driver event maxima and hard-pagefault counts. Exact counters
+  remain available. Interrupt time is not added to busy time; missing evidence
+  is not rendered as zero. No raw event histogram is fabricated from aggregates.
+- Firmware facts are grouped, detected interfaces are visible, and Windows WMI
+  virtualization/TPM observations supplement SMBIOS identity and DIMM data.
+  Windows SLAT flags can be masked by a hypervisor; TPM unavailable is not proof
+  of absence. Documentation is labelled reference-only, not a reader of current
+  setup values. BIOS writes remain unavailable.
+- Short opacity/transform transitions and pressed feedback reuse native CSS;
+  keyboard focus and reduced-motion behavior remain supported.
+
+Checks: 70 .NET and 14 UI tests, format/typecheck/lint, frontend and native
+Release build passed. Browser interaction checks used delayed mocked agent
+responses for Start/Stop/Cancel/Analyze/Refresh, driver pagination and firmware
+consent; light/dark layouts at a 907×573 effective viewport (1360×860 at 150%)
+had no horizontal overflow. Reduced motion and keyboard focus were checked.
+The packaged firmware read ran successfully without elevation on this host;
+TPM information was unavailable in that context. This is not a new privileged
+WPR validation: recheck Start/live/Stop/Cancel/Analyze as administrator after
+the timestamp change, including automatic stop at the deadline. No merge was
+performed.
+
+### Suggested upstream projects
+
+[SCEHUB](https://github.com/ab3lkaizen/SCEHUB) redistributes AMISCE/SCEWIN and
+associated drivers; its README says it is not endorsed by AMI. Export support
+depends on firmware/HII compatibility, and some suggested workarounds disable
+firmware protections or modify firmware. No repository license was returned by
+GitHub's license endpoint during review; that is not evidence of redistribution
+rights for the binaries. NeuroTune did not download/run these tools, load their
+drivers, weaken firmware protections or invoke BIOS setters. Following explicit
+user approval, a bounded offline importer and hash-bound, opt-in local SCEWIN
+export adapter were implemented; see [SCEWIN and System One review](SCEWIN_SYSTEM_ONE.md).
+This does not establish vendor provenance, licensing, signature trust or live
+board compatibility. No driver was actually executed during implementation.
+
+[Coucou](https://github.com/Louis-CFM/coucou) is a Claude Code companion, not a
+latency or BIOS library. Its Windows app also uses Tauri 2. State-driven,
+focus-preserving feedback is useful inspiration; an always-on-top mascot is not
+required for NeuroTune. Its code is MIT but the character, icons, sounds and
+media have separate restrictions. No Coucou code, branded assets, services or
+60-fps decorative canvas loop were incorporated.

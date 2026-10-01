@@ -12,8 +12,16 @@ public static class FirmwareInspection
     {
         if (!consent) return new(false, false, new Dictionary<string, string>(), [], "Reading is disabled.", "");
         var facts = SystemProfiler.ReadFirmwareAndMemory();
+        facts["Firmware virtualization (Windows-observed)"] = SystemProfiler.Query(
+            "SELECT VirtualizationFirmwareEnabled, SecondLevelAddressTranslationExtensions FROM Win32_Processor",
+            row => $"Virtualization enabled: {ObservedBoolean(row["VirtualizationFirmwareEnabled"])}; Windows-reported SLAT flag: {ObservedBoolean(row["SecondLevelAddressTranslationExtensions"])} (may be masked by an active hypervisor)")
+            .FirstOrDefault() ?? "Unavailable";
+        facts["TPM (Windows-observed)"] = SystemProfiler.Query(@"root\CIMV2\Security\MicrosoftTpm",
+            "SELECT SpecVersion, ManufacturerVersion, IsEnabled_InitialValue FROM Win32_Tpm",
+            row => $"Specification: {row["SpecVersion"]}; firmware: {row["ManufacturerVersion"]}; enabled at initialization: {ObservedBoolean(row["IsEnabled_InitialValue"])}")
+            .FirstOrDefault() ?? "Unavailable or not exposed to Windows";
         var interfaces = new List<string>();
-        var status = "No validated BIOS setup reader is available for this firmware. Current setup values remain Unknown.";
+        var status = "Firmware identity and Windows-observed state are readable, but exact BIOS setup settings are unavailable: this firmware has no validated setup reader.";
         var board = facts.GetValueOrDefault("Motherboard", "");
         var url = "";
         if (board.Contains("Micro-Star", StringComparison.OrdinalIgnoreCase))
@@ -36,6 +44,8 @@ public static class FirmwareInspection
         }
         return new(true, false, facts, interfaces, status, url);
     }
+
+    internal static string ObservedBoolean(object? value) => value is bool enabled ? (enabled ? "Yes" : "No") : "Unknown";
 
     internal static string GuidanceUrl(string board) => board.Contains("MPG X570 GAMING EDGE WIFI (MS-7C37)", StringComparison.OrdinalIgnoreCase)
         ? "https://download.msi.com/archive/mnu_exe/mb/E7C37v1.1.pdf"

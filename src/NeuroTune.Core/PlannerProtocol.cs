@@ -2,12 +2,13 @@ using System.Text.Json;
 
 namespace NeuroTune;
 
-public enum PlannerTurnKind { RequestEvidence, Diagnosis }
+public enum PlannerTurnKind { RequestEvidence, RequestInvestigation, Diagnosis }
 
 public sealed record PlannerTurn(
     PlannerTurnKind Kind,
     IReadOnlyList<string> EvidenceIds,
-    string DiagnosisJson);
+    string DiagnosisJson,
+    InvestigationRequest? Investigation = null);
 
 public sealed record PlannerAuditEntry(
     int Turn,
@@ -20,11 +21,12 @@ public sealed record PlannerDiagnosisOutcome(
     DiagnosisResult Diagnosis,
     IReadOnlyList<PlannerAuditEntry> Audit,
     string StopReason,
-    bool UsedLocalFallback);
+    bool UsedLocalFallback,
+    IReadOnlyDictionary<string, string>? AdditionalEvidence = null);
 
 public static class PlannerProtocol
 {
-    public const int MaxTurns = 4;
+    public const int MaxTurns = 32; // Resource ceiling; the user-selected investigation budget is lower by default.
     public const int MaxEvidencePerTurn = 40;
 
     public static PlannerTurn Parse(string content)
@@ -44,11 +46,19 @@ public static class PlannerProtocol
                     throw new InvalidOperationException("The planner requested an invalid number of evidence facts.");
                 return new(PlannerTurnKind.RequestEvidence, ids, "");
             }
+            if (kind == "requestInvestigation")
+            {
+                var request = new InvestigationRequest(root.GetProperty("toolId").GetString() ?? "",
+                    root.GetProperty("question").GetString() ?? "",
+                    root.TryGetProperty("module", out var module) ? module.GetString() : null);
+                InvestigationService.Validate(request);
+                return new(PlannerTurnKind.RequestInvestigation, [], "", request);
+            }
             if (kind == "diagnosis")
                 return new(PlannerTurnKind.Diagnosis, [], root.GetProperty("diagnosis").GetRawText());
             throw new InvalidOperationException("The planner returned an unknown turn kind.");
         }
-        catch (Exception exception) when (exception is JsonException or KeyNotFoundException)
+        catch (Exception exception) when (exception is JsonException or KeyNotFoundException or InvalidOperationException or ArgumentException)
         {
             throw new InvalidOperationException("The planner did not return a valid JSON turn.", exception);
         }

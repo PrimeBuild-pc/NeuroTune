@@ -21,14 +21,17 @@ public sealed class CoreTests
     }
 
     [TestMethod]
-    public void Diagnosis_rejects_unknown_actions()
+    public void Diagnosis_retains_unknown_actions_without_write_authority()
     {
         var json = """
             {"summary":"Sistema valido","findings":[],"recommendations":[{"id":"bad","kind":"executableAction","title":"Bad","actionId":"run.powershell","evidenceIds":[],"reason":"Esegui script"}],"consentQuestion":"Apply selected actions?"}
             """;
 
-        Assert.ThrowsExactly<InvalidOperationException>(() =>
-            LlmClient.ParseDiagnosis(json, new OptimizationCatalog()));
+        var proposal = LlmClient.ParseDiagnosis(json, new OptimizationCatalog()).Recommendations.Single();
+        Assert.AreEqual(PlanRecommendationKind.ManualGuidance, proposal.Kind);
+        Assert.AreEqual("", proposal.ActionId);
+        Assert.AreEqual(RiskLevel.High, proposal.Risk);
+        Assert.IsNotEmpty(proposal.ReviewWarnings);
     }
 
     [TestMethod]

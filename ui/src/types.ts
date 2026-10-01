@@ -1,4 +1,4 @@
-export type ProviderKind = 'openRouter' | 'openAI' | 'anthropic' | 'deepSeek' | 'custom' | 'local';
+export type ProviderKind = 'openRouter' | 'openAI' | 'anthropic' | 'deepSeek' | 'custom' | 'local' | 'chatGpt';
 export type ApiProtocol = 'openAiCompatible' | 'anthropic';
 export type ThemePreference = 'system' | 'light' | 'dark';
 
@@ -9,7 +9,15 @@ export interface ProviderSettings {
   protocol: ApiProtocol;
   model: string;
   requiresApiKey: boolean;
+  chatGptAccountId?: string;
+  investigationMaxTurns?: number;
+  investigationMaxMinutes?: number;
 }
+
+export interface SupportingAttachment { id: string; name: string; kind: 'report' | 'image'; contentType: 'text/plain' | 'image/png'; content: string; sha256: string; }
+export interface SupportingAttachmentInfo { id: string; name: string; kind: 'report' | 'image'; contentType: string; sha256: string; bytes: number; }
+
+export interface ChatGptAccountInfo { id: string; label: string; connected: boolean; planEnabled: boolean; }
 
 export interface SystemProfile {
   schemaVersion: number;
@@ -101,6 +109,8 @@ export interface Recommendation {
   reason: string;
   risk: 'low' | 'medium' | 'high';
   expectedImpact: string;
+  uncertainty?: string;
+  reversibility?: string;
   tradeoffs: string[];
   prerequisites: string[];
   requiresRestart: boolean;
@@ -110,7 +120,7 @@ export interface Recommendation {
   reviewWarnings: string[];
 }
 
-export type OptimizationPriority = 'balanced' | 'fps' | 'systemLatency' | 'networkLatency' | 'efficiency';
+export type OptimizationPriority = 'balanced' | 'fps' | 'systemLatency' | 'networkLatency' | 'efficiency' | 'stability';
 
 export interface TuningGoals {
   priority: OptimizationPriority;
@@ -174,7 +184,10 @@ export interface DiagnosisFinding {
   assessment: string;
 }
 
+export interface SystemOneAdvisory { phase: string; status: string; domain: string | null; score: number | null; seconds: number; detail: string; evidenceIds: string[]; }
+
 export interface Diagnosis {
+  systemOneAdvisories?: SystemOneAdvisory[];
   summary: string;
   findings: DiagnosisFinding[];
   recommendations: Recommendation[];
@@ -213,6 +226,8 @@ export interface OptimizationRun {
   diagnosis?: Diagnosis;
   baselineSessionIds: string[];
   candidateSessionIds: string[];
+  diagnosticSessionIds?: string[];
+  supportingAttachments?: SupportingAttachmentInfo[];
   approvedActionIds: string[];
   operationId?: string;
   comparison?: MeasurementComparison;
@@ -239,6 +254,7 @@ export interface ActionRecord {
 }
 
 export interface OperationManifest {
+  systemOneAdvisories?: SystemOneAdvisory[];
   id: string;
   optimizationRunId?: string;
   createdAt: string;
@@ -290,6 +306,8 @@ export interface TraceReport {
 }
 
 export interface MeasurementSession {
+  hardwareFingerprint?: string;
+  configurationFingerprint?: string;
   systemWide?: boolean;
   hardFaultsEnabled?: boolean;
   id: string;
@@ -311,6 +329,7 @@ export interface MeasurementSession {
 }
 
 export interface MeasurementComparison {
+  systemOneAdvisories?: SystemOneAdvisory[];
   id: string;
   level: 'exploratory' | 'repeated';
   baselineSessionIds: string[];
