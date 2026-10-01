@@ -34,17 +34,24 @@ public sealed class SettingsService
         AtomicWrite(_settingsPath, JsonSerializer.Serialize(settings, JsonOptions));
         if (!string.IsNullOrWhiteSpace(apiKey))
         {
-            var protectedBytes = ProtectedData.Protect(
-                Encoding.UTF8.GetBytes(apiKey.Trim()), null, DataProtectionScope.CurrentUser);
-            AtomicWriteBytes(KeyPath(settings.CredentialId), protectedBytes);
+            SaveSecret(settings.CredentialId, apiKey);
         }
     }
 
-    public string? LoadApiKey(LlmProvider provider) => LoadApiKey(provider.ToString().ToLowerInvariant());
+    public string? LoadApiKey(LlmProvider provider) => LoadSecret(provider.ToString().ToLowerInvariant());
 
-    public string? LoadApiKey(UserSettings settings) => LoadApiKey(settings.CredentialId);
+    public string? LoadApiKey(UserSettings settings) => LoadSecret(settings.CredentialId);
 
-    private static string? LoadApiKey(string credentialId)
+    internal void SaveSecret(string credentialId, string apiKey)
+    {
+        apiKey = apiKey.Trim();
+        if (string.IsNullOrWhiteSpace(apiKey) || apiKey.Length > 4096 || apiKey.Any(char.IsControl)) throw new ArgumentException("Invalid API key.");
+        Directory.CreateDirectory(DataDirectory);
+        AtomicWriteBytes(KeyPath(credentialId), ProtectedData.Protect(Encoding.UTF8.GetBytes(apiKey.Trim()), null, DataProtectionScope.CurrentUser));
+    }
+    internal void DeleteSecret(string credentialId) => File.Delete(KeyPath(credentialId));
+
+    internal string? LoadSecret(string credentialId)
     {
         try
         {

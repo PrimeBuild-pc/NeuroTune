@@ -5,13 +5,14 @@
     <Nullable>enable</Nullable>
     <AssemblyName>NeuroTune.Core</AssemblyName>
     <RootNamespace>NeuroTune</RootNamespace>
-    <Version>0.7.0-alpha.1</Version>
+    <Version>0.8.0-alpha.1</Version>
     <Authors>PrimeBuild</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/PrimeBuild-pc/NeuroTune</RepositoryUrl>
   </PropertyGroup>
   <ItemGroup>
     <EmbeddedResource Include="Data\component-baselines.v1.json" />
+    <EmbeddedResource Include="system-one-worker.py" />
     <InternalsVisibleTo Include="NeuroTune.Tests" />
     <PackageReference Include="System.Management" Version="8.0.0" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />

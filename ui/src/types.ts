@@ -1,4 +1,4 @@
-export type ProviderKind = 'openRouter' | 'openAI' | 'anthropic' | 'deepSeek' | 'custom' | 'local';
+export type ProviderKind = 'openRouter' | 'openAI' | 'anthropic' | 'deepSeek' | 'custom' | 'local' | 'chatGpt';
 export type ApiProtocol = 'openAiCompatible' | 'anthropic';
 export type ThemePreference = 'system' | 'light' | 'dark';
 
@@ -9,7 +9,15 @@ export interface ProviderSettings {
   protocol: ApiProtocol;
   model: string;
   requiresApiKey: boolean;
+  chatGptAccountId?: string;
+  investigationMaxTurns?: number;
+  investigationMaxMinutes?: number;
 }
+
+export interface SupportingAttachment { id: string; name: string; kind: 'report' | 'image'; contentType: 'text/plain' | 'image/png'; content: string; sha256: string; }
+export interface SupportingAttachmentInfo { id: string; name: string; kind: 'report' | 'image'; contentType: string; sha256: string; bytes: number; }
+
+export interface ChatGptAccountInfo { id: string; label: string; connected: boolean; planEnabled: boolean; }
 
 export interface SystemProfile {
   schemaVersion: number;
@@ -74,6 +82,13 @@ export interface OptimizationAction {
   availability: Availability;
 }
 
+export interface CustomPowerPlanFile {
+  name: string;
+  path: string;
+  sizeBytes: number;
+  sha256: string;
+}
+
 export type PlanRecommendationKind = 'executableAction' | 'manualGuidance' | 'scriptArtifact' | 'externalResource' | 'updateNotice';
 export type RiskProfile = 'safe' | 'balanced' | 'aggressive';
 
@@ -94,6 +109,8 @@ export interface Recommendation {
   reason: string;
   risk: 'low' | 'medium' | 'high';
   expectedImpact: string;
+  uncertainty?: string;
+  reversibility?: string;
   tradeoffs: string[];
   prerequisites: string[];
   requiresRestart: boolean;
@@ -103,7 +120,7 @@ export interface Recommendation {
   reviewWarnings: string[];
 }
 
-export type OptimizationPriority = 'balanced' | 'fps' | 'systemLatency' | 'networkLatency' | 'efficiency';
+export type OptimizationPriority = 'balanced' | 'fps' | 'systemLatency' | 'networkLatency' | 'efficiency' | 'stability';
 
 export interface TuningGoals {
   priority: OptimizationPriority;
@@ -167,7 +184,10 @@ export interface DiagnosisFinding {
   assessment: string;
 }
 
+export interface SystemOneAdvisory { phase: string; status: string; domain: string | null; score: number | null; seconds: number; detail: string; evidenceIds: string[]; }
+
 export interface Diagnosis {
+  systemOneAdvisories?: SystemOneAdvisory[];
   summary: string;
   findings: DiagnosisFinding[];
   recommendations: Recommendation[];
@@ -206,6 +226,8 @@ export interface OptimizationRun {
   diagnosis?: Diagnosis;
   baselineSessionIds: string[];
   candidateSessionIds: string[];
+  diagnosticSessionIds?: string[];
+  supportingAttachments?: SupportingAttachmentInfo[];
   approvedActionIds: string[];
   operationId?: string;
   comparison?: MeasurementComparison;
@@ -232,6 +254,7 @@ export interface ActionRecord {
 }
 
 export interface OperationManifest {
+  systemOneAdvisories?: SystemOneAdvisory[];
   id: string;
   optimizationRunId?: string;
   createdAt: string;
@@ -263,12 +286,16 @@ export interface DistributionMetrics {
 }
 
 export interface TraceReport {
+  schemaVersion?: number;
   sessionId: string;
   generatedAtUtc: string;
   targetExecutable: string;
   quality: { durationMilliseconds: number; etlBytes: number; eventsLost: number; missingProviders: string[]; targetPresencePercent: number; isValid: boolean };
   interrupts: Array<{ kind: string; module: string; logicalProcessor: number; distribution: DistributionMetrics }>;
-  processors: Array<{ logicalProcessor: number; interruptSharePercent: number; targetRunningMilliseconds: number; readyOverlapMicroseconds: number }>;
+  processors: Array<{ logicalProcessor: number; interruptSharePercent: number; targetRunningMilliseconds: number; readyOverlapMicroseconds: number; scheduledBusyMilliseconds?: number | null; scheduledIdleMilliseconds?: number | null; unobservedMilliseconds?: number | null; dpc?: DistributionMetrics; isr?: DistributionMetrics }>;
+  hardFaults?: Array<{ processKey: string; processName: string; resolution: DistributionMetrics }>;
+  longestSpikes?: Array<{ kind: string; source: string; logicalProcessor: number; startMilliseconds: number; durationMicroseconds: number }>;
+  limitations?: string[];
   threads: Array<{ threadKey: string; runningMilliseconds: number; readyTime: DistributionMetrics; migrations: number; residencyMilliseconds: Record<string, number> }>;
   frameTimes?: {
     source: string; sampleCount: number; capturedDurationMilliseconds: number; averageFps: number;
@@ -279,6 +306,10 @@ export interface TraceReport {
 }
 
 export interface MeasurementSession {
+  hardwareFingerprint?: string;
+  configurationFingerprint?: string;
+  systemWide?: boolean;
+  hardFaultsEnabled?: boolean;
   id: string;
   optimizationRunId?: string;
   processId: number;
@@ -298,6 +329,7 @@ export interface MeasurementSession {
 }
 
 export interface MeasurementComparison {
+  systemOneAdvisories?: SystemOneAdvisory[];
   id: string;
   level: 'exploratory' | 'repeated';
   baselineSessionIds: string[];

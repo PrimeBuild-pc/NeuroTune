@@ -156,6 +156,7 @@ public sealed class OptimizationCatalog
         actions.Add(PageFileManagedSizes());
         actions.Add(CoreParkingOff());
         foreach (var target in GameGpuTargetStore.Load()) actions.AddRange(PerAppGpuPreferences(target));
+        foreach (var plan in new PowerPlanStore().ListStaged()) actions.Add(CustomPowerPlan(plan));
         if (actions.Select(action => action.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count() != actions.Count)
             throw new InvalidOperationException("The capability registry contains duplicate action IDs.");
         foreach (var action in actions) action.Definition.Validate();
@@ -232,7 +233,7 @@ public sealed class OptimizationCatalog
     {
         const string subgroup = "54533251-82be-4824-96c1-47b60b740d00";
         const string setting = "0cc5b647-c1df-4637-891a-dec35c318583";
-        int Current() => ReadAcPowerSetting(Guid.Parse(subgroup), Guid.Parse(setting));
+        int Current() => checked((int)ReadPowerSetting(Guid.Parse(subgroup), Guid.Parse(setting)).Ac);
         ActionAvailability Inspect()
         {
             try
@@ -347,6 +348,47 @@ public sealed class OptimizationCatalog
             evidenceRequirements: ["Exact active and available power-scheme identifiers"],
             sources: ["Microsoft powercfg command contract and exact local scheme inventory"],
             sideEffects: ["Changes the active system power policy and may affect energy use"]);
+    }
+
+    internal static OptimizationAction CustomPowerPlan(CustomPowerPlanFile plan)
+    {
+        var target = new Guid(Convert.FromHexString(plan.Sha256)[..16]).ToString("D");
+        bool Exists() => RunPowerCfg("/list").Contains(target, StringComparison.OrdinalIgnoreCase);
+        string Active() => Regex.Match(RunPowerCfg("/getactivescheme"), "[0-9a-fA-F-]{36}").Value is { Length: 36 } guid
+            ? guid : throw new InvalidOperationException("The active power plan could not be detected.");
+        string Capture() => JsonSerializer.Serialize(new CustomPowerPlanState(Active(), Exists()));
+        void Apply()
+        {
+            if (!PowerPlanStore.Matches(plan)) throw new InvalidOperationException("The staged .pow file no longer matches its SHA-256.");
+            if (!Exists()) RunPowerCfg("/import", plan.Path, target);
+            RunPowerCfg("/setactive", target);
+        }
+        void Restore(string state)
+        {
+            var previous = JsonSerializer.Deserialize<CustomPowerPlanState>(state)
+                ?? throw new InvalidOperationException("The custom power-plan snapshot was invalid.");
+            RunPowerCfg("/setactive", previous.ActiveGuid);
+            if (!previous.TargetExisted && Exists()) RunPowerCfg("/delete", target);
+        }
+        ActionAvailability Inspect()
+        {
+            try
+            {
+                if (!PowerPlanStore.Matches(plan)) return ActionAvailability.Unavailable("The staged .pow file is missing or no longer matches its SHA-256");
+                return Active().Equals(target, StringComparison.OrdinalIgnoreCase)
+                    ? ActionAvailability.Applied($"Active custom plan · SHA-256 {plan.Sha256[..12]}")
+                    : ActionAvailability.Ready($"Opaque .pow · SHA-256 {plan.Sha256[..12]} · {(Exists() ? "installed" : "not installed")}");
+            }
+            catch (Exception exception) { return ActionAvailability.Unavailable(exception.Message); }
+        }
+        return new($"power.custom.{plan.Sha256.ToLowerInvariant()}", $"Import and use {plan.Name}",
+            "Imports the selected opaque .pow file under a deterministic GUID and activates it for measured comparison.",
+            "Power", RiskLevel.High, false, null, Inspect, Capture, Apply, Restore,
+            () => Active().Equals(target, StringComparison.OrdinalIgnoreCase),
+            supportedHardware: ["Windows 11 PC; the third-party plan may still contain hardware-specific values"],
+            evidenceRequirements: [$"User-staged .pow file with SHA-256 {plan.Sha256}; plan contents are opaque"],
+            sources: ["User-provided powercfg export; Microsoft powercfg import contract"],
+            sideEffects: ["Changes the active power policy; may increase temperature, energy use, instability, or latency; requires Baseline and separate high-risk confirmation"]);
     }
 
     private static OptimizationAction RegistryDword(string id, string name, string description, string category,
@@ -610,7 +652,7 @@ public sealed class OptimizationCatalog
     private static string RunPowerCfg(params string[] arguments)
         => RunExecutable("powercfg.exe", arguments);
 
-    private static int ReadAcPowerSetting(Guid subgroup, Guid setting)
+    internal static PowerSettingValue ReadPowerSetting(Guid subgroup, Guid setting)
     {
         var status = NativePower.PowerGetActiveScheme(IntPtr.Zero, out var schemePointer);
         if (status != 0 || schemePointer == IntPtr.Zero)
@@ -621,7 +663,10 @@ public sealed class OptimizationCatalog
             status = NativePower.PowerReadACValueIndex(IntPtr.Zero, ref scheme, ref subgroup, ref setting, out var value);
             if (status != 0)
                 throw new InvalidOperationException($"The active AC power setting could not be read (Win32 {status}).");
-            return checked((int)value);
+            var dcStatus = NativePower.PowerReadDCValueIndex(IntPtr.Zero, ref scheme, ref subgroup, ref setting, out var dc);
+            if (dcStatus != 0)
+                throw new InvalidOperationException($"The DC power setting could not be read (Win32 {dcStatus}).");
+            return new(value, dc);
         }
         finally { NativePower.LocalFree(schemePointer); }
     }
@@ -647,6 +692,8 @@ public sealed class OptimizationCatalog
 
     internal sealed record RegistryValueSnapshot(bool Exists, RegistryValueKind Kind, string? Value);
     internal sealed record PageFileEntry(string Path, uint? InitialSize, uint? MaximumSize);
+    internal sealed record CustomPowerPlanState(string ActiveGuid, bool TargetExisted);
+    internal readonly record struct PowerSettingValue(uint Ac, uint Dc);
 
     private static class NativePower
     {
@@ -656,6 +703,10 @@ public sealed class OptimizationCatalog
         [DllImport("powrprof.dll")]
         internal static extern uint PowerReadACValueIndex(IntPtr rootPowerKey, ref Guid schemeGuid,
             ref Guid subgroupOfPowerSettingsGuid, ref Guid powerSettingGuid, out uint acValueIndex);
+
+        [DllImport("powrprof.dll")]
+        internal static extern uint PowerReadDCValueIndex(IntPtr rootPowerKey, ref Guid schemeGuid,
+            ref Guid subgroupOfPowerSettingsGuid, ref Guid powerSettingGuid, out uint dcValueIndex);
 
         [DllImport("kernel32.dll")]
         internal static extern IntPtr LocalFree(IntPtr memory);

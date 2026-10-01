@@ -87,7 +87,7 @@ public sealed class OpenRouterOAuthService
             : throw new InvalidOperationException("OpenRouter did not return an API key.");
     }
 
-    private static async Task Respond(HttpListenerResponse response, int status, string title, string message)
+    internal static async Task Respond(HttpListenerResponse response, int status, string title, string message)
     {
         var html = $$"""
             <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
@@ -102,7 +102,7 @@ public sealed class OpenRouterOAuthService
         response.Close();
     }
 
-    private static int FreeLoopbackPort()
+    internal static int FreeLoopbackPort()
     {
         var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
@@ -111,10 +111,10 @@ public sealed class OpenRouterOAuthService
         return port;
     }
 
-    private static string Base64Url(byte[] bytes) =>
+    internal static string Base64Url(byte[] bytes) =>
         Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
-    private static bool SecureEquals(string expected, string actual)
+    internal static bool SecureEquals(string expected, string actual)
     {
         var left = Encoding.UTF8.GetBytes(expected);
         var right = Encoding.UTF8.GetBytes(actual);

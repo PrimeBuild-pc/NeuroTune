@@ -81,6 +81,21 @@ NeuroTune is developed safety-first: a feature is not considered complete merely
 
 ## v1.0 — Release Criteria
 
+### System latency and firmware scope (M11–M12)
+
+- [x] Add bounded system-wide captures, live per-core counters, complete DPC/ISR aggregates, local spike timelines and hard pagefaults; validate three desktop captures on RX 6950 XT
+- [x] Add optional BIOS/UEFI inspection and scan consent with explicit unavailable setup values on the local MSI firmware
+- [ ] Replace the LatencyMon diagnostic workflow with start/stop system monitoring, live per-core busy/idle and DPC/ISR time, complete driver statistics, spike attribution, hard pagefaults, and a validated interrupt-to-process latency probe
+- [ ] Turn repeated measurements into approved affinity, device, and dedicated-service changes with before/after verification and exact rollback; reuse M8/M9 and the existing optimization run
+- [ ] Provide BIOS guidance matched to the detected motherboard/revision/firmware, including setting locations, evidence, and reversal instructions
+- [ ] Offer optional BIOS setting reads and separately enabled, explicitly approved writes only through validated supported OEM interfaces, with tested firmware recovery
+
+The checked foundations are implemented; complete parity and writers remain
+open. Detailed gaps and
+acceptance checks are maintained in [M11 and M12](docs/IMPLEMENTATION_PLAN.md#m11--latencymon-replacement-and-measured-system-remediation).
+
+### Release gates
+
 - [ ] Supported actions pass apply/verify/rollback tests across the support matrix
 - [ ] No unresolved critical or high-severity security findings
 - [ ] Installer and portable artifacts have documented checksums and reproducible provenance

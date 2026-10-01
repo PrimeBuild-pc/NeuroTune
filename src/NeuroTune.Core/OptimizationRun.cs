@@ -23,7 +23,7 @@ public enum OptimizationRunState
     Failed
 }
 
-public enum OptimizationRunDecision { Undecided, Keep, Rollback }
+public enum OptimizationRunDecision { Undecided, Keep, Rollback, Declined }
 
 public sealed record OptimizationRunTransition(
     DateTimeOffset AtUtc,
@@ -40,6 +40,7 @@ public sealed class OptimizationRun
     public OptimizationRunState State { get; set; } = OptimizationRunState.Draft;
     public TuningGoals Goals { get; init; } = new();
     public Dictionary<string, string> EvidenceFacts { get; set; } = [];
+    public List<SupportingAttachmentInfo> SupportingAttachments { get; set; } = [];
     public DiagnosisResult? Diagnosis { get; set; }
     public List<PlannerAuditEntry> PlannerAudit { get; set; } = [];
     public string PlannerStopReason { get; set; } = "";
@@ -49,6 +50,7 @@ public sealed class OptimizationRun
     public bool HighRiskConfirmed { get; set; }
     public List<Guid> BaselineSessionIds { get; set; } = [];
     public List<Guid> CandidateSessionIds { get; set; } = [];
+    public List<Guid> DiagnosticSessionIds { get; set; } = [];
     public Guid? OperationId { get; set; }
     public string BootIdAtApply { get; set; } = "";
     public MeasurementComparison? Comparison { get; set; }
@@ -69,6 +71,7 @@ public static class OptimizationRunStateMachine
 
     public static bool CanTransition(OptimizationRunState from, OptimizationRunState to) => (from, to) switch
     {
+        (OptimizationRunState.Scanned or OptimizationRunState.Hypothesizing or OptimizationRunState.BaselinePending or OptimizationRunState.BaselineReady or OptimizationRunState.Approved, OptimizationRunState.Completed) => true,
         (OptimizationRunState.Draft, OptimizationRunState.Scanned) => true,
         (OptimizationRunState.Scanned, OptimizationRunState.Hypothesizing) => true,
         (OptimizationRunState.Hypothesizing, OptimizationRunState.ProposalReady or OptimizationRunState.Failed) => true,
@@ -97,20 +100,23 @@ public sealed class OptimizationRunService
     public OptimizationRunService(string? directory = null) => _directory = directory ?? RunsDirectory;
 
     public OptimizationRun Create(SystemProfile profile, TuningGoals goals,
-        IReadOnlyCollection<MeasurementSession>? baselineSessions = null)
+        IReadOnlyCollection<MeasurementSession>? baselineSessions = null, IReadOnlyList<SupportingAttachment>? attachments = null, bool imagesConfirmed = false)
     {
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(goals);
         goals.Validate();
         baselineSessions = (baselineSessions ?? []).Where(session => session.Label == MeasurementLabel.Baseline &&
             session.State == MeasurementSessionState.Completed && session.Report?.Quality.IsValid == true).ToList();
-        var evidence = LlmClient.MergeEvidenceFacts(LlmClient.BuildEvidenceFacts(profile),
-            MeasurementService.BuildNormalizedEvidence(baselineSessions));
+        var supporting = NeuroTune.SupportingAttachments.Normalize(attachments, imagesConfirmed);
+        var evidence = NeuroTune.SupportingAttachments.MergeEvidence(LlmClient.MergeEvidenceFacts(LlmClient.BuildEvidenceFacts(profile),
+            MeasurementService.BuildNormalizedEvidence(baselineSessions)), supporting);
         var run = new OptimizationRun
         {
             Goals = goals,
             EvidenceFacts = evidence.ToDictionary(fact => fact.Key, fact => fact.Value, StringComparer.Ordinal),
-            BaselineSessionIds = baselineSessions.Select(session => session.Id).Distinct().ToList(),
+            SupportingAttachments = NeuroTune.SupportingAttachments.Describe(supporting),
+            BaselineSessionIds = baselineSessions.Where(session => !session.SystemWide).Select(session => session.Id).Distinct().ToList(),
+            DiagnosticSessionIds = baselineSessions.Where(session => session.SystemWide).Select(session => session.Id).Distinct().ToList(),
             State = OptimizationRunState.Scanned
         };
         run.Transitions.Add(new(run.UpdatedAtUtc, OptimizationRunState.Draft,
@@ -139,11 +145,12 @@ public sealed class OptimizationRunService
     {
         ArgumentNullException.ThrowIfNull(outcome);
         var run = LoadExpected(id, OptimizationRunState.Hypothesizing);
+        run.EvidenceFacts = LlmClient.AppendInvestigationEvidence(run.EvidenceFacts, outcome.AdditionalEvidence).ToDictionary(fact => fact.Key, fact => fact.Value, StringComparer.Ordinal);
         run.Diagnosis = outcome.Diagnosis;
         run.PlannerAudit = outcome.Audit.ToList();
         run.PlannerStopReason = outcome.StopReason;
         run.UsedLocalFallback = outcome.UsedLocalFallback;
-        run.RequestedProbeIds = outcome.Audit.Where(entry => entry.Accepted && entry.Kind == "requestEvidence")
+        run.RequestedProbeIds = outcome.Audit.Where(entry => entry.Accepted && entry.Kind is "requestEvidence" or "requestInvestigation")
             .SelectMany(entry => entry.EvidenceIds).Distinct(StringComparer.Ordinal).ToList();
         Move(run, OptimizationRunState.ProposalReady, "Provider proposal passed local validation");
         Move(run, run.BaselineSessionIds.Count > 0 ? OptimizationRunState.BaselineReady : OptimizationRunState.BaselinePending,
@@ -162,6 +169,7 @@ public sealed class OptimizationRunService
         run.Error = BoundError(error);
         if (outcome is not null)
         {
+            run.EvidenceFacts = LlmClient.AppendInvestigationEvidence(run.EvidenceFacts, outcome.AdditionalEvidence).ToDictionary(fact => fact.Key, fact => fact.Value, StringComparer.Ordinal);
             run.PlannerAudit = outcome.Audit.ToList();
             run.PlannerStopReason = outcome.StopReason;
             run.UsedLocalFallback = true;
@@ -171,11 +179,23 @@ public sealed class OptimizationRunService
         return run;
     });
 
+    public OptimizationRun Dismiss(Guid id) => WithLock(() =>
+    {
+        var run = LoadCore(id);
+        if (OptimizationRunStateMachine.IsTerminal(run.State)) return run;
+        if (run.OperationId is not null || run.RequiresRecovery || run.State is not (OptimizationRunState.Scanned or OptimizationRunState.Hypothesizing or OptimizationRunState.ProposalReady or OptimizationRunState.BaselinePending or OptimizationRunState.BaselineReady or OptimizationRunState.Approved))
+            throw new InvalidOperationException("A run with an operation or pending recovery cannot be dismissed; use verified rollback/recovery.");
+        run.Decision = OptimizationRunDecision.Declined;
+        Move(run, OptimizationRunState.Completed, "Diagnosis dismissed without system changes");
+        Save(run);
+        return run;
+    });
+
     public OptimizationRun AttachMeasurement(Guid id, MeasurementSession session) => WithLock(() =>
     {
         ArgumentNullException.ThrowIfNull(session);
         var run = LoadCore(id);
-        if (session.OptimizationRunId != id || session.State != MeasurementSessionState.Completed ||
+        if (session.SystemWide || session.OptimizationRunId != id || session.State != MeasurementSessionState.Completed ||
             session.Report?.Quality.IsValid != true)
             throw new InvalidOperationException("The linked measurement is not a completed, quality-valid session from this optimization run.");
         if (session.Label == MeasurementLabel.Baseline)
@@ -431,13 +451,21 @@ public sealed class OptimizationRunService
         run.Goals.Validate();
         if (!LlmClient.MeasureEvidence(run.EvidenceFacts).FitsSinglePass)
             throw new InvalidOperationException("The optimization run evidence exceeded the single-pass limit.");
+        if (run.SupportingAttachments is null || run.SupportingAttachments.Count > NeuroTune.SupportingAttachments.MaxFiles ||
+            run.SupportingAttachments.Count(item => item?.Kind == "image") > NeuroTune.SupportingAttachments.MaxImages ||
+            run.SupportingAttachments.Select(item => item?.Id).Distinct().Count() != run.SupportingAttachments.Count ||
+            run.SupportingAttachments.Any(item => item is null || !Guid.TryParseExact(item.Id, "D", out _) || string.IsNullOrWhiteSpace(item.Name) || item.Name.Length > 120 ||
+                item.Kind is not ("report" or "image") || item.ContentType != (item.Kind == "image" ? "image/png" : "text/plain") ||
+                item.Bytes is < 1 or > NeuroTune.SupportingAttachments.MaxImageBytes || item.Sha256 is null || item.Sha256.Length != 64 || item.Sha256.Any(character => !Uri.IsHexDigit(character)) ||
+                !run.EvidenceFacts.ContainsKey($"support:{item.Id}:provenance")))
+            throw new InvalidOperationException("Invalid persisted supporting attachment metadata.");
         if (run.State != OptimizationRunState.Draft && run.EvidenceFacts.Count == 0)
             throw new InvalidOperationException("The optimization run has no sanitized evidence.");
         var knownProbeIds = run.EvidenceFacts.Keys.ToHashSet(StringComparer.Ordinal);
         if (run.RequestedProbeIds.Any(probe => !knownProbeIds.Contains(probe)))
             throw new InvalidOperationException("The optimization run referenced an unknown probe.");
         if (run.RequestedProbeIds.Count > PlannerProtocol.MaxTurns * PlannerProtocol.MaxEvidencePerTurn || run.ApprovedActionIds.Count > 100 ||
-            run.BaselineSessionIds.Count > 20 || run.CandidateSessionIds.Count > 20 || run.Transitions.Count > 200 ||
+            run.BaselineSessionIds.Count > 20 || run.CandidateSessionIds.Count > 20 || run.DiagnosticSessionIds.Count > 20 || run.Transitions.Count > 200 ||
             run.PlannerAudit.Count > PlannerProtocol.MaxTurns || run.PlannerStopReason.Length > 500 ||
             run.PlannerAudit.Any(entry => entry.Reason.Length > 500 || entry.EvidenceIds.Count > PlannerProtocol.MaxEvidencePerTurn ||
                 entry.EvidenceIds.Any(id => id.Length is 0 or > 500) ||
@@ -446,7 +474,10 @@ public sealed class OptimizationRunService
             run.CandidateSessionIds.Count != run.CandidateSessionIds.Distinct().Count() ||
             run.BaselineSessionIds.Intersect(run.CandidateSessionIds).Any() ||
             run.ApprovedActionIds.Count != run.ApprovedActionIds.Distinct(StringComparer.OrdinalIgnoreCase).Count() ||
-            run.RequestedProbeIds.Concat(run.ApprovedActionIds).Any(value => string.IsNullOrWhiteSpace(value) || value.Length > 120) ||
+            run.DiagnosticSessionIds.Count != run.DiagnosticSessionIds.Distinct().Count() ||
+            run.DiagnosticSessionIds.Intersect(run.BaselineSessionIds.Concat(run.CandidateSessionIds)).Any() ||
+            run.RequestedProbeIds.Any(value => string.IsNullOrWhiteSpace(value) || value.Length > 500) ||
+            run.ApprovedActionIds.Any(value => string.IsNullOrWhiteSpace(value) || value.Length > 120) ||
             run.Error?.Length > 2_000 || run.BootIdAtApply.Length > 100)
             throw new InvalidOperationException("The optimization run contained invalid or excessive data.");
     }

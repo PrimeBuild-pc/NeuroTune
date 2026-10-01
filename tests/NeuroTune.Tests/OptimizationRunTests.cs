@@ -28,6 +28,7 @@ public sealed class OptimizationRunTests
             Assert.AreEqual(operationId, reloaded.OperationId);
             Assert.AreEqual("CPU", reloaded.EvidenceFacts["system:cpu"]);
             Assert.ThrowsExactly<InvalidOperationException>(() => service.BeginApply(run.Id, Guid.NewGuid()));
+            Assert.ThrowsExactly<InvalidOperationException>(() => service.Dismiss(run.Id));
 
             service.RecordApplyCompleted(run.Id, false);
             var candidates = Enumerable.Range(0, 3).Select(_ => Session(run.Id, MeasurementLabel.Candidate)).ToList();
@@ -67,7 +68,15 @@ public sealed class OptimizationRunTests
         try
         {
             var service = new OptimizationRunService(directory);
-            var run = service.Create(Profile(), new TuningGoals());
+            var run = service.Create(Profile(), new TuningGoals(), [new MeasurementSession
+            {
+                Id = Guid.NewGuid(), SystemWide = true, Label = MeasurementLabel.Baseline,
+                State = MeasurementSessionState.Completed,
+                Report = new TraceReport { Quality = new(30_000, 1, 0, [], 0, true) }
+            }]);
+            Assert.HasCount(0, run.BaselineSessionIds);
+            Assert.HasCount(1, run.DiagnosticSessionIds);
+            Assert.IsTrue(run.EvidenceFacts.Any(fact => fact.Key.EndsWith(":quality:system_wide_diagnostic", StringComparison.Ordinal) && fact.Value == "True"));
             service.BeginDiagnosis(run.Id);
             run = service.RecordDiagnosis(run.Id, Outcome());
 
@@ -77,6 +86,8 @@ public sealed class OptimizationRunTests
                 OptimizationRunState.Applying, OptimizationRunState.Completed));
             Assert.IsTrue(OptimizationRunStateMachine.CanTransition(
                 OptimizationRunState.Applying, OptimizationRunState.RecoveryRequired));
+            Assert.AreEqual(OptimizationRunDecision.Declined, service.Dismiss(run.Id).Decision);
+            Assert.AreEqual(OptimizationRunState.Completed, service.Load(run.Id).State);
         }
         finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); }
     }

@@ -11,6 +11,8 @@ public sealed record MeasurementWorkload(int ProcessId, string Name, DateTimeOff
 public sealed class MeasurementSession
 {
     public int SchemaVersion { get; init; } = 1;
+    public bool SystemWide { get; init; }
+    public bool HardFaultsEnabled { get; init; }
     public Guid Id { get; init; }
     public Guid? OptimizationRunId { get; init; }
     public int ProcessId { get; init; }
@@ -59,7 +61,17 @@ public sealed record ProcessorMetrics(
     int LogicalProcessor,
     double InterruptSharePercent,
     double TargetRunningMilliseconds,
-    double ReadyOverlapMicroseconds);
+    double ReadyOverlapMicroseconds)
+{
+    public double? ScheduledBusyMilliseconds { get; init; }
+    public double? ScheduledIdleMilliseconds { get; init; }
+    public double? UnobservedMilliseconds { get; init; }
+    public DistributionMetrics? Dpc { get; init; }
+    public DistributionMetrics? Isr { get; init; }
+}
+
+public sealed record HardFaultMetrics(string ProcessKey, string ProcessName, DistributionMetrics Resolution);
+public sealed record LatencySpike(string Kind, string Source, int LogicalProcessor, double StartMilliseconds, double DurationMicroseconds);
 
 public sealed record ThreadSchedulingMetrics(
     string ThreadKey,
@@ -99,6 +111,9 @@ public sealed class TraceReport
     public IReadOnlyList<InterruptMetrics> Interrupts { get; init; } = [];
     public IReadOnlyList<ProcessorMetrics> Processors { get; init; } = [];
     public IReadOnlyList<ThreadSchedulingMetrics> Threads { get; init; } = [];
+    public IReadOnlyList<HardFaultMetrics> HardFaults { get; init; } = [];
+    public IReadOnlyList<LatencySpike> LongestSpikes { get; init; } = [];
+    public IReadOnlyList<string> Limitations { get; init; } = [];
     public FrameTimeMetrics? FrameTimes { get; init; }
     public IReadOnlyList<DiagnosticObservation> Observations { get; init; } = [];
 }
@@ -112,6 +127,7 @@ public sealed record ComparisonMetric(
 
 public sealed class MeasurementComparison
 {
+    public List<SystemOneAdvisory> SystemOneAdvisories { get; set; } = [];
     public int SchemaVersion { get; init; } = 1;
     public Guid Id { get; init; }
     public ComparisonLevel Level { get; init; }
@@ -129,10 +145,13 @@ public sealed record MeasurementStartRequest(
     MeasurementLabel Label,
     int DurationSeconds = 180,
     bool KeepRawTrace = false,
-    Guid? OptimizationRunId = null);
+    Guid? OptimizationRunId = null,
+    bool SystemWide = false);
 
 public sealed record MeasurementIdRequest(Guid SessionId, Guid? OptimizationRunId = null);
 public sealed record FrameTimeImportRequest(Guid SessionId, string Csv, Guid? OptimizationRunId = null);
+public sealed record MeasurementExplanationRequest(MeasurementCompareRequest Comparison, TuningGoals Goals);
+
 public sealed record MeasurementCompareRequest(IReadOnlyList<Guid> BaselineSessionIds, IReadOnlyList<Guid> CandidateSessionIds,
     Guid? OptimizationRunId = null);
 

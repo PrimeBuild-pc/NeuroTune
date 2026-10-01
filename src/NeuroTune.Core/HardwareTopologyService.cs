@@ -39,15 +39,17 @@ public sealed class HardwareTopologyService
     public GpuCandidateSet Generate(GpuCandidateRequest request, IReadOnlyList<MeasurementSession> sessions, MachineTopology? topology = null)
     {
         if (sessions.Count < 3) throw new InvalidOperationException("At least three valid baseline sessions are required.");
+        if (sessions.Any(item => item.SystemWide)) throw new InvalidOperationException("Affinity ranking requires matching target-workload baselines, not system-wide snapshots.");
+        if (sessions.Select(item => item.Report?.SchemaVersion).Distinct().Count() != 1)
+            throw new InvalidOperationException("Affinity ranking requires matching analyzer schema versions.");
         if (sessions.Any(item => item.Label != MeasurementLabel.Baseline || item.State != MeasurementSessionState.Completed || item.Report?.Quality.IsValid != true))
             throw new InvalidOperationException("Every selected session must be a completed, quality-valid baseline.");
         if (sessions.Select(item => item.HardwareFingerprint).Distinct(StringComparer.Ordinal).Count() != 1 ||
             sessions.Select(item => item.ConfigurationFingerprint).Distinct(StringComparer.Ordinal).Count() != 1 ||
             sessions.Select(item => item.ProcessName).Distinct(StringComparer.OrdinalIgnoreCase).Count() != 1)
             throw new InvalidOperationException("Baseline executable, hardware, and configuration must match.");
-        var duration = MeasurementService.Median(sessions.Select(item => (double)item.DurationSeconds));
-        if (sessions.Any(item => Math.Abs(item.DurationSeconds - duration) / duration > .10))
-            throw new InvalidOperationException("Baseline durations differ by more than 10%.");
+        if (!MeasurementService.CapturedDurationsMatch(sessions))
+            throw new InvalidOperationException("Actual baseline durations are unavailable or differ by more than 10%.");
 
         topology ??= Collect();
         var gpu = topology.Gpus.SingleOrDefault(item => item.DeviceKey == request.DeviceKey)
