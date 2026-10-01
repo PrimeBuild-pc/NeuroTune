@@ -1,13 +1,52 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-motion="quiet">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
     <title>NeuroTune</title>
+    <style>
+      html, body { margin: 0; background: #0b0e14; }
+      #startup { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; overflow: hidden; background: #0b0e14; color: #f4f7fb; font-family: "Segoe UI", system-ui, sans-serif; transition: opacity .32s ease; }
+      #startup.startup-ready { opacity: 0; pointer-events: none; }
+      .startup-scene { position: relative; display: grid; justify-items: center; gap: 14px; text-align: center; padding: 28px; }
+      .startup-halo { position: absolute; width: min(80vw, 540px); aspect-ratio: 1; top: 42%; transform: translateY(-50%); border-radius: 50%; background: radial-gradient(circle, #9388ff22, transparent 65%); pointer-events: none; }
+      .startup-emblem { width: min(48vw, 230px); height: auto; overflow: visible; }
+      .startup-ring { fill: none; stroke: #9388ff; stroke-width: 1; opacity: .4; transform-origin: 120px 120px; animation: startup-orbit 4s ease-in-out 2; }
+      .startup-ring.inner { stroke: #43d29a; animation-direction: reverse; }
+      .startup-path { fill: none; stroke: #c5bfff; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 300; animation: startup-trace 1.15s cubic-bezier(.16,1,.3,1) both; }
+      .startup-node { fill: #43d29a; transform-box: fill-box; transform-origin: center; animation: startup-node .8s ease-out both; }
+      .startup-node:nth-of-type(2) { animation-delay: .15s; }
+      .startup-node:nth-of-type(3) { animation-delay: .3s; }
+      .startup-title { margin: 0; font-size: clamp(30px, 5vw, 40px); letter-spacing: -.04em; font-weight: 650; }
+      .startup-tagline { margin: 0; color: #bdc7d5; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; }
+      #startup-status { max-width: 38ch; min-height: 2.5em; margin: 12px 0 0; font-size: 13px; line-height: 1.5; color: #96a5b8; }
+      @keyframes startup-orbit { 50% { transform: rotate(35deg) scale(1.04); opacity: .7; } }
+      @keyframes startup-trace { from { stroke-dashoffset: 300; opacity: .2; } to { stroke-dashoffset: 0; opacity: 1; } }
+      @keyframes startup-node { from { transform: scale(.2); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+      html[data-motion='quiet'] #startup *, html[data-motion='quiet'] #startup { animation: none !important; transition: none !important; }
+      @media (prefers-reduced-motion: reduce) { #startup, #startup * { animation: none !important; transition: none !important; } }
+    </style>
   </head>
   <body>
+    <div id="startup" role="status" aria-live="polite" aria-label="Avvio NeuroTune">
+      <div class="startup-scene">
+        <div class="startup-halo" aria-hidden="true"></div>
+        <svg class="startup-emblem" viewBox="0 0 240 240" aria-hidden="true">
+          <circle class="startup-ring" cx="120" cy="120" r="104" stroke-dasharray="90 12 30 12"/>
+          <circle class="startup-ring inner" cx="120" cy="120" r="85" stroke-dasharray="48 14 16 14"/>
+          <rect x="64" y="64" width="112" height="112" rx="30" fill="#191c31" stroke="#655da7"/>
+          <path class="startup-path" d="M92 148 V92 L148 148 V92"/>
+          <circle class="startup-node" cx="92" cy="148" r="5"/>
+          <circle class="startup-node" cx="148" cy="92" r="5"/>
+          <circle class="startup-node" cx="120" cy="16" r="3"/>
+        </svg>
+        <h1 class="startup-title">NeuroTune</h1>
+        <p class="startup-tagline">Evidence · Intelligence · Control</p>
+        <p id="startup-status">Caricamento dell’interfaccia…</p>
+      </div>
+    </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

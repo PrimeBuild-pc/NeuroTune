@@ -11,7 +11,7 @@ public sealed class MeasurementService
     public static readonly string MeasurementsDirectory = Path.Combine(SettingsService.DataDirectory, "measurements");
     private const string SessionFileName = "session.json";
     private const string TraceFileName = "capture.etl";
-    private readonly JsonSerializerOptions _json = new()
+    private static readonly JsonSerializerOptions _json = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true,
@@ -19,7 +19,13 @@ public sealed class MeasurementService
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
 
-    public MeasurementService() => RecoverAndPurge();
+    private readonly Action<string>? _progress;
+
+    public MeasurementService(Action<string>? progress = null)
+    {
+        _progress = progress;
+        RecoverAndPurge();
+    }
 
     public IReadOnlyList<MeasurementWorkload> Workloads()
     {
@@ -45,13 +51,19 @@ public sealed class MeasurementService
     {
         if (request.DurationSeconds is < 30 or > 600) throw new ArgumentOutOfRangeException(nameof(request.DurationSeconds), "Duration must be between 30 and 600 seconds.");
         if (!File.Exists(wprProfilePath)) throw new FileNotFoundException("The embedded NeuroTune WPR profile is missing.", wprProfilePath);
-        var workload = Workloads().SingleOrDefault(item => item.ProcessId == request.ProcessId &&
+        if (request.SystemWide && request.OptimizationRunId is not null)
+            throw new InvalidOperationException("System-wide monitoring is diagnostic only. Select a repeatable workload for an optimization run.");
+        var workload = request.SystemWide ? new MeasurementWorkload(0, "System-wide", DateTimeOffset.MinValue, "System diagnostics") : Workloads().SingleOrDefault(item => item.ProcessId == request.ProcessId &&
             Math.Abs((item.StartTimeUtc - request.ProcessStartTimeUtc).TotalSeconds) < 1)
             ?? throw new InvalidOperationException("The selected process ended or its identity changed. Refresh the process list.");
         var id = Guid.NewGuid();
+        _progress?.Invoke("Reading hardware and configuration fingerprints locally (WMI)…");
         var environment = CaptureEnvironment();
         var session = new MeasurementSession
         {
+            SchemaVersion = 2,
+            SystemWide = request.SystemWide,
+            HardFaultsEnabled = true,
             Id = id,
             OptimizationRunId = request.OptimizationRunId,
             ProcessId = workload.ProcessId,
@@ -72,16 +84,17 @@ public sealed class MeasurementService
         Save(session);
         try
         {
-            Transition(session, MeasurementSessionState.Recording);
-            session.RecordingStartedAtUtc = DateTimeOffset.UtcNow;
-            Save(session);
+            _progress?.Invoke("Waiting for the capture lock and starting Windows Performance Recorder…");
             WithCaptureMutex(() =>
             {
                 if (ListWithoutRecovery().Any(item => item.Id != id && item.State == MeasurementSessionState.Recording))
                     throw new InvalidOperationException("Another NeuroTune measurement is already recording.");
                 RunWpr(["-start", $"{Path.GetFullPath(wprProfilePath)}!NeuroTuneLatency", "-instancename", session.InstanceName]);
+                Transition(session, MeasurementSessionState.Recording);
+                session.RecordingStartedAtUtc = DateTimeOffset.UtcNow;
+                Save(session);
             });
-            Save(session);
+            _progress?.Invoke("WPR is recording. The capture countdown starts now.");
             return session;
         }
         catch (Exception exception)
@@ -96,33 +109,45 @@ public sealed class MeasurementService
     public MeasurementSession Stop(Guid id)
     {
         var session = Load(id);
-        if (session.State != MeasurementSessionState.Recording) throw new InvalidOperationException("Only a recording session can be stopped.");
-        try
+        _progress?.Invoke("Stopping WPR and flushing captured events to the local ETL; this can take several seconds…");
+        WithCaptureMutex(() =>
         {
-            WithCaptureMutex(() => RunWpr(["-stop", TracePath(id), "-instancename", session.InstanceName]));
-            Transition(session, MeasurementSessionState.Captured);
-            session.CapturedAtUtc = DateTimeOffset.UtcNow;
-            session.Error = null;
-            Save(session);
-            return session;
-        }
-        catch (Exception exception)
-        {
-            Transition(session, MeasurementSessionState.Failed);
-            session.Error = exception.Message;
-            Save(session);
-            throw;
-        }
+            session = Load(id); // Watchdog, polling recovery and UI race: recheck and persist under the recorder lock.
+            if (session.State is MeasurementSessionState.Captured or MeasurementSessionState.Analyzing or MeasurementSessionState.Completed) return;
+            if (session.State != MeasurementSessionState.Recording) throw new InvalidOperationException("Only a recording session can be stopped.");
+            try
+            {
+                RunWpr(["-stop", TracePath(id), "-instancename", session.InstanceName]);
+                Transition(session, MeasurementSessionState.Captured);
+                session.CapturedAtUtc = DateTimeOffset.UtcNow;
+                session.Error = null;
+                Save(session);
+            }
+            catch (Exception exception)
+            {
+                Transition(session, MeasurementSessionState.Failed);
+                session.Error = exception.Message;
+                Save(session);
+                throw;
+            }
+        });
+        return session;
     }
 
     public MeasurementSession Cancel(Guid id)
     {
         var session = Load(id);
-        if (session.State == MeasurementSessionState.Recording)
-            WithCaptureMutex(() => RunWpr(["-cancel", "-instancename", session.InstanceName]));
-        Transition(session, MeasurementSessionState.Cancelled);
-        session.Error = null;
-        DeleteDirectory(id);
+        _progress?.Invoke("Cancelling the named WPR capture; waiting for Windows to release the recorder…");
+        WithCaptureMutex(() =>
+        {
+            session = Load(id);
+            if (session.State == MeasurementSessionState.Recording)
+                RunWpr(["-cancel", "-instancename", session.InstanceName]);
+            _progress?.Invoke("Deleting this session's incomplete local data…");
+            Transition(session, MeasurementSessionState.Cancelled);
+            session.Error = null;
+            DeleteDirectory(id);
+        });
         return session;
     }
 
@@ -212,6 +237,8 @@ public sealed class MeasurementService
         if (baseline.Count == 0 || candidate.Count == 0) throw new InvalidOperationException("Select at least one baseline and one candidate session.");
         var all = baseline.Concat(candidate).ToList();
         var reasons = new List<string>();
+        if (all.Any(item => item.SystemWide)) reasons.Add("System-wide captures are diagnostic snapshots, not matched workload benchmarks.");
+        if (all.Select(item => item.Report?.SchemaVersion).Distinct().Count() != 1) reasons.Add("Analyzer schema versions differ; recapture matching sessions.");
         if (baseline.Any(item => item.Label != MeasurementLabel.Baseline) || candidate.Any(item => item.Label != MeasurementLabel.Candidate)) reasons.Add("Session labels do not match their comparison side.");
         if (all.Any(item => item.State != MeasurementSessionState.Completed || item.Report is null)) reasons.Add("Every session must have a completed report.");
         if (all.Any(item => item.Report?.Quality.IsValid != true)) reasons.Add("Every session must pass the trace quality gate.");
@@ -230,14 +257,13 @@ public sealed class MeasurementService
             reasons.Add("CPU performance state differs by more than 15 percentage points.");
         var frameTimeCount = all.Count(item => item.Report?.FrameTimes is not null);
         if (frameTimeCount > 0 && frameTimeCount != all.Count) reasons.Add("Frame-time evidence is missing from part of the comparison.");
-        var durationMedian = Median(all.Select(item => (double)item.DurationSeconds));
-        if (all.Any(item => Math.Abs(item.DurationSeconds - durationMedian) / durationMedian > .10)) reasons.Add("Session durations differ by more than 10%.");
+        if (!CapturedDurationsMatch(all)) reasons.Add("Actual captured durations are unavailable or differ by more than 10%.");
         if (reasons.Count > 0) return NewComparison(request, ComparisonLevel.Exploratory, [], reasons);
 
         var level = baseline.Count >= 3 && candidate.Count >= 3 ? ComparisonLevel.Repeated : ComparisonLevel.Exploratory;
         var baselineFacts = baseline.Select(SessionMetrics).ToList();
         var candidateFacts = candidate.Select(SessionMetrics).ToList();
-        var keys = baselineFacts.SelectMany(item => item.Keys).Intersect(candidateFacts.SelectMany(item => item.Keys), StringComparer.Ordinal).Distinct().Order().ToList();
+        var keys = baselineFacts[0].Keys.Where(key => baselineFacts.All(item => item.ContainsKey(key)) && candidateFacts.All(item => item.ContainsKey(key))).Order().ToList();
         var comparisonId = Guid.NewGuid();
         var metrics = keys.Select(key =>
         {
@@ -299,7 +325,11 @@ public sealed class MeasurementService
         foreach (var session in sessions.Where(item => item.State == MeasurementSessionState.Completed && item.Report is not null))
         {
             var report = session.Report!;
+            facts[$"measurement:{session.Id}:context:workload_name"] = ProfileSanitizer.Redact(session.SystemWide ? "System-wide diagnostic; not a game benchmark" : session.ProcessName);
+            facts[$"measurement:{session.Id}:context:duration_ms"] = report.Quality.DurationMilliseconds.ToString("F3", System.Globalization.CultureInfo.InvariantCulture);
+            facts[$"measurement:{session.Id}:context:frame_metrics_available"] = (report.FrameTimes is not null).ToString();
             facts[$"measurement:{session.Id}:quality:valid"] = report.Quality.IsValid.ToString();
+            facts[$"measurement:{session.Id}:quality:system_wide_diagnostic"] = session.SystemWide.ToString();
             facts[$"measurement:{session.Id}:quality:events_lost"] = report.Quality.EventsLost.ToString();
             facts[$"measurement:{session.Id}:quality:target_presence_percent"] = report.Quality.TargetPresencePercent.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
             foreach (var item in report.Interrupts)
@@ -309,7 +339,19 @@ public sealed class MeasurementService
                 facts[$"measurement:{session.Id}:cpu:{item.LogicalProcessor}:interrupt_share_percent"] = item.InterruptSharePercent.ToString("F3", System.Globalization.CultureInfo.InvariantCulture);
                 facts[$"measurement:{session.Id}:cpu:{item.LogicalProcessor}:target_running_ms"] = item.TargetRunningMilliseconds.ToString("F3", System.Globalization.CultureInfo.InvariantCulture);
                 facts[$"measurement:{session.Id}:cpu:{item.LogicalProcessor}:ready_overlap_us"] = item.ReadyOverlapMicroseconds.ToString("F3", System.Globalization.CultureInfo.InvariantCulture);
+                if (item.ScheduledBusyMilliseconds is { } busy)
+                    facts[$"measurement:{session.Id}:cpu:{item.LogicalProcessor}:scheduled_busy_ms"] = busy.ToString("F3", System.Globalization.CultureInfo.InvariantCulture);
+                if (item.Dpc is { } dpc)
+                    facts[$"measurement:{session.Id}:cpu:{item.LogicalProcessor}:dpc_total_us"] = dpc.TotalMicroseconds.ToString("F3", System.Globalization.CultureInfo.InvariantCulture);
+                if (item.Isr is { } isr)
+                    facts[$"measurement:{session.Id}:cpu:{item.LogicalProcessor}:isr_total_us"] = isr.TotalMicroseconds.ToString("F3", System.Globalization.CultureInfo.InvariantCulture);
             }
+            if (session.HardFaultsEnabled)
+                foreach (var item in report.HardFaults)
+                {
+                    facts[$"measurement:{session.Id}:fault:{item.ProcessKey}:count"] = item.Resolution.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    facts[$"measurement:{session.Id}:fault:{item.ProcessKey}:max_us"] = item.Resolution.MaxMicroseconds.ToString("F3", System.Globalization.CultureInfo.InvariantCulture);
+                }
             foreach (var item in report.Threads)
                 facts[$"measurement:{session.Id}:thread:{item.ThreadKey}:ready_p99_us"] = item.ReadyTime.P99Microseconds.ToString("F3", System.Globalization.CultureInfo.InvariantCulture);
             if (report.FrameTimes is { } frames)
@@ -323,15 +365,22 @@ public sealed class MeasurementService
         return facts;
     }
 
-    private Dictionary<string, double> SessionMetrics(MeasurementSession session)
+    internal static bool CapturedDurationsMatch(IEnumerable<MeasurementSession> sessions)
+    {
+        var durations = sessions.Select(item => item.Report?.Quality.DurationMilliseconds ?? 0).ToList();
+        if (durations.Count == 0 || durations.Any(value => !double.IsFinite(value) || value <= 0)) return false;
+        var median = Median(durations);
+        return durations.All(value => Math.Abs(value - median) / median <= .10);
+    }
+
+    internal static Dictionary<string, double> SessionMetrics(MeasurementSession session)
     {
         var report = session.Report!;
         var result = new Dictionary<string, double>(StringComparer.Ordinal);
         foreach (var group in report.Interrupts.GroupBy(item => (item.Kind, item.Module)))
-            result[$"interrupt:{TraceAnalyzer.EvidencePart(group.Key.Kind)}:{TraceAnalyzer.EvidencePart(group.Key.Module)}:p99_us"] = group.Max(item => item.Distribution.P99Microseconds);
-        foreach (var cpu in report.Processors)
-            result[$"cpu:{cpu.LogicalProcessor}:interrupt_share_percent"] = cpu.InterruptSharePercent;
-        result["target:ready_p99_us"] = report.Threads.Count == 0 ? 0 : report.Threads.Max(item => item.ReadyTime.P99Microseconds);
+            result[$"interrupt:{TraceAnalyzer.EvidencePart(group.Key.Kind)}:{TraceAnalyzer.EvidencePart(group.Key.Module)}:worst_core_p99_us"] = group.Max(item => item.Distribution.P99Microseconds);
+        // Redistribution is not an improvement: shares sum to 100% even when total latency grows.
+        result["target:worst_thread_ready_p99_us"] = report.Threads.Count == 0 ? 0 : report.Threads.Max(item => item.ReadyTime.P99Microseconds);
         result["target:migrations"] = report.Threads.Sum(item => item.Migrations);
         if (report.FrameTimes is { } frames)
         {
@@ -344,7 +393,7 @@ public sealed class MeasurementService
     }
 
     private MeasurementSession Load(Guid id) => TryLoad(id) ?? throw new InvalidOperationException("The measurement session was not found.");
-    private MeasurementSession? TryLoad(Guid id)
+    private static MeasurementSession? TryLoad(Guid id)
     {
         var path = SessionPath(id);
         if (!File.Exists(path)) return null;
@@ -385,7 +434,9 @@ public sealed class MeasurementService
         }
     }
 
-    private IEnumerable<MeasurementSession> ListWithoutRecovery() => !Directory.Exists(MeasurementsDirectory) ? [] :
+    public static bool HasActiveRecording() => ListWithoutRecovery().Any(session => session.State == MeasurementSessionState.Recording);
+
+    private static IEnumerable<MeasurementSession> ListWithoutRecovery() => !Directory.Exists(MeasurementsDirectory) ? [] :
         Directory.EnumerateDirectories(MeasurementsDirectory).Select(Path.GetFileName).Select(name => Guid.TryParse(name, out var id) ? TryLoad(id) : null).Where(item => item is not null).Cast<MeasurementSession>();
 
     private static void RunWpr(IReadOnlyList<string> arguments)
@@ -404,7 +455,7 @@ public sealed class MeasurementService
         if (process.ExitCode != 0) throw new InvalidOperationException($"WPR failed ({process.ExitCode}): {FirstLine(error, output)}");
     }
 
-    private static void WithCaptureMutex(Action action)
+    internal static void WithCaptureMutex(Action action)
     {
         using var mutex = new Mutex(false, @"Global\NeuroTune.MeasurementCapture");
         try
@@ -433,6 +484,7 @@ public sealed class MeasurementService
         => RepeatedOutcome(baselineMedian, candidate, false);
     internal static ComparisonOutcome RepeatedOutcome(double baselineMedian, IReadOnlyList<double> candidate, bool higherIsBetter)
     {
+        if (candidate.Count < 3) return ComparisonOutcome.Inconclusive;
         var required = (int)Math.Ceiling(candidate.Count * 2d / 3d);
         if (candidate.Count(value => higherIsBetter ? value > baselineMedian : value < baselineMedian) >= required) return ComparisonOutcome.Improvement;
         if (candidate.Count(value => higherIsBetter ? value < baselineMedian : value > baselineMedian) >= required) return ComparisonOutcome.Regression;
@@ -445,7 +497,9 @@ public sealed class MeasurementService
         var meaningful = metrics.Where(metric => Math.Abs(metric.DeltaPercent) >= 3 && metric.Outcome != ComparisonOutcome.Inconclusive).ToList();
         var improvements = meaningful.Count(metric => metric.Outcome == ComparisonOutcome.Improvement);
         var regressions = meaningful.Count(metric => metric.Outcome == ComparisonOutcome.Regression);
-        return regressions > improvements
+        if (improvements == 0 && regressions == 0)
+            return (ComparisonDecision.InsufficientEvidence, "No repeatable improvement beyond the noise band; do not automatically keep the change.");
+        return regressions > 0
             ? (ComparisonDecision.Rollback, $"Rollback is safer: {regressions} reproducible metric regression(s) versus {improvements} improvement(s) beyond the 3% noise band.")
             : (ComparisonDecision.Keep, $"Keep is reasonable: {improvements} reproducible improvement(s) versus {regressions} regression(s) beyond the 3% noise band. This is not a performance guarantee.");
     }
