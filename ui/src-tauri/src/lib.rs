@@ -12,17 +12,26 @@ use tauri::{AppHandle, Emitter, Manager};
 
 const COMMANDS: &[&str] = &[
     "get-state",
+    "system-one-status",
+    "system-one-install",
+    "system-one-configure",
+    "system-one-models",
+    "system-one-remove",
     "provider-defaults",
     "save-provider",
     "oauth-openrouter",
+    "oauth-chatgpt",
+    "chatgpt-signout",
     "models",
     "scan",
     "run-create",
+    "support-preview",
     "run-get",
     "run-list",
     "run-reconcile",
     "run-resume-after-restart",
     "run-keep",
+    "run-dismiss",
     "analyze-local",
     "diagnose",
     "actions",
@@ -33,6 +42,9 @@ const COMMANDS: &[&str] = &[
     "measurement-live",
     "measurement-driver-details",
     "firmware-read",
+    "scewin-inspect",
+    "scewin-import",
+    "scewin-export",
     "measurement-start",
     "measurement-stop",
     "measurement-cancel",
@@ -40,6 +52,7 @@ const COMMANDS: &[&str] = &[
     "measurement-frame-import",
     "measurement-list",
     "measurement-compare",
+    "measurement-explain",
     "measurement-topology",
     "measurement-gpu-candidates",
     "measurement-gpu-affinity-inspect",
@@ -98,7 +111,7 @@ fn cancel_request(
             return Ok(false);
         };
         if !agent.cancellable {
-            return Err("Only a NeuroTune scan or measurement analysis can be cancelled".into());
+            return Err("Only a scan, diagnosis, measurement analysis or optional-model installation can be cancelled".into());
         }
         agent.cancelled = true;
         agent.process_id
@@ -150,6 +163,10 @@ fn run_agent(
     command: &str,
     payload: Option<Value>,
 ) -> Result<Value, String> {
+    let encoded_payload = payload.unwrap_or(Value::Null).to_string();
+    if encoded_payload.len() > 6_500_000 {
+        return Err("Agent payload exceeds 6.5 MB; reduce supporting attachments".into());
+    }
     let executable = agent_path(app)?;
     let mut child = Command::new(&executable)
         .arg(command)
@@ -184,7 +201,7 @@ fn run_agent(
     }
 
     if let Some(mut stdin) = child.stdin.take() {
-        if let Err(error) = stdin.write_all(payload.unwrap_or(Value::Null).to_string().as_bytes()) {
+        if let Err(error) = stdin.write_all(encoded_payload.as_bytes()) {
             let _ = child.kill();
             if let Ok(mut active) = app.state::<AgentState>().0.lock() {
                 active.remove(request_id);
@@ -238,7 +255,10 @@ fn run_agent(
 }
 
 fn is_cancellable(command: &str) -> bool {
-    matches!(command, "scan" | "measurement-analyze")
+    matches!(
+        command,
+        "scan" | "diagnose" | "measurement-analyze" | "measurement-explain" | "system-one-install"
+    )
 }
 
 fn validate_request(request_id: &str) -> Result<(), String> {
@@ -272,6 +292,9 @@ mod tests {
         assert!(validate_request("").is_err());
         assert!(is_cancellable("scan"));
         assert!(is_cancellable("measurement-analyze"));
+        assert!(is_cancellable("diagnose"));
+        assert!(is_cancellable("system-one-install"));
+        assert!(is_cancellable("measurement-explain"));
         assert!(!is_cancellable("apply"));
         assert!(!COMMANDS.contains(&"measurement-watchdog"));
         assert!(!COMMANDS.iter().any(|command| command.contains("script")));
@@ -379,6 +402,13 @@ use std::os::windows::process::CommandExt;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .on_page_load(|webview, payload| {
+            if payload.event() == tauri::webview::PageLoadEvent::Finished {
+                if let Err(error) = webview.window().show() {
+                    log::error!("Could not reveal the loaded NeuroTune window: {error}");
+                }
+            }
+        })
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -391,6 +421,25 @@ pub fn run() {
         })
         .manage(AgentState::default())
         .invoke_handler(tauri::generate_handler![agent, cancel_agent])
-        .run(tauri::generate_context!())
-        .expect("error while running NeuroTune");
+        .build(tauri::generate_context!())
+        .expect("error while building NeuroTune")
+        .run(|app, event| {
+            if matches!(event, tauri::RunEvent::ExitRequested { .. }) {
+                let state = app.state::<AgentState>();
+                let requests = state
+                    .0
+                    .lock()
+                    .map(|active| {
+                        active
+                            .iter()
+                            .filter(|(_, agent)| agent.cancellable)
+                            .map(|(id, _)| id.clone())
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
+                for id in requests {
+                    let _ = cancel_request(&state.0, &id);
+                }
+            }
+        });
 }

@@ -4,6 +4,24 @@ namespace NeuroTune.Tests;
 public sealed class MeasurementTests
 {
     [TestMethod]
+    public void Repeated_stop_of_a_finalized_session_does_not_restart_Wpr_or_corrupt_the_report()
+    {
+        var id = Guid.NewGuid();
+        var directory = Path.Combine(MeasurementService.MeasurementsDirectory, id.ToString("D"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            File.WriteAllText(Path.Combine(directory, "session.json"), System.Text.Json.JsonSerializer.Serialize(new MeasurementSession
+            { Id = id, State = MeasurementSessionState.Completed, Report = new TraceReport { Quality = new(30_000, 1, 0, [], 0, true) } }));
+            var finalized = new MeasurementService().Stop(id);
+            Assert.AreEqual(MeasurementSessionState.Completed, finalized.State);
+            Assert.IsNotNull(finalized.Report);
+            Assert.IsNull(finalized.Error);
+        }
+        finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); }
+    }
+
+    [TestMethod]
     public void Percentiles_use_nearest_rank()
     {
         var distribution = TraceAnalyzer.Describe([1, 2, 3, 4, 100], 1000);
@@ -225,6 +243,10 @@ public sealed class MeasurementTests
         Assert.IsFalse(result.WriteSupported);
         Assert.HasCount(0, result.Facts);
         Assert.HasCount(0, result.Interfaces);
+        Assert.AreEqual("Unknown", FirmwareInspection.ObservedBoolean(null));
+        Assert.AreEqual("Unknown", FirmwareInspection.ObservedBoolean("false"));
+        Assert.AreEqual("Yes", FirmwareInspection.ObservedBoolean(true));
+        Assert.AreEqual("No", FirmwareInspection.ObservedBoolean(false));
         Assert.AreEqual("https://download.msi.com/archive/mnu_exe/mb/E7C37v1.1.pdf",
             FirmwareInspection.GuidanceUrl("Micro-Star International Co., Ltd. MPG X570 GAMING EDGE WIFI (MS-7C37) 1.0"));
         Assert.DoesNotContain("E7C37", FirmwareInspection.GuidanceUrl("MSI MPG X570 GAMING PLUS (MS-7C37)"));

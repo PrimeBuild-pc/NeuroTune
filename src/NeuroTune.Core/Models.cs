@@ -2,10 +2,10 @@ using System.Text.Json.Serialization;
 
 namespace NeuroTune;
 
-public enum LlmProvider { OpenRouter, OpenAI, Anthropic, DeepSeek, Custom, Local }
+public enum LlmProvider { OpenRouter, OpenAI, Anthropic, DeepSeek, Custom, Local, ChatGpt }
 public enum ApiProtocol { OpenAiCompatible, Anthropic }
 public enum RiskLevel { Low, Medium, High }
-public enum OptimizationPriority { Balanced, Fps, SystemLatency, NetworkLatency, Efficiency }
+public enum OptimizationPriority { Balanced, Fps, SystemLatency, NetworkLatency, Efficiency, Stability }
 public enum ConflictKind { Confirmed, Conditional, SuspiciousOverride, MissingEvidence }
 public enum EvidencePrivacy { General, SystemConfiguration, SoftwareInventory }
 public enum TelemetryStatus { Supported, Unavailable, BlockedByHvci, DriverNotApproved }
@@ -18,6 +18,9 @@ public sealed class UserSettings
     public ApiProtocol Protocol { get; set; } = ApiProtocol.OpenAiCompatible;
     public string Model { get; set; } = "openai/gpt-4o-mini";
     public bool RequiresApiKey { get; set; } = true;
+    public string? ChatGptAccountId { get; set; }
+    public int InvestigationMaxTurns { get; set; } = 12;
+    public int InvestigationMaxMinutes { get; set; } = 10;
 
     [JsonIgnore]
     public string CredentialId => Provider switch
@@ -96,6 +99,8 @@ public sealed class TuningGoals
 
     public void Validate()
     {
+        if (!Enum.IsDefined(Priority) || !Enum.IsDefined(RiskProfile))
+            throw new InvalidOperationException("The analysis objective or risk profile was invalid.");
         Games ??= [];
         GameContext ??= new();
         PerformanceInput ??= new();
@@ -193,6 +198,7 @@ public sealed class UserPerformanceInput
 
 public sealed class DiagnosisResult
 {
+    public List<SystemOneAdvisory> SystemOneAdvisories { get; set; } = [];
     public string Summary { get; set; } = "";
     public List<DiagnosisFinding> Findings { get; set; } = [];
     public List<PlanRecommendation> Recommendations { get; set; } = [];
@@ -256,6 +262,7 @@ public sealed class ActionRecord
 
 public sealed class OperationManifest
 {
+    public List<SystemOneAdvisory> SystemOneAdvisories { get; set; } = [];
     public int SchemaVersion { get; set; } = 2;
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid? OptimizationRunId { get; set; }

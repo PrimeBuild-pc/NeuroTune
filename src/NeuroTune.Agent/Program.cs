@@ -26,16 +26,25 @@ try
     object? result = command switch
     {
         "get-state" => GetState(settingsService),
+        "system-one-status" => SystemOneService.Status(),
+        "system-one-install" => await SystemOneService.InstallAsync(Read<SystemOneOptions>(input), Console.Error.WriteLine),
+        "system-one-configure" => SystemOneService.Configure(Read<SystemOneConfigureRequest>(input)),
+        "system-one-models" => await SystemOneService.ListOpenRouterModelsAsync(catalog),
+        "system-one-remove" => SystemOneService.Remove(),
         "provider-defaults" => LlmClient.Defaults(Read<LlmProvider>(input)),
         "save-provider" => SaveProvider(Read<SaveProviderRequest>(input), settingsService),
         "oauth-openrouter" => await OAuth(settingsService),
+        "oauth-chatgpt" => await ChatGptSignIn(Read<ChatGptSignInRequest>(input), settingsService),
+        "chatgpt-signout" => await ChatGptSignOut(Read<ChatGptSignInRequest>(input), settingsService),
         "models" => await Models(settingsService, catalog),
         "scan" => await Scan(catalog, settingsService, ReadOptional<ScanRequest>(input)),
+        "support-preview" => SupportingAttachments.Preview(Read<SupportingAttachmentsRequest>(input)),
         "run-create" => CreateRun(Read<RunCreateRequest>(input)),
         "run-get" => new OptimizationRunService().Load(Read<RunIdRequest>(input).RunId),
         "run-list" => new OptimizationRunService().List(),
         "run-reconcile" => ReconcileRun(Read<RunIdRequest>(input), catalog, backup),
         "run-resume-after-restart" => new OptimizationRunService().ResumeAfterRestart(Read<RunIdRequest>(input).RunId),
+        "run-dismiss" => new OptimizationRunService().Dismiss(Read<RunIdRequest>(input).RunId),
         "run-keep" => new OptimizationRunService().Keep(Read<RunIdRequest>(input).RunId),
         "analyze-local" => AnalyzeLocal(Read<DiagnoseRequest>(input)),
         "diagnose" => await Diagnose(Read<DiagnoseRequest>(input), settingsService, catalog),
@@ -47,13 +56,17 @@ try
         "measurement-live" => await new PerformanceSnapshotService().CollectProcessorsAsync(),
         "measurement-driver-details" => DriverInspection.Read(Read<DriverInspectionRequest>(input).Module),
         "firmware-read" => FirmwareInspection.Read(Read<FirmwareReadRequest>(input).ReadConsent),
+        "scewin-inspect" => ScewinService.Inspect(Read<ScewinDirectoryRequest>(input).Directory),
+        "scewin-import" => ScewinService.Import(Read<ScewinImportRequest>(input)),
+        "scewin-export" => await ScewinService.ExportAsync(Read<ScewinExportRequest>(input), Console.Error.WriteLine),
         "measurement-start" => StartMeasurement(Read<MeasurementStartRequest>(input)),
-        "measurement-stop" => new MeasurementService().Stop(Read<MeasurementIdRequest>(input).SessionId),
-        "measurement-cancel" => new MeasurementService().Cancel(Read<MeasurementIdRequest>(input).SessionId),
+        "measurement-stop" => new MeasurementService(Console.Error.WriteLine).Stop(Read<MeasurementIdRequest>(input).SessionId),
+        "measurement-cancel" => new MeasurementService(Console.Error.WriteLine).Cancel(Read<MeasurementIdRequest>(input).SessionId),
         "measurement-analyze" => AnalyzeMeasurement(Read<MeasurementIdRequest>(input)),
         "measurement-frame-import" => new MeasurementService().ImportFrameTimes(Read<FrameTimeImportRequest>(input)),
         "measurement-list" => new MeasurementService().List(),
-        "measurement-compare" => CompareMeasurement(Read<MeasurementCompareRequest>(input)),
+        "measurement-compare" => await CompareMeasurement(Read<MeasurementCompareRequest>(input)),
+        "measurement-explain" => await ExplainMeasurement(Read<MeasurementExplanationRequest>(input), settingsService, catalog),
         "measurement-topology" => new MeasurementService().Topology(),
         "measurement-gpu-candidates" => new MeasurementService().GpuAffinityCandidates(Read<GpuCandidateRequest>(input)),
         "measurement-gpu-affinity-inspect" => new MeasurementService().GpuAffinityPolicy(Read<GpuAffinityInspectRequest>(input)),
@@ -81,12 +94,30 @@ void Write(object value) => Console.Write(JsonSerializer.Serialize(value, json))
 object GetState(SettingsService service)
 {
     var settings = service.Load();
-    return new { settings, hasCredential = !string.IsNullOrWhiteSpace(service.LoadApiKey(settings)) };
+    var chatGptAccounts = new ChatGptOAuthService().Accounts();
+    return new
+    {
+        settings,
+        isRecording = MeasurementService.HasActiveRecording(),
+        chatGptAccounts,
+        hasCredential = settings.Provider == LlmProvider.ChatGpt
+        ? chatGptAccounts.Any(account => account.Id == settings.ChatGptAccountId && account.Connected)
+        : !string.IsNullOrWhiteSpace(service.LoadApiKey(settings))
+    };
 }
 
 object SaveProvider(SaveProviderRequest request, SettingsService service)
 {
     LlmClient.ValidateBaseUrl(request.Settings);
+    LlmClient.ValidateInvestigationBudget(request.Settings);
+    if (request.Settings.Provider == LlmProvider.ChatGpt)
+    {
+        if (!string.IsNullOrWhiteSpace(request.ApiKey)) throw new InvalidOperationException("ChatGPT plan authorization is separate from API-key billing.");
+        var account = new ChatGptOAuthService().Accounts().SingleOrDefault(account => account.Id == request.Settings.ChatGptAccountId)
+            ?? throw new InvalidOperationException("Sign in with ChatGPT or select a saved account.");
+        service.Save(request.Settings);
+        return new { saved = true, hasCredential = account.Connected };
+    }
     var existing = service.LoadApiKey(request.Settings);
     if (request.Settings.RequiresApiKey && string.IsNullOrWhiteSpace(request.ApiKey) && string.IsNullOrWhiteSpace(existing))
         throw new InvalidOperationException("This provider requires an API key or browser sign-in.");
@@ -102,12 +133,35 @@ async Task<object> OAuth(SettingsService service)
     return new { settings, hasCredential = true };
 }
 
+async Task<object> ChatGptSignIn(ChatGptSignInRequest request, SettingsService service)
+{
+    var oauth = new ChatGptOAuthService();
+    var accountId = await oauth.SignInAsync(request.AccountId);
+    var current = service.Load();
+    var settings = LlmClient.Defaults(LlmProvider.ChatGpt);
+    if (current.Provider == LlmProvider.ChatGpt && current.ChatGptAccountId == accountId) settings.Model = current.Model;
+    settings.ChatGptAccountId = accountId;
+    service.Save(settings);
+    var accounts = oauth.Accounts();
+    return new { settings, chatGptAccounts = accounts, hasCredential = accounts.Single(account => account.Id == accountId).Connected };
+}
+
+async Task<object> ChatGptSignOut(ChatGptSignInRequest request, SettingsService service)
+{
+    var revoked = await new ChatGptOAuthService().SignOutAsync(request.AccountId);
+    return new { remoteRevocationConfirmed = revoked, chatGptAccounts = new ChatGptOAuthService().Accounts(), state = GetState(service) };
+}
+
+async Task<string?> Credential(SettingsService service, UserSettings settings) => settings.Provider == LlmProvider.ChatGpt
+    ? await new ChatGptOAuthService().AccessTokenAsync(settings.ChatGptAccountId) : service.LoadApiKey(settings);
+
 async Task<object> Models(SettingsService service, OptimizationCatalog actionCatalog)
 {
     var settings = service.Load();
-    var key = service.LoadApiKey(settings);
-    var models = await new LlmClient(actionCatalog).ListModelsAsync(settings, key);
-    return new { models };
+    var key = await Credential(service, settings);
+    var client = new LlmClient(actionCatalog);
+    var models = await client.ListModelsAsync(settings, key);
+    return new { models, modelLabels = client.ModelLabels };
 }
 
 async Task<object> Scan(OptimizationCatalog actionCatalog, SettingsService settingsService, ScanRequest? request)
@@ -145,19 +199,23 @@ async Task<object> Diagnose(DiagnoseRequest request, SettingsService service, Op
     if (request.Profile is null || request.Goals is null)
         throw new InvalidOperationException("Diagnosis requires a system profile and tuning goals.");
     var settings = service.Load();
-    var key = service.LoadApiKey(settings);
+    var key = await Credential(service, settings);
     var runService = new OptimizationRunService();
     var run = request.RunId is { } runId ? runService.Load(runId) : null;
     var measurementIds = run is null
         ? request.MeasurementSessionIds ?? []
-        : run.BaselineSessionIds.Concat(run.CandidateSessionIds).ToList();
+        : run.BaselineSessionIds.Concat(run.CandidateSessionIds).Concat(run.DiagnosticSessionIds).ToList();
     var measurementEvidence = new MeasurementService().BuildNormalizedEvidence(measurementIds);
-    var evidence = LlmClient.MergeEvidenceFacts(LlmClient.BuildEvidenceFacts(request.Profile), measurementEvidence);
+    var attachments = SupportingAttachments.Normalize(request.Attachments, request.ImagesConfirmed);
+    var evidence = SupportingAttachments.MergeEvidence(LlmClient.MergeEvidenceFacts(LlmClient.BuildEvidenceFacts(request.Profile), measurementEvidence), attachments);
     if (run is not null)
     {
         if (JsonSerializer.Serialize(run.Goals, json) != JsonSerializer.Serialize(request.Goals, json))
             throw new InvalidOperationException("The diagnosis goals do not match the persisted optimization run.");
-        if (run.EvidenceFacts.Count != evidence.Count || run.EvidenceFacts.Any(fact =>
+        if (JsonSerializer.Serialize(run.SupportingAttachments, json) != JsonSerializer.Serialize(SupportingAttachments.Describe(attachments), json))
+            throw new InvalidOperationException("Supporting files do not match this run. Screenshots are not stored locally; reattach matching prepared files or dismiss and start a new diagnosis.");
+        var originalEvidence = run.EvidenceFacts.Where(fact => !fact.Key.StartsWith("investigation:", StringComparison.Ordinal)).ToList();
+        if (originalEvidence.Count != evidence.Count || originalEvidence.Any(fact =>
             !evidence.TryGetValue(fact.Key, out var value) || value != fact.Value))
             throw new InvalidOperationException("The optimization run evidence no longer matches this diagnosis request.");
         runService.BeginDiagnosis(run.Id);
@@ -165,7 +223,7 @@ async Task<object> Diagnose(DiagnoseRequest request, SettingsService service, Op
     var report = LlmClient.MeasureEvidence(evidence);
     try
     {
-        var outcome = await new LlmClient(actionCatalog).PlanAsync(request.Profile, request.Goals, settings, key, measurementEvidence);
+        var outcome = await new LlmClient(actionCatalog).PlanAsync(request.Profile, request.Goals, settings, key, measurementEvidence, attachments: attachments, imagesConfirmed: request.ImagesConfirmed);
         if (run is not null)
         {
             if (outcome.UsedLocalFallback)
@@ -198,7 +256,7 @@ OptimizationRun CreateRun(RunCreateRequest request)
     var sessions = measurementService.List().Where(session => ids.Contains(session.Id)).ToList();
     if (sessions.Count != ids.Count)
         throw new InvalidOperationException("Every optimization run measurement must exist locally.");
-    return new OptimizationRunService().Create(request.Profile, request.Goals, sessions);
+    return new OptimizationRunService().Create(request.Profile, request.Goals, sessions, request.Attachments, request.ImagesConfirmed);
 }
 
 MeasurementSession StartMeasurement(MeasurementStartRequest request)
@@ -215,7 +273,7 @@ MeasurementSession StartMeasurement(MeasurementStartRequest request)
         if (request.Label != expectedLabel)
             throw new InvalidOperationException($"This optimization run requires a {expectedLabel} measurement.");
     }
-    var service = new MeasurementService();
+    var service = new MeasurementService(Console.Error.WriteLine);
     var session = service.Start(request, Path.Combine(AppContext.BaseDirectory, "NeuroTuneLatency.wprp"));
     StartWatchdog(session.Id);
     return session;
@@ -232,12 +290,25 @@ MeasurementSession AnalyzeMeasurement(MeasurementIdRequest request)
     return session;
 }
 
-MeasurementComparison CompareMeasurement(MeasurementCompareRequest request)
+async Task<MeasurementComparison> CompareMeasurement(MeasurementCompareRequest request)
 {
     var comparison = new MeasurementService().Compare(request);
+    var advisory = await SystemOneService.AnalyzeAsync("measurement comparison", JsonSerializer.Serialize(comparison),
+        comparison.Metrics.ToDictionary(metric => metric.EvidenceId, metric => JsonSerializer.Serialize(metric)), Console.Error.WriteLine);
+    if (advisory is not null) comparison.SystemOneAdvisories.Add(advisory);
     if (request.OptimizationRunId is { } runId && comparison.RejectionReasons.Count == 0)
         new OptimizationRunService().RecordComparison(runId, comparison);
     return comparison;
+}
+
+async Task<string> ExplainMeasurement(MeasurementExplanationRequest request, SettingsService service, OptimizationCatalog actionCatalog)
+{
+    if (MeasurementService.HasActiveRecording()) throw new InvalidOperationException("Stop/cancel recording before asking the selected provider AI to explain results.");
+    var comparison = new MeasurementService().Compare(request.Comparison);
+    if (comparison.RejectionReasons.Count > 0) throw new InvalidOperationException("The comparison was rejected; the selected AI cannot bypass its validity checks.");
+    var settings = service.Load();
+    var key = await Credential(service, settings);
+    return await new LlmClient(actionCatalog).ExplainComparisonAsync(comparison, request.Goals, settings, key);
 }
 
 object? DeleteMeasurement(MeasurementIdRequest request)
@@ -312,11 +383,17 @@ async Task<OperationManifest> Apply(ApplyRequest request, OptimizationCatalog ac
             .ApplyAsync(request.ActionIds, request.HighRiskConfirmed, operationId, run.Id);
         var restart = request.ActionIds.Select(actionCatalog.Get).Any(action => action.RequiresRestart);
         runService.RecordApplyCompleted(run.Id, restart);
+        await AnnotateOperation(manifest, "application-result", JsonSerializer.Serialize(new { manifest.Status, verified = manifest.Actions.All(action => action.Applied), actions = request.ActionIds.Select(id => actionCatalog.Get(id).Name) }));
         return manifest;
     }
     catch (Exception exception)
     {
-        try { runService.RecordApplyFailure(run.Id, backupService.Load(operationId), exception.Message); }
+        try
+        {
+            var manifest = backupService.Load(operationId);
+            runService.RecordApplyFailure(run.Id, manifest, exception.Message);
+            if (manifest is not null) await AnnotateOperation(manifest, "application-error", exception.Message);
+        }
         catch (Exception journalException)
         {
             try { runService.RequireRecovery(run.Id, $"Apply failed and recovery bookkeeping also failed: {journalException.Message}"); }
@@ -360,6 +437,17 @@ OptimizationRun ReconcileRun(RunIdRequest request, OptimizationCatalog actionCat
     return run;
 }
 
+async Task AnnotateOperation(OperationManifest manifest, string phase, string context)
+{
+    // Optional advice cannot turn a completed/rolled-back transaction into a failure or change its actions.
+    try
+    {
+        var advisory = await SystemOneService.AnalyzeAsync(phase, context, progress: Console.Error.WriteLine);
+        if (advisory is not null) { manifest.SystemOneAdvisories.Add(advisory); new BackupService().Save(manifest); }
+    }
+    catch (Exception error) { Console.Error.WriteLine($"Optional application annotation unavailable: {error.GetType().Name}. Transaction state unchanged."); }
+}
+
 async Task<object?> Rollback(RollbackRequest request, OptimizationCatalog actionCatalog, BackupService backupService)
 {
     var manifest = backupService.Load(request.OperationId)
@@ -391,11 +479,13 @@ async Task<object?> Rollback(RollbackRequest request, OptimizationCatalog action
 
 sealed record AgentResponse(bool Ok, object? Data, string? Error);
 sealed record SaveProviderRequest(UserSettings Settings, string? ApiKey);
-sealed record DiagnoseRequest(SystemProfile? Profile, TuningGoals? Goals, List<Guid>? MeasurementSessionIds = null, Guid? RunId = null);
+sealed record DiagnoseRequest(SystemProfile? Profile, TuningGoals? Goals, List<Guid>? MeasurementSessionIds = null, Guid? RunId = null,
+    List<SupportingAttachment>? Attachments = null, bool ImagesConfirmed = false);
 sealed record ApplyRequest(List<string> ActionIds, bool HighRiskConfirmed, Guid RunId);
 sealed record RollbackRequest(Guid OperationId, Guid? RunId = null);
 sealed record ScanRequest(bool OptionalTelemetryConsent, bool FirmwareReadConsent = false);
-sealed record RunCreateRequest(SystemProfile? Profile, TuningGoals? Goals, List<Guid>? MeasurementSessionIds = null);
+sealed record RunCreateRequest(SystemProfile? Profile, TuningGoals? Goals, List<Guid>? MeasurementSessionIds = null,
+    List<SupportingAttachment>? Attachments = null, bool ImagesConfirmed = false);
 sealed record RunIdRequest(Guid RunId);
 sealed record PowerPlanDirectoryRequest(string Directory);
 sealed record PowerPlanPathRequest(string Path);

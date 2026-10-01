@@ -29,6 +29,8 @@ public sealed class PlanRecommendation
     public string Reason { get; set; } = "";
     public RiskLevel Risk { get; set; } = RiskLevel.Low;
     public string ExpectedImpact { get; set; } = "";
+    public string Uncertainty { get; set; } = "";
+    public string Reversibility { get; set; } = "";
     public List<string> Tradeoffs { get; set; } = [];
     public List<string> Prerequisites { get; set; } = [];
     public bool RequiresRestart { get; set; }

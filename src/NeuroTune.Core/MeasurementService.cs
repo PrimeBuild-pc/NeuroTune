@@ -11,7 +11,7 @@ public sealed class MeasurementService
     public static readonly string MeasurementsDirectory = Path.Combine(SettingsService.DataDirectory, "measurements");
     private const string SessionFileName = "session.json";
     private const string TraceFileName = "capture.etl";
-    private readonly JsonSerializerOptions _json = new()
+    private static readonly JsonSerializerOptions _json = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true,
@@ -19,7 +19,13 @@ public sealed class MeasurementService
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
 
-    public MeasurementService() => RecoverAndPurge();
+    private readonly Action<string>? _progress;
+
+    public MeasurementService(Action<string>? progress = null)
+    {
+        _progress = progress;
+        RecoverAndPurge();
+    }
 
     public IReadOnlyList<MeasurementWorkload> Workloads()
     {
@@ -51,6 +57,7 @@ public sealed class MeasurementService
             Math.Abs((item.StartTimeUtc - request.ProcessStartTimeUtc).TotalSeconds) < 1)
             ?? throw new InvalidOperationException("The selected process ended or its identity changed. Refresh the process list.");
         var id = Guid.NewGuid();
+        _progress?.Invoke("Reading hardware and configuration fingerprints locally (WMI)…");
         var environment = CaptureEnvironment();
         var session = new MeasurementSession
         {
@@ -77,16 +84,17 @@ public sealed class MeasurementService
         Save(session);
         try
         {
-            Transition(session, MeasurementSessionState.Recording);
-            session.RecordingStartedAtUtc = DateTimeOffset.UtcNow;
-            Save(session);
+            _progress?.Invoke("Waiting for the capture lock and starting Windows Performance Recorder…");
             WithCaptureMutex(() =>
             {
                 if (ListWithoutRecovery().Any(item => item.Id != id && item.State == MeasurementSessionState.Recording))
                     throw new InvalidOperationException("Another NeuroTune measurement is already recording.");
                 RunWpr(["-start", $"{Path.GetFullPath(wprProfilePath)}!NeuroTuneLatency", "-instancename", session.InstanceName]);
+                Transition(session, MeasurementSessionState.Recording);
+                session.RecordingStartedAtUtc = DateTimeOffset.UtcNow;
+                Save(session);
             });
-            Save(session);
+            _progress?.Invoke("WPR is recording. The capture countdown starts now.");
             return session;
         }
         catch (Exception exception)
@@ -101,33 +109,45 @@ public sealed class MeasurementService
     public MeasurementSession Stop(Guid id)
     {
         var session = Load(id);
-        if (session.State != MeasurementSessionState.Recording) throw new InvalidOperationException("Only a recording session can be stopped.");
-        try
+        _progress?.Invoke("Stopping WPR and flushing captured events to the local ETL; this can take several seconds…");
+        WithCaptureMutex(() =>
         {
-            WithCaptureMutex(() => RunWpr(["-stop", TracePath(id), "-instancename", session.InstanceName]));
-            Transition(session, MeasurementSessionState.Captured);
-            session.CapturedAtUtc = DateTimeOffset.UtcNow;
-            session.Error = null;
-            Save(session);
-            return session;
-        }
-        catch (Exception exception)
-        {
-            Transition(session, MeasurementSessionState.Failed);
-            session.Error = exception.Message;
-            Save(session);
-            throw;
-        }
+            session = Load(id); // Watchdog, polling recovery and UI race: recheck and persist under the recorder lock.
+            if (session.State is MeasurementSessionState.Captured or MeasurementSessionState.Analyzing or MeasurementSessionState.Completed) return;
+            if (session.State != MeasurementSessionState.Recording) throw new InvalidOperationException("Only a recording session can be stopped.");
+            try
+            {
+                RunWpr(["-stop", TracePath(id), "-instancename", session.InstanceName]);
+                Transition(session, MeasurementSessionState.Captured);
+                session.CapturedAtUtc = DateTimeOffset.UtcNow;
+                session.Error = null;
+                Save(session);
+            }
+            catch (Exception exception)
+            {
+                Transition(session, MeasurementSessionState.Failed);
+                session.Error = exception.Message;
+                Save(session);
+                throw;
+            }
+        });
+        return session;
     }
 
     public MeasurementSession Cancel(Guid id)
     {
         var session = Load(id);
-        if (session.State == MeasurementSessionState.Recording)
-            WithCaptureMutex(() => RunWpr(["-cancel", "-instancename", session.InstanceName]));
-        Transition(session, MeasurementSessionState.Cancelled);
-        session.Error = null;
-        DeleteDirectory(id);
+        _progress?.Invoke("Cancelling the named WPR capture; waiting for Windows to release the recorder…");
+        WithCaptureMutex(() =>
+        {
+            session = Load(id);
+            if (session.State == MeasurementSessionState.Recording)
+                RunWpr(["-cancel", "-instancename", session.InstanceName]);
+            _progress?.Invoke("Deleting this session's incomplete local data…");
+            Transition(session, MeasurementSessionState.Cancelled);
+            session.Error = null;
+            DeleteDirectory(id);
+        });
         return session;
     }
 
@@ -305,6 +325,9 @@ public sealed class MeasurementService
         foreach (var session in sessions.Where(item => item.State == MeasurementSessionState.Completed && item.Report is not null))
         {
             var report = session.Report!;
+            facts[$"measurement:{session.Id}:context:workload_name"] = ProfileSanitizer.Redact(session.SystemWide ? "System-wide diagnostic; not a game benchmark" : session.ProcessName);
+            facts[$"measurement:{session.Id}:context:duration_ms"] = report.Quality.DurationMilliseconds.ToString("F3", System.Globalization.CultureInfo.InvariantCulture);
+            facts[$"measurement:{session.Id}:context:frame_metrics_available"] = (report.FrameTimes is not null).ToString();
             facts[$"measurement:{session.Id}:quality:valid"] = report.Quality.IsValid.ToString();
             facts[$"measurement:{session.Id}:quality:system_wide_diagnostic"] = session.SystemWide.ToString();
             facts[$"measurement:{session.Id}:quality:events_lost"] = report.Quality.EventsLost.ToString();
@@ -370,7 +393,7 @@ public sealed class MeasurementService
     }
 
     private MeasurementSession Load(Guid id) => TryLoad(id) ?? throw new InvalidOperationException("The measurement session was not found.");
-    private MeasurementSession? TryLoad(Guid id)
+    private static MeasurementSession? TryLoad(Guid id)
     {
         var path = SessionPath(id);
         if (!File.Exists(path)) return null;
@@ -411,7 +434,9 @@ public sealed class MeasurementService
         }
     }
 
-    private IEnumerable<MeasurementSession> ListWithoutRecovery() => !Directory.Exists(MeasurementsDirectory) ? [] :
+    public static bool HasActiveRecording() => ListWithoutRecovery().Any(session => session.State == MeasurementSessionState.Recording);
+
+    private static IEnumerable<MeasurementSession> ListWithoutRecovery() => !Directory.Exists(MeasurementsDirectory) ? [] :
         Directory.EnumerateDirectories(MeasurementsDirectory).Select(Path.GetFileName).Select(name => Guid.TryParse(name, out var id) ? TryLoad(id) : null).Where(item => item is not null).Cast<MeasurementSession>();
 
     private static void RunWpr(IReadOnlyList<string> arguments)
@@ -430,7 +455,7 @@ public sealed class MeasurementService
         if (process.ExitCode != 0) throw new InvalidOperationException($"WPR failed ({process.ExitCode}): {FirstLine(error, output)}");
     }
 
-    private static void WithCaptureMutex(Action action)
+    internal static void WithCaptureMutex(Action action)
     {
         using var mutex = new Mutex(false, @"Global\NeuroTune.MeasurementCapture");
         try

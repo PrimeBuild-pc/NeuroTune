@@ -127,6 +127,7 @@ public sealed record ComparisonMetric(
 
 public sealed class MeasurementComparison
 {
+    public List<SystemOneAdvisory> SystemOneAdvisories { get; set; } = [];
     public int SchemaVersion { get; init; } = 1;
     public Guid Id { get; init; }
     public ComparisonLevel Level { get; init; }
@@ -149,6 +150,8 @@ public sealed record MeasurementStartRequest(
 
 public sealed record MeasurementIdRequest(Guid SessionId, Guid? OptimizationRunId = null);
 public sealed record FrameTimeImportRequest(Guid SessionId, string Csv, Guid? OptimizationRunId = null);
+public sealed record MeasurementExplanationRequest(MeasurementCompareRequest Comparison, TuningGoals Goals);
+
 public sealed record MeasurementCompareRequest(IReadOnlyList<Guid> BaselineSessionIds, IReadOnlyList<Guid> CandidateSessionIds,
     Guid? OptimizationRunId = null);
 
