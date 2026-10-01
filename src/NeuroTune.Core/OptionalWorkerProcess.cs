@@ -84,7 +84,9 @@ internal static class OptionalWorkerProcess
     }
     private static SafeFileHandle? NonAdminToken()
     {
-        if (!new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator)) return null;
+        if (!LogService.IsAdministrator()) return null;
+        // A restricted token may lack access to a service runner's window station/desktop; do not change its ACLs or fall back to elevation.
+        if (!Environment.UserInteractive) throw new InvalidOperationException("The optional local worker cannot start from an elevated non-interactive Windows session. Use an interactive desktop session; administrator fallback is forbidden.");
         Check(OpenProcessToken(GetCurrentProcess(), 0xf01ff, out var original));
         using (original)
         {

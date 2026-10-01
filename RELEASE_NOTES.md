@@ -43,7 +43,9 @@ use a disposable VM for system-changing acceptance tests.
   install smoke test and one-shot non-admin workers, or a separately consented
   OpenRouter classifier with its own encrypted key/model and API costs. Advice
   is uncalibrated, non-causal and cannot replace evidence or authorize writes.
-  Non-admin execution is not a filesystem/network sandbox.
+  Elevated non-interactive Windows sessions are explicitly refused; no desktop
+  ACL changes or administrator fallback are attempted. Non-admin execution is
+  not a filesystem/network sandbox.
 - **Optional export-only firmware support:** explicitly approved local SCEWIN
   packages can export settings; offline text imports remain unverified. Hashes
   identify files, not vendor authenticity. Driver/elevation risks and unknown
@@ -79,7 +81,10 @@ anonymization. Review all previews before consenting to cloud transmission.
 ## Validation and remaining acceptance
 
 - Local automated validation: **99 .NET, 28 UI and 2 Rust tests passed**, plus
-  typecheck/lint, formatting and production/native builds.
+  typecheck/lint, formatting and production/native builds. Headless elevated
+  CI checks safe worker refusal, not desktop inference; local unelevated tests
+  exercise Unicode/environment isolation and cancellation. Rust audit is a CI
+  gate. Vitest/mocker is patched to 4.1.11 for GHSA-82fw-gwwq-j7x9.
 - Mocked browser checks cover orchestration, four presets, separate consent,
   final review/decline, keyboard, reduced motion and a narrow/scaled layout.
   Supporting-file checks use the published agent for actual local normalization,
