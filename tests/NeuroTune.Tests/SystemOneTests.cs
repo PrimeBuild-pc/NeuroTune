@@ -69,17 +69,24 @@ public sealed class SystemOneTests
         finally { Directory.Delete(temporary, true); }
     }
     [TestMethod]
-    public async Task Native_worker_roundtrips_unicode_without_admin_or_parent_secret_environment()
+    public async Task Native_worker_roundtrips_unicode_without_admin_or_parent_secret_environment_or_refuses_headless_elevation()
     {
         var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
         var script = "[Console]::InputEncoding=[Text.Encoding]::UTF8; [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); $v=[Console]::In.ReadToEnd(); [Console]::Write($v); $p=[Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent()); [Console]::Write('|admin='+$p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator).ToString().ToLower()+'|secret='+$env:NEUROTUNE_TEST_SECRET)";
         Environment.SetEnvironmentVariable("NEUROTUNE_TEST_SECRET", "not-for-worker");
         try
         {
-            var result = await OptionalWorkerProcess.RunAsync(Path.Combine(windows, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
+            Console.WriteLine($"Interactive desktop={Environment.UserInteractive}; administrator={LogService.IsAdministrator()}");
+            var execution = OptionalWorkerProcess.RunAsync(Path.Combine(windows, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
                 ["-NoProfile", "-NonInteractive", "-EncodedCommand", Convert.ToBase64String(Encoding.Unicode.GetBytes(script))], Path.GetTempPath(), "hello àè世界",
                 new Dictionary<string, string> { ["SystemRoot"] = windows, ["WINDIR"] = windows }, TimeSpan.FromSeconds(20), null, CancellationToken.None);
-            Assert.AreEqual("hello àè世界|admin=false|secret=", result);
+            if (LogService.IsAdministrator() && !Environment.UserInteractive)
+            {
+                var error = await Assert.ThrowsAsync<InvalidOperationException>(() => execution);
+                Assert.Contains("elevated non-interactive Windows session", error.Message);
+                Assert.Contains("administrator fallback is forbidden", error.Message);
+            }
+            else Assert.AreEqual("hello àè世界|admin=false|secret=", await execution);
         }
         finally { Environment.SetEnvironmentVariable("NEUROTUNE_TEST_SECRET", null); }
         Assert.AreEqual("\"C:\\space folder\\\\\"", OptionalWorkerProcess.Quote("C:\\space folder\\"));
@@ -92,14 +99,20 @@ public sealed class SystemOneTests
         Assert.ThrowsExactly<InvalidOperationException>(() => LlmClient.ParseComparisonExplanation("""{"summary":""}"""));
     }
     [TestMethod]
-    public async Task Optional_worker_deadline_stops_its_process_tree()
+    public async Task Optional_worker_deadline_stops_its_process_tree_or_refuses_headless_elevation()
     {
         var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
         var script = "Start-Sleep -Seconds 30";
         var started = System.Diagnostics.Stopwatch.StartNew();
-        await Assert.ThrowsAsync<OperationCanceledException>(() => OptionalWorkerProcess.RunAsync(Path.Combine(windows, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
+        var execution = OptionalWorkerProcess.RunAsync(Path.Combine(windows, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
             ["-NoProfile", "-NonInteractive", "-EncodedCommand", Convert.ToBase64String(Encoding.Unicode.GetBytes(script))], Path.GetTempPath(), "",
-            new Dictionary<string, string> { ["SystemRoot"] = windows }, TimeSpan.FromMilliseconds(700), null, CancellationToken.None));
+            new Dictionary<string, string> { ["SystemRoot"] = windows }, TimeSpan.FromMilliseconds(700), null, CancellationToken.None);
+        if (LogService.IsAdministrator() && !Environment.UserInteractive)
+        {
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(() => execution);
+            Assert.Contains("elevated non-interactive Windows session", error.Message);
+        }
+        else await Assert.ThrowsAsync<OperationCanceledException>(() => execution);
         Assert.IsTrue(started.Elapsed < TimeSpan.FromSeconds(10));
     }
 }
