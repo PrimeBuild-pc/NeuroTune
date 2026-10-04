@@ -93,11 +93,19 @@ public static class OptimizationRunStateMachine
 
 public sealed class OptimizationRunService
 {
-    public static readonly string RunsDirectory = Path.Combine(SettingsService.DataDirectory, "runs");
+    public static readonly string RunsDirectory = Path.Combine(JournalStorage.UserDirectory, "runs");
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
     private readonly string _directory;
+    private readonly JournalStorage _storage;
 
-    public OptimizationRunService(string? directory = null) => _directory = directory ?? RunsDirectory;
+    public OptimizationRunService() : this(RunsDirectory, privileged: true) { }
+    internal OptimizationRunService(string directory) : this(directory, privileged: false) { }
+
+    private OptimizationRunService(string directory, bool privileged)
+    {
+        _storage = new(directory, privileged);
+        _directory = _storage.DirectoryPath;
+    }
 
     public OptimizationRun Create(SystemProfile profile, TuningGoals goals,
         IReadOnlyCollection<MeasurementSession>? baselineSessions = null, IReadOnlyList<SupportingAttachment>? attachments = null, bool imagesConfirmed = false)
@@ -225,6 +233,7 @@ public sealed class OptimizationRunService
                 throw new InvalidOperationException("A locally validated diagnosis is required before approval.");
             var actions = actionIds.Distinct(StringComparer.OrdinalIgnoreCase).Select(catalog.Get).ToList();
             if (actions.Count == 0) throw new InvalidOperationException("Select at least one optimization capability.");
+            OptimizationCatalog.ValidateSelection(actions);
             if (actions.Any(action => action.Risk == RiskLevel.High) && !highRiskConfirmed)
                 throw new InvalidOperationException("High-risk capabilities require separate confirmation.");
             run.ApprovedActionIds = actions.Select(action => action.Id).ToList();
@@ -353,11 +362,11 @@ public sealed class OptimizationRunService
 
     private IReadOnlyList<OptimizationRun> ListCore(bool strict = false)
     {
-        if (!Directory.Exists(_directory)) return [];
+        _storage.CheckLegacyJournals();
         var runs = new List<OptimizationRun>();
-        foreach (var path in Directory.GetFiles(_directory, "run.json", SearchOption.AllDirectories))
+        foreach (var directory in _storage.Directories())
         {
-            try { runs.Add(LoadPath(path)); }
+            try { runs.Add(LoadPath(Path.Combine(directory, "run.json"))); }
             catch (InvalidOperationException exception) when (!strict)
             {
                 Console.Error.WriteLine(exception.Message);
@@ -408,7 +417,9 @@ public sealed class OptimizationRunService
     private OptimizationRun LoadCore(Guid id)
     {
         if (id == Guid.Empty) throw new InvalidOperationException("The optimization run ID was invalid.");
+        _storage.CheckLegacyJournals();
         var path = Path.Combine(_directory, id.ToString("D"), "run.json");
+        _storage.CheckPath(path);
         if (!File.Exists(path)) throw new InvalidOperationException("The optimization run was not found.");
         return LoadPath(path);
     }
@@ -417,9 +428,16 @@ public sealed class OptimizationRunService
     {
         try
         {
-            var run = JsonSerializer.Deserialize<OptimizationRun>(File.ReadAllText(path));
+            var content = _storage.Read(path);
+            using var json = JsonDocument.Parse(content);
+            if (!json.RootElement.TryGetProperty("SchemaVersion", out _) || !json.RootElement.TryGetProperty("Id", out _) ||
+                !json.RootElement.TryGetProperty("State", out _)) throw new JsonException("Missing required run fields.");
+            var run = JsonSerializer.Deserialize<OptimizationRun>(content);
             if (run is null) throw new JsonException("The optimization run was empty.");
             run.DirectoryPath = Path.GetDirectoryName(path)!;
+            if (!Guid.TryParseExact(Path.GetFileName(run.DirectoryPath), "D", out var directoryId) || run.Id != directoryId ||
+                !Path.GetDirectoryName(run.DirectoryPath)!.Equals(_directory, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("The optimization run ID does not match its directory.");
             Validate(run);
             return run;
         }
@@ -433,22 +451,28 @@ public sealed class OptimizationRunService
     {
         Validate(run);
         run.DirectoryPath = Path.Combine(_directory, run.Id.ToString("D"));
-        Directory.CreateDirectory(run.DirectoryPath);
-        var path = Path.Combine(run.DirectoryPath, "run.json");
-        var temporary = path + ".tmp";
-        using (var stream = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
-        {
-            JsonSerializer.Serialize(stream, run, JsonOptions);
-            stream.Flush(true);
-        }
-        File.Move(temporary, path, true);
+        _storage.Write(Path.Combine(run.DirectoryPath, "run.json"), run, JsonOptions);
     }
 
     private static void Validate(OptimizationRun run)
     {
-        if (run.SchemaVersion != 1 || run.Id == Guid.Empty)
+        if (run.SchemaVersion != 1 || run.Id == Guid.Empty || !Enum.IsDefined(run.State) || !Enum.IsDefined(run.Decision) ||
+            run.Goals is null || run.EvidenceFacts is null || run.RequestedProbeIds is null || run.ApprovedActionIds is null ||
+            run.BaselineSessionIds is null || run.CandidateSessionIds is null || run.DiagnosticSessionIds is null ||
+            run.Transitions is null || run.PlannerAudit is null || run.PlannerStopReason is null || run.BootIdAtApply is null ||
+            run.OperationId == Guid.Empty || run.BaselineSessionIds.Concat(run.CandidateSessionIds).Concat(run.DiagnosticSessionIds).Contains(Guid.Empty))
             throw new InvalidOperationException("The optimization run schema or ID was invalid.");
         run.Goals.Validate();
+        for (var index = 0; index < run.Transitions.Count; index++)
+        {
+            var transition = run.Transitions[index];
+            if (transition is null || transition.Reason is null || transition.Reason.Length is 0 or > 500 ||
+                !OptimizationRunStateMachine.CanTransition(transition.From, transition.To) ||
+                transition.From != (index == 0 ? OptimizationRunState.Draft : run.Transitions[index - 1].To))
+                throw new InvalidOperationException("The run transition history is invalid.");
+        }
+        if (run.Transitions.Count > 0 && run.Transitions[^1].To != run.State)
+            throw new InvalidOperationException("The run state does not match its transition history.");
         if (!LlmClient.MeasureEvidence(run.EvidenceFacts).FitsSinglePass)
             throw new InvalidOperationException("The optimization run evidence exceeded the single-pass limit.");
         if (run.SupportingAttachments is null || run.SupportingAttachments.Count > NeuroTune.SupportingAttachments.MaxFiles ||

@@ -1,5 +1,4 @@
 using Microsoft.Win32;
-using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text.Json;
@@ -14,12 +13,16 @@ public sealed class OptimizationAction : IReversibleAction
     private readonly Action _apply;
     private readonly Action<string> _restore;
     private readonly Func<bool> _verify;
+    private readonly Action<string> _validateSnapshot;
+    private readonly Func<string, bool>? _verifyRestored;
 
     public OptimizationAction(string id, string name, string description, string category, RiskLevel risk,
         bool requiresRestart, string? registryExportPath, Func<ActionAvailability> inspect, Func<string> capture,
         Action apply, Action<string> restore, Func<bool> verify, IReadOnlyList<string>? supportedWindowsBuilds = null,
         IReadOnlyList<string>? supportedHardware = null, IReadOnlyList<string>? evidenceRequirements = null,
-        IReadOnlyList<string>? sources = null, IReadOnlyList<string>? sideEffects = null)
+        IReadOnlyList<string>? sources = null, IReadOnlyList<string>? sideEffects = null,
+        Action<string>? validateSnapshot = null, string? conflictTarget = null, string? recoveryTarget = null,
+        Func<string, bool>? verifyRestored = null)
     {
         Definition = new(id, name, description, category, risk, requiresRestart, registryExportPath,
             supportedWindowsBuilds ?? ["Windows 11"],
@@ -33,6 +36,10 @@ public sealed class OptimizationAction : IReversibleAction
         _apply = apply;
         _restore = restore;
         _verify = verify;
+        _validateSnapshot = validateSnapshot ?? (_ => throw new InvalidOperationException("No snapshot validator is registered."));
+        _verifyRestored = verifyRestored;
+        ConflictTarget = conflictTarget ?? id;
+        RecoveryTarget = recoveryTarget;
     }
 
     public ActionDefinition Definition { get; }
@@ -46,8 +53,22 @@ public sealed class OptimizationAction : IReversibleAction
     public ActionAvailability Inspect() => _inspect();
     public string Capture() => _capture();
     public void Apply() => _apply();
-    public void Restore(string capturedState) => _restore(capturedState);
+    public void Restore(string capturedState) { ValidateSnapshot(capturedState); _restore(capturedState); }
     public bool Verify() => _verify();
+    internal string ConflictTarget { get; }
+    internal string? RecoveryTarget { get; }
+    internal bool VerifyRestored(string state) => _verifyRestored?.Invoke(state) ??
+        string.Equals(Capture(), state, StringComparison.Ordinal);
+    internal void ValidateSnapshot(string state)
+    {
+        try
+        {
+            if (state is null || state.Length is 0 or > 262_144) throw new InvalidOperationException("The saved snapshot size is invalid.");
+            _validateSnapshot(state);
+        }
+        catch (Exception exception) when (exception is not InvalidOperationException)
+        { throw new InvalidOperationException("The saved snapshot is invalid.", exception); }
+    }
 }
 
 public sealed class OptimizationCatalog
@@ -56,7 +77,9 @@ public sealed class OptimizationCatalog
     private const string BalancedGuid = "381b4222-f694-41f0-9685-ff5bb260df2e";
     private readonly Dictionary<string, OptimizationAction> _actions;
 
-    public OptimizationCatalog()
+    public OptimizationCatalog() : this(includeDynamic: true) { }
+
+    internal OptimizationCatalog(bool includeDynamic)
     {
         var actions = new List<OptimizationAction>
         {
@@ -155,8 +178,11 @@ public sealed class OptimizationCatalog
         };
         actions.Add(PageFileManagedSizes());
         actions.Add(CoreParkingOff());
-        foreach (var target in GameGpuTargetStore.Load()) actions.AddRange(PerAppGpuPreferences(target));
-        foreach (var plan in new PowerPlanStore().ListStaged()) actions.Add(CustomPowerPlan(plan));
+        if (includeDynamic)
+        {
+            foreach (var target in GameGpuTargetStore.Load()) actions.AddRange(PerAppGpuPreferences(target));
+            foreach (var plan in new PowerPlanStore().ListStaged()) actions.Add(CustomPowerPlan(plan));
+        }
         if (actions.Select(action => action.Id).Distinct(StringComparer.OrdinalIgnoreCase).Count() != actions.Count)
             throw new InvalidOperationException("The capability registry contains duplicate action IDs.");
         foreach (var action in actions) action.Definition.Validate();
@@ -171,6 +197,40 @@ public sealed class OptimizationCatalog
         : throw new InvalidOperationException($"Action is not allowlisted: {id}");
 
     public bool Contains(string id) => _actions.ContainsKey(id);
+
+    internal static void ValidateSelection(IReadOnlyList<OptimizationAction> actions)
+    {
+        if (actions.Count > 100 || actions.GroupBy(action => action.ConflictTarget, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))
+            throw new InvalidOperationException("Selected capabilities write to the same target; choose only one state per setting.");
+    }
+
+    internal OptimizationAction ResolveRollback(ActionRecord record)
+    {
+        OptimizationAction action;
+        if (Regex.IsMatch(record.ActionId, @"^power\.custom\.[0-9a-f]{64}$", RegexOptions.CultureInvariant))
+        {
+            if (record.RecoveryTarget is not null) throw new InvalidOperationException("Unexpected power-plan recovery metadata.");
+            action = CustomPowerPlan(new("Journal recovery", "", 0, record.ActionId["power.custom.".Length..]));
+        }
+        else if (Regex.IsMatch(record.ActionId, @"^gaming\.gpu-[0-9a-f]{16}\.(high|saving|default)$", RegexOptions.CultureInvariant))
+        {
+            var path = record.RecoveryTarget;
+            if (string.IsNullOrWhiteSpace(path) || path.Length > 2048 || !Path.IsPathFullyQualified(path) ||
+                path.StartsWith(@"\\", StringComparison.Ordinal) || !Path.GetExtension(path).Equals(".exe", StringComparison.OrdinalIgnoreCase) ||
+                !path.Equals(Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase) || path.IndexOf(':', 2) >= 0)
+                throw new InvalidOperationException("Invalid persisted GPU recovery target.");
+            var target = new GameGpuTarget(GameGpuTargetStore.CreateId(path), Path.GetFileName(path), path);
+            action = PerAppGpuPreferences(target).SingleOrDefault(item => item.Id == record.ActionId)
+                ?? throw new InvalidOperationException("The GPU target does not match its action ID.");
+        }
+        else
+        {
+            if (record.RecoveryTarget is not null) throw new InvalidOperationException("Unexpected static-action recovery metadata.");
+            action = Get(record.ActionId);
+        }
+        action.ValidateSnapshot(record.OriginalState);
+        return action;
+    }
 
     private static OptimizationAction PageFileManagedSizes()
     {
@@ -218,7 +278,8 @@ public sealed class OptimizationCatalog
             state => RestoreRegistryValue(RegistryHive.LocalMachine, path, valueName, DeserializeRegistrySnapshot(state)), IsManaged,
             evidenceRequirements: ["Exact local PagingFiles REG_MULTI_SZ value; at least one existing page-file entry"],
             sources: ["Microsoft Win32_PageFileSetting mapping and documented zero/zero per-volume system-managed sizing"],
-            sideEffects: ["Takes effect after restart; page-file volumes remain unchanged but Windows may grow or shrink their files"]);
+            sideEffects: ["Takes effect after restart; page-file volumes remain unchanged but Windows may grow or shrink their files"],
+            validateSnapshot: state => _ = DeserializeRegistrySnapshot(state));
     }
 
     internal static PageFileEntry ParsePageFileEntry(string value)
@@ -231,9 +292,25 @@ public sealed class OptimizationCatalog
 
     private static OptimizationAction CoreParkingOff()
     {
-        const string subgroup = "54533251-82be-4824-96c1-47b60b740d00";
-        const string setting = "0cc5b647-c1df-4637-891a-dec35c318583";
-        int Current() => checked((int)ReadPowerSetting(Guid.Parse(subgroup), Guid.Parse(setting)).Ac);
+        var subgroup = Guid.Parse("54533251-82be-4824-96c1-47b60b740d00");
+        var setting = Guid.Parse("0cc5b647-c1df-4637-891a-dec35c318583");
+        void Set(Guid scheme, uint value)
+        {
+            RunPowerCfg("/setacvalueindex", scheme.ToString("D"), subgroup.ToString("D"), setting.ToString("D"), value.ToString(CultureInfo.InvariantCulture));
+            if (ActivePowerScheme() == scheme) RunPowerCfg("/setactive", scheme.ToString("D"));
+        }
+        return CoreParkingOff(ActivePowerScheme, scheme => ReadPowerSetting(subgroup, setting, scheme).Ac, Set);
+    }
+
+    internal static OptimizationAction CoreParkingOff(Func<Guid> active, Func<Guid, uint> read, Action<Guid, uint> set)
+    {
+        Guid? capturedScheme = null;
+        uint Current() => read(active());
+        string Capture()
+        {
+            capturedScheme = active();
+            return JsonSerializer.Serialize(new CoreParkingState(capturedScheme.Value, read(capturedScheme.Value)));
+        }
         ActionAvailability Inspect()
         {
             try
@@ -247,21 +324,22 @@ public sealed class OptimizationCatalog
             }
             catch (Exception exception) { return ActionAvailability.Unavailable(exception.Message); }
         }
-        void Set(int value)
+        void Restore(string state)
         {
-            RunPowerCfg("/setacvalueindex", "SCHEME_CURRENT", subgroup, setting,
-                value.ToString(CultureInfo.InvariantCulture));
-            RunPowerCfg("/setactive", "SCHEME_CURRENT");
+            var snapshot = ReadCoreParkingState(state);
+            set(snapshot.SchemeId, snapshot.Ac);
         }
         return new("system.core-parking-off", "Disable core parking on AC power",
             "Keeps every logical core available in the active desktop power scheme; compare repeated measurements because this can increase power and heat.",
             "Power", RiskLevel.Medium, false, null, Inspect,
-            () => Current().ToString(CultureInfo.InvariantCulture), () => Set(100),
-            state => Set(int.Parse(state, CultureInfo.InvariantCulture)), () => Current() == 100,
+            Capture, () => set(capturedScheme ?? throw new InvalidOperationException("Capture the exact scheme before applying."), 100),
+            Restore, () => capturedScheme is { } scheme && read(scheme) == 100,
             supportedHardware: ["AC-powered desktop with a power scheme exposing the Windows core-parking minimum-cores setting"],
             evidenceRequirements: ["Exact active-scheme AC CPMINCORES value and no detected battery"],
             sources: ["Microsoft powercfg command contract and exact local power-setting GUID inspection"],
-            sideEffects: ["May increase idle power, temperature, and fan noise; does not change the DC value"]);
+            sideEffects: ["May increase idle power, temperature, and fan noise; does not change the DC value"],
+            validateSnapshot: state => _ = ReadCoreParkingState(state),
+            verifyRestored: state => { var saved = ReadCoreParkingState(state); return read(saved.SchemeId) == saved.Ac; });
     }
 
     internal static IEnumerable<OptimizationAction> PerAppGpuPreferences(GameGpuTarget target)
@@ -310,7 +388,9 @@ public sealed class OptimizationCatalog
             supportedHardware: ["Detected local executable and a Windows 11 graphics stack exposing per-app GPU preferences"],
             evidenceRequirements: [$"Durable detected-target ID {target.Id}; exact Registry value kind and content"],
             sources: ["Windows 11 per-app Graphics settings plus exact local UserGpuPreferences inspection"],
-            sideEffects: ["Changes only the selected executable preference; Windows and the graphics driver choose the physical adapter"]);
+            sideEffects: ["Changes only the selected executable preference; Windows and the graphics driver choose the physical adapter"],
+            validateSnapshot: state => _ = DeserializeRegistrySnapshot(state),
+            conflictTarget: $"gpu:{target.Id}", recoveryTarget: target.ExecutablePath);
     }
 
     private static OptimizationAction PowerPlan(string id, string name, string description, string targetGuid,
@@ -340,14 +420,19 @@ public sealed class OptimizationCatalog
         }
 
         void Apply() => RunPowerCfg("/setactive", targetAlias);
-        void Restore(string guid) => RunPowerCfg("/setactive", guid);
+        void Restore(string guid) => RunPowerCfg("/setactive", Guid.ParseExact(guid, "D").ToString("D"));
         bool Verify() => Capture().Equals(targetGuid, StringComparison.OrdinalIgnoreCase);
 
         return new(id, name, description, "System", RiskLevel.Medium, false,
             null, Inspect, Capture, Apply, Restore, Verify,
             evidenceRequirements: ["Exact active and available power-scheme identifiers"],
             sources: ["Microsoft powercfg command contract and exact local scheme inventory"],
-            sideEffects: ["Changes the active system power policy and may affect energy use"]);
+            sideEffects: ["Changes the active system power policy and may affect energy use"],
+            validateSnapshot: state =>
+            {
+                if (!Guid.TryParseExact(state, "D", out var scheme) || scheme == Guid.Empty)
+                    throw new InvalidOperationException("The saved power scheme is invalid.");
+            }, conflictTarget: "power:active-scheme");
     }
 
     internal static OptimizationAction CustomPowerPlan(CustomPowerPlanFile plan)
@@ -365,8 +450,7 @@ public sealed class OptimizationCatalog
         }
         void Restore(string state)
         {
-            var previous = JsonSerializer.Deserialize<CustomPowerPlanState>(state)
-                ?? throw new InvalidOperationException("The custom power-plan snapshot was invalid.");
+            var previous = ReadCustomPowerPlanState(state);
             RunPowerCfg("/setactive", previous.ActiveGuid);
             if (!previous.TargetExisted && Exists()) RunPowerCfg("/delete", target);
         }
@@ -388,7 +472,8 @@ public sealed class OptimizationCatalog
             supportedHardware: ["Windows 11 PC; the third-party plan may still contain hardware-specific values"],
             evidenceRequirements: [$"User-staged .pow file with SHA-256 {plan.Sha256}; plan contents are opaque"],
             sources: ["User-provided powercfg export; Microsoft powercfg import contract"],
-            sideEffects: ["Changes the active power policy; may increase temperature, energy use, instability, or latency; requires Baseline and separate high-risk confirmation"]);
+            sideEffects: ["Changes the active power policy; may increase temperature, energy use, instability, or latency; requires Baseline and separate high-risk confirmation"],
+            validateSnapshot: state => _ = ReadCustomPowerPlanState(state), conflictTarget: "power:active-scheme");
     }
 
     private static OptimizationAction RegistryDword(string id, string name, string description, string category,
@@ -432,7 +517,8 @@ public sealed class OptimizationCatalog
 
         bool Verify() => ReadCurrent() == desiredValue;
 
-        return new(id, name, description, category, risk, restart, exportPath, Inspect, Capture, Apply, Restore, Verify);
+        return new(id, name, description, category, risk, restart, exportPath, Inspect, Capture, Apply, Restore, Verify,
+            validateSnapshot: state => _ = DeserializeRegistrySnapshot(state), conflictTarget: $"{exportPath}\\{valueName}");
     }
 
     private static OptimizationAction RegistryDeleteDwords(string id, string name, string description, string category,
@@ -476,13 +562,17 @@ public sealed class OptimizationCatalog
 
         void Restore(string state)
         {
-            var snapshot = DeserializeRegistrySnapshots(state);
-            foreach (var (valueName, value) in snapshot)
+            var snapshot = DeserializeRegistrySnapshots(state, valueNames);
+            foreach (var valueName in valueNames)
+            {
+                var value = snapshot[valueName];
                 RestoreRegistryValue(hive, path, valueName, value);
+            }
         }
 
         return new(id, name, description, category, risk, restart, exportPath,
-            Inspect, Capture, Apply, Restore, () => ReadCurrent().Values.All(value => value is null));
+            Inspect, Capture, Apply, Restore, () => ReadCurrent().Values.All(value => value is null),
+            validateSnapshot: state => _ = DeserializeRegistrySnapshots(state, valueNames));
     }
 
     private static OptimizationAction RegistryDeleteDword(string id, string name, string description, string category,
@@ -521,7 +611,8 @@ public sealed class OptimizationCatalog
         void Restore(string state) => RestoreRegistryValue(hive, path, valueName, DeserializeRegistrySnapshot(state));
 
         return new(id, name, description, category, risk, restart, exportPath,
-            Inspect, Capture, Apply, Restore, () => ReadCurrent() is null);
+            Inspect, Capture, Apply, Restore, () => ReadCurrent() is null,
+            validateSnapshot: state => _ = DeserializeRegistrySnapshot(state), conflictTarget: $"{exportPath}\\{valueName}");
     }
 
     private static OptimizationAction BcdDeleteValues(string id, string name, string description, string[] valueNames)
@@ -559,8 +650,7 @@ public sealed class OptimizationCatalog
 
         void Restore(string state)
         {
-            var snapshot = JsonSerializer.Deserialize<Dictionary<string, string?>>(state)
-                ?? throw new InvalidOperationException("The BCD snapshot is invalid.");
+            var snapshot = ReadBcdSnapshot(state, valueNames);
             foreach (var (valueName, value) in snapshot)
             {
                 var current = ReadCurrent()[valueName];
@@ -578,7 +668,8 @@ public sealed class OptimizationCatalog
             Inspect, Capture, Apply, Restore, Verify,
             evidenceRequirements: ["Exact values from the active BCD entry"],
             sources: ["Microsoft BCDEdit command contract and exact local active-entry inspection"],
-            sideEffects: ["Changes boot policy after restart; malformed overrides are removed, never forced"]);
+            sideEffects: ["Changes boot policy after restart; malformed overrides are removed, never forced"],
+            validateSnapshot: state => _ = ReadBcdSnapshot(state, valueNames));
     }
 
     private static RegistryValueSnapshot CaptureRegistryValue(RegistryHive hive, string path, string valueName)
@@ -592,6 +683,7 @@ public sealed class OptimizationCatalog
 
     private static void RestoreRegistryValue(RegistryHive hive, string path, string valueName, RegistryValueSnapshot snapshot)
     {
+        ValidateRegistrySnapshot(snapshot);
         using var key = RegistryKey.OpenBaseKey(hive, RegistryView.Registry64).CreateSubKey(path, true)
             ?? throw new InvalidOperationException($"Cannot open {(hive == RegistryHive.CurrentUser ? "HKCU" : "HKLM")}\\{path}.");
         if (!snapshot.Exists)
@@ -604,25 +696,92 @@ public sealed class OptimizationCatalog
 
     internal static RegistryValueSnapshot DeserializeRegistrySnapshot(string state)
     {
-        using var json = JsonDocument.Parse(state);
-        if (json.RootElement.TryGetProperty("Kind", out _))
-            return JsonSerializer.Deserialize<RegistryValueSnapshot>(state)
-                ?? throw new InvalidOperationException("The Registry snapshot is invalid.");
-        var exists = json.RootElement.GetProperty("Exists").GetBoolean();
-        var value = json.RootElement.GetProperty("Value");
-        return new(exists, RegistryValueKind.DWord, value.ValueKind == JsonValueKind.Null ? null : value.GetRawText());
+        try
+        {
+            using var json = JsonDocument.Parse(state);
+            var root = json.RootElement;
+            ValidateObjectKeys(root, root.TryGetProperty("Kind", out _) ? ["Exists", "Kind", "Value"] : ["Exists", "Value"]);
+            var snapshot = root.TryGetProperty("Kind", out _)
+                ? JsonSerializer.Deserialize<RegistryValueSnapshot>(state)!
+                : new(root.GetProperty("Exists").GetBoolean(), RegistryValueKind.DWord,
+                    root.GetProperty("Value").ValueKind == JsonValueKind.Null ? null : root.GetProperty("Value").GetRawText());
+            ValidateRegistrySnapshot(snapshot);
+            return snapshot;
+        }
+        catch (Exception exception) when (exception is not InvalidOperationException)
+        { throw new InvalidOperationException("The Registry snapshot is invalid.", exception); }
     }
 
-    private static Dictionary<string, RegistryValueSnapshot> DeserializeRegistrySnapshots(string state)
+    private static void ValidateRegistrySnapshot(RegistryValueSnapshot snapshot)
+    {
+        if (!snapshot.Exists)
+        {
+            if (snapshot.Value is not null || snapshot.Kind is not (RegistryValueKind.Unknown or RegistryValueKind.DWord))
+                throw new InvalidOperationException("The missing Registry value snapshot is invalid.");
+            return;
+        }
+        if (snapshot.Value is null || snapshot.Value.Length > 262_144)
+            throw new InvalidOperationException("The saved Registry value is missing or too large.");
+        var value = DeserializeRegistryValue(snapshot.Kind, snapshot.Value);
+        if (value is string[] strings && strings.Any(item => item is null || item.Contains('\0')))
+            throw new InvalidOperationException("The saved REG_MULTI_SZ contains invalid strings.");
+    }
+
+    internal static Dictionary<string, RegistryValueSnapshot> DeserializeRegistrySnapshots(string state, string[] valueNames)
     {
         using var json = JsonDocument.Parse(state);
-        return json.RootElement.EnumerateObject().ToDictionary(
-            item => item.Name,
-            item => item.Value.ValueKind == JsonValueKind.Object
-                ? DeserializeRegistrySnapshot(item.Value.GetRawText())
-                : new RegistryValueSnapshot(item.Value.ValueKind != JsonValueKind.Null, RegistryValueKind.DWord,
-                    item.Value.ValueKind == JsonValueKind.Null ? null : item.Value.GetRawText()),
-            StringComparer.OrdinalIgnoreCase);
+        ValidateObjectKeys(json.RootElement, valueNames, StringComparer.OrdinalIgnoreCase);
+        return json.RootElement.EnumerateObject().ToDictionary(item => item.Name,
+            item => DeserializeRegistrySnapshot(item.Value.GetRawText()), StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static void ValidateObjectKeys(JsonElement root, string[] keys, StringComparer? comparer = null)
+    {
+        comparer ??= StringComparer.Ordinal;
+        var names = root.EnumerateObject().Select(item => item.Name).ToList();
+        if (names.Count != keys.Length || names.Distinct(comparer).Count() != names.Count ||
+            !names.ToHashSet(comparer).SetEquals(keys))
+            throw new InvalidOperationException("The snapshot does not contain exactly the allowlisted fields.");
+    }
+
+    private static Dictionary<string, string?> ReadBcdSnapshot(string state, string[] valueNames)
+    {
+        using var json = JsonDocument.Parse(state);
+        ValidateObjectKeys(json.RootElement, valueNames, StringComparer.OrdinalIgnoreCase);
+        var values = JsonSerializer.Deserialize<Dictionary<string, string?>>(state)!;
+        foreach (var (name, value) in values)
+        {
+            if (value is null) continue;
+            var valid = name.ToLowerInvariant() switch
+            {
+                "numproc" or "truncatememory" or "removememory" => value.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
+                    ? ulong.TryParse(value[2..], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out _)
+                    : ulong.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out _),
+                "tscsyncpolicy" => new[] { "Default", "Legacy", "Enhanced" }.Contains(value, StringComparer.OrdinalIgnoreCase),
+                _ => new[] { "Yes", "No", "True", "False", "On", "Off" }.Contains(value, StringComparer.OrdinalIgnoreCase)
+            };
+            if (!valid || value.Length > 32) throw new InvalidOperationException("The saved BCD value is unsupported.");
+        }
+        return values;
+    }
+
+    private static CustomPowerPlanState ReadCustomPowerPlanState(string state)
+    {
+        using var json = JsonDocument.Parse(state);
+        ValidateObjectKeys(json.RootElement, ["ActiveGuid", "TargetExisted"]);
+        var saved = JsonSerializer.Deserialize<CustomPowerPlanState>(state)!;
+        if (!Guid.TryParseExact(saved.ActiveGuid, "D", out var id) || id == Guid.Empty)
+            throw new InvalidOperationException("The saved active power scheme is invalid.");
+        return saved;
+    }
+
+    private static CoreParkingState ReadCoreParkingState(string state)
+    {
+        using var json = JsonDocument.Parse(state);
+        ValidateObjectKeys(json.RootElement, ["SchemeId", "Ac"]);
+        var saved = JsonSerializer.Deserialize<CoreParkingState>(state)!;
+        if (saved.SchemeId == Guid.Empty || saved.Ac > 100) throw new InvalidOperationException("The saved core-parking target/index is invalid.");
+        return saved;
     }
 
     internal static string? SerializeRegistryValue(RegistryValueKind kind, object value) => kind switch
@@ -652,47 +811,34 @@ public sealed class OptimizationCatalog
     private static string RunPowerCfg(params string[] arguments)
         => RunExecutable("powercfg.exe", arguments);
 
-    internal static PowerSettingValue ReadPowerSetting(Guid subgroup, Guid setting)
+    private static Guid ActivePowerScheme()
     {
         var status = NativePower.PowerGetActiveScheme(IntPtr.Zero, out var schemePointer);
         if (status != 0 || schemePointer == IntPtr.Zero)
             throw new InvalidOperationException($"The active power scheme could not be read (Win32 {status}).");
         try
         {
-            var scheme = Marshal.PtrToStructure<Guid>(schemePointer);
-            status = NativePower.PowerReadACValueIndex(IntPtr.Zero, ref scheme, ref subgroup, ref setting, out var value);
-            if (status != 0)
-                throw new InvalidOperationException($"The active AC power setting could not be read (Win32 {status}).");
-            var dcStatus = NativePower.PowerReadDCValueIndex(IntPtr.Zero, ref scheme, ref subgroup, ref setting, out var dc);
-            if (dcStatus != 0)
-                throw new InvalidOperationException($"The DC power setting could not be read (Win32 {dcStatus}).");
-            return new(value, dc);
+            return Marshal.PtrToStructure<Guid>(schemePointer);
         }
         finally { NativePower.LocalFree(schemePointer); }
     }
 
-    private static string RunExecutable(string executable, params string[] arguments)
+    internal static PowerSettingValue ReadPowerSetting(Guid subgroup, Guid setting, Guid? schemeId = null)
     {
-        var start = new ProcessStartInfo(executable)
-        {
-            UseShellExecute = false,
-            RedirectStandardError = true,
-            RedirectStandardOutput = true,
-            CreateNoWindow = true
-        };
-        foreach (var argument in arguments) start.ArgumentList.Add(argument);
-        using var process = Process.Start(start) ?? throw new InvalidOperationException($"Cannot start {executable}.");
-        var output = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-        if (process.ExitCode != 0)
-            throw new InvalidOperationException(string.IsNullOrWhiteSpace(error) ? $"{executable} failed." : error.Trim());
-        return output;
+        var scheme = schemeId ?? ActivePowerScheme();
+        var status = NativePower.PowerReadACValueIndex(IntPtr.Zero, ref scheme, ref subgroup, ref setting, out var ac);
+        if (status != 0) throw new InvalidOperationException($"The AC power setting could not be read (Win32 {status}).");
+        status = NativePower.PowerReadDCValueIndex(IntPtr.Zero, ref scheme, ref subgroup, ref setting, out var dc);
+        if (status != 0) throw new InvalidOperationException($"The DC power setting could not be read (Win32 {status}).");
+        return new(ac, dc);
     }
+
+    private static string RunExecutable(string executable, params string[] arguments) => WindowsCommand.Run(executable, arguments);
 
     internal sealed record RegistryValueSnapshot(bool Exists, RegistryValueKind Kind, string? Value);
     internal sealed record PageFileEntry(string Path, uint? InitialSize, uint? MaximumSize);
     internal sealed record CustomPowerPlanState(string ActiveGuid, bool TargetExisted);
+    internal sealed record CoreParkingState(Guid SchemeId, uint Ac);
     internal readonly record struct PowerSettingValue(uint Ac, uint Dc);
 
     private static class NativePower

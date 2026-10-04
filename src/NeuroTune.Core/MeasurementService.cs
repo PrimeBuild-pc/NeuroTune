@@ -232,8 +232,13 @@ public sealed class MeasurementService
 
     public MeasurementComparison Compare(MeasurementCompareRequest request)
     {
-        var baseline = request.BaselineSessionIds.Distinct().Select(Load).ToList();
-        var candidate = request.CandidateSessionIds.Distinct().Select(Load).ToList();
+        return Compare(request, request.BaselineSessionIds.Distinct().Select(Load).ToList(),
+            request.CandidateSessionIds.Distinct().Select(Load).ToList());
+    }
+
+    internal static MeasurementComparison Compare(MeasurementCompareRequest request,
+        IReadOnlyList<MeasurementSession> baseline, IReadOnlyList<MeasurementSession> candidate)
+    {
         if (baseline.Count == 0 || candidate.Count == 0) throw new InvalidOperationException("Select at least one baseline and one candidate session.");
         var all = baseline.Concat(candidate).ToList();
         var reasons = new List<string>();
@@ -257,13 +262,22 @@ public sealed class MeasurementService
             reasons.Add("CPU performance state differs by more than 15 percentage points.");
         var frameTimeCount = all.Count(item => item.Report?.FrameTimes is not null);
         if (frameTimeCount > 0 && frameTimeCount != all.Count) reasons.Add("Frame-time evidence is missing from part of the comparison.");
+        if (all.Select(item => item.HardFaultsEnabled).Distinct().Count() != 1)
+            reasons.Add("Hard-fault collection availability changed between sessions.");
         if (!CapturedDurationsMatch(all)) reasons.Add("Actual captured durations are unavailable or differ by more than 10%.");
         if (reasons.Count > 0) return NewComparison(request, ComparisonLevel.Exploratory, [], reasons);
 
         var level = baseline.Count >= 3 && candidate.Count >= 3 ? ComparisonLevel.Repeated : ComparisonLevel.Exploratory;
         var baselineFacts = baseline.Select(SessionMetrics).ToList();
         var candidateFacts = candidate.Select(SessionMetrics).ToList();
-        var keys = baselineFacts[0].Keys.Where(key => baselineFacts.All(item => item.ContainsKey(key)) && candidateFacts.All(item => item.ContainsKey(key))).Order().ToList();
+        var facts = baselineFacts.Concat(candidateFacts).ToList();
+        if (facts.Any(item => item.Values.Any(value => !double.IsFinite(value) || value < 0)))
+            return NewComparison(request, ComparisonLevel.Exploratory, [], ["Comparison metrics contain invalid values."]);
+        var allKeys = facts.SelectMany(item => item.Keys).Distinct(StringComparer.Ordinal).Order().ToList();
+        var keys = allKeys.Where(key => facts.All(item => item.ContainsKey(key))).ToList();
+        var missing = allKeys.Except(keys).ToList();
+        if (missing.Count > 0)
+            reasons.Add($"Metric coverage changed; missing values are not zero: {string.Join(", ", missing.Take(20))}.");
         var comparisonId = Guid.NewGuid();
         var metrics = keys.Select(key =>
         {
@@ -279,6 +293,8 @@ public sealed class MeasurementService
             return new ComparisonMetric($"comparison:{comparisonId}:{key}:median_delta_percent", before, after, delta, outcome);
         }).ToList();
         var recommendation = Recommend(level, metrics);
+        if (reasons.Count > 0 && recommendation.Decision != ComparisonDecision.Rollback)
+            recommendation = (ComparisonDecision.InsufficientEvidence, "Coverage changed; a favorable Keep recommendation is not justified.");
         return new MeasurementComparison
         {
             Id = comparisonId,
@@ -286,6 +302,7 @@ public sealed class MeasurementService
             BaselineSessionIds = request.BaselineSessionIds,
             CandidateSessionIds = request.CandidateSessionIds,
             Metrics = metrics,
+            RejectionReasons = reasons,
             Recommendation = recommendation.Decision,
             RecommendationReason = recommendation.Reason
         };
@@ -379,6 +396,12 @@ public sealed class MeasurementService
         var result = new Dictionary<string, double>(StringComparer.Ordinal);
         foreach (var group in report.Interrupts.GroupBy(item => (item.Kind, item.Module)))
             result[$"interrupt:{TraceAnalyzer.EvidencePart(group.Key.Kind)}:{TraceAnalyzer.EvidencePart(group.Key.Module)}:worst_core_p99_us"] = group.Max(item => item.Distribution.P99Microseconds);
+        result["interrupt:system:worst_module_p99_us"] = report.Interrupts.Select(item => item.Distribution.P99Microseconds).DefaultIfEmpty(0).Max();
+        if (session.HardFaultsEnabled)
+        {
+            result["fault:system:count"] = report.HardFaults.Sum(item => item.Resolution.Count);
+            result["fault:system:worst_process_p99_us"] = report.HardFaults.Select(item => item.Resolution.P99Microseconds).DefaultIfEmpty(0).Max();
+        }
         // Redistribution is not an improvement: shares sum to 100% even when total latency grows.
         result["target:worst_thread_ready_p99_us"] = report.Threads.Count == 0 ? 0 : report.Threads.Max(item => item.ReadyTime.P99Microseconds);
         result["target:migrations"] = report.Threads.Sum(item => item.Migrations);
@@ -441,18 +464,9 @@ public sealed class MeasurementService
 
     private static void RunWpr(IReadOnlyList<string> arguments)
     {
-        var start = new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "System32", "wpr.exe"))
-        {
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        };
+        var start = new ProcessStartInfo(WindowsCommand.PathFor("wpr.exe"));
         foreach (var argument in arguments) start.ArgumentList.Add(argument);
-        using var process = Process.Start(start) ?? throw new InvalidOperationException("Windows Performance Recorder could not be started.");
-        var output = process.StandardOutput.ReadToEnd(); var error = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-        if (process.ExitCode != 0) throw new InvalidOperationException($"WPR failed ({process.ExitCode}): {FirstLine(error, output)}");
+        _ = WindowsCommand.RunAsync(start, TimeSpan.FromMinutes(3)).GetAwaiter().GetResult();
     }
 
     internal static void WithCaptureMutex(Action action)

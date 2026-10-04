@@ -558,6 +558,225 @@ public sealed class CoreTests
     }
 
     [TestMethod]
+    public void Invalid_operation_schema_is_rejected_before_persisting_a_journal()
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, $"security-backup-{Guid.NewGuid():N}");
+        try
+        {
+            var manifest = new OperationManifest { SchemaVersion = 999 };
+            manifest.DirectoryPath = Path.Combine(directory, $"{manifest.CreatedAt:yyyyMMdd-HHmmss}-{manifest.Id:N}");
+            var error = Assert.ThrowsExactly<InvalidOperationException>(() => new BackupService(directory).Save(manifest));
+            StringAssert.Contains(error.Message, "schema");
+            Assert.IsFalse(File.Exists(Path.Combine(manifest.DirectoryPath, "manifest.json")));
+        }
+        finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); }
+    }
+
+    [TestMethod]
+    [DataRow("{\"Exists\":true,\"Kind\":999,\"Value\":\"7\"}")]
+    [DataRow("{\"Exists\":true,\"Kind\":4,\"Value\":\"not-an-integer\"}")]
+    [DataRow("{\"Exists\":true,\"Kind\":4,\"Value\":null}")]
+    public void Registry_snapshot_rejects_invalid_types_or_values_before_restore(string snapshot)
+    {
+        Assert.ThrowsExactly<InvalidOperationException>(() => OptimizationCatalog.DeserializeRegistrySnapshot(snapshot));
+    }
+
+    [TestMethod]
+    public void System_commands_resolve_only_absolute_allowlisted_Windows_tools()
+    {
+        foreach (var name in new[] { "powercfg.exe", "bcdedit.exe", "reg.exe", "powershell.exe", "wpr.exe",
+            "fsutil.exe", "fltmc.exe", "netsh.exe", "netcfg.exe" })
+        {
+            var path = WindowsCommand.PathFor(name);
+            Assert.IsTrue(Path.IsPathFullyQualified(path));
+            Assert.AreEqual(name, Path.GetFileName(path));
+            if (name == "powershell.exe") StringAssert.Contains(path, @"WindowsPowerShell\v1.0");
+        }
+        Assert.ThrowsExactly<InvalidOperationException>(() => WindowsCommand.PathFor(@"..\powercfg.exe"));
+        Assert.ThrowsExactly<InvalidOperationException>(() => WindowsCommand.PathFor("unknown.exe"));
+    }
+
+    [TestMethod]
+    public async Task Windows_command_drains_both_pipes_and_fails_on_timeout_or_output_overflow()
+    {
+        System.Diagnostics.ProcessStartInfo Start(string script)
+        {
+            var start = new System.Diagnostics.ProcessStartInfo(WindowsCommand.PathFor("powershell.exe"));
+            foreach (var argument in new[] { "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script }) start.ArgumentList.Add(argument);
+            start.WorkingDirectory = AppContext.BaseDirectory;
+            return start;
+        }
+        var output = await WindowsCommand.RunAsync(Start("[Console]::Error.Write(('x' * 256000)); [Console]::Out.Write('done')"), TimeSpan.FromSeconds(15));
+        Assert.AreEqual("done", output);
+        var modulePath = Start("[Console]::Write($env:PSModulePath)");
+        modulePath.Environment["PSModulePath"] = AppContext.BaseDirectory;
+        output = await WindowsCommand.RunAsync(modulePath, TimeSpan.FromSeconds(15));
+        var expectedModules = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "System32", "WindowsPowerShell", "v1.0", "Modules");
+        Assert.AreEqual(expectedModules, output, StringComparer.OrdinalIgnoreCase);
+        await Assert.ThrowsAsync<TimeoutException>(() => WindowsCommand.RunAsync(Start("Start-Sleep -Seconds 10"), TimeSpan.FromMilliseconds(300)));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => WindowsCommand.RunAsync(Start("[Console]::Out.Write(('x' * 1100000))"), TimeSpan.FromSeconds(15)));
+    }
+
+    [TestMethod]
+    public void Recovery_reconstructs_dynamic_actions_without_the_original_cache_or_power_file()
+    {
+        var catalog = new OptimizationCatalog(includeDynamic: false);
+        var gpuPath = Path.Combine(AppContext.BaseDirectory, "missing-game.exe");
+        var gpu = new ActionRecord
+        {
+            ActionId = $"gaming.gpu-{GameGpuTargetStore.CreateId(gpuPath)}.high",
+            RecoveryTarget = gpuPath,
+            OriginalState = "{\"Exists\":false,\"Kind\":0,\"Value\":null}",
+            Attempted = true
+        };
+        Assert.IsFalse(File.Exists(gpuPath));
+        Assert.ThrowsExactly<InvalidOperationException>(() => catalog.Get(gpu.ActionId));
+        Assert.AreEqual(gpuPath, catalog.ResolveRollback(gpu).RecoveryTarget);
+        gpu.RecoveryTarget = Path.Combine(AppContext.BaseDirectory, "different-game.exe");
+        Assert.ThrowsExactly<InvalidOperationException>(() => catalog.ResolveRollback(gpu));
+        gpu.RecoveryTarget = null;
+        Assert.ThrowsExactly<InvalidOperationException>(() => catalog.ResolveRollback(gpu));
+
+        var power = new ActionRecord
+        {
+            ActionId = "power.custom." + new string('a', 64),
+            Attempted = true,
+            OriginalState = "{\"ActiveGuid\":\"381b4222-f694-41f0-9685-ff5bb260df2e\",\"TargetExisted\":false}"
+        };
+        Assert.ThrowsExactly<InvalidOperationException>(() => catalog.Get(power.ActionId));
+        Assert.AreEqual(power.ActionId, catalog.ResolveRollback(power).Id);
+        power.OriginalState = "{\"ActiveGuid\":\"not-a-guid\",\"TargetExisted\":false}";
+        Assert.ThrowsExactly<InvalidOperationException>(() => catalog.ResolveRollback(power));
+    }
+
+    [TestMethod]
+    public void Core_parking_apply_restore_and_verification_use_the_captured_scheme_not_the_current_one()
+    {
+        var first = Guid.NewGuid(); var second = Guid.NewGuid(); var active = first;
+        var values = new Dictionary<Guid, uint> { [first] = 25, [second] = 10 };
+        var action = OptimizationCatalog.CoreParkingOff(() => active, scheme => values[scheme], (scheme, value) => values[scheme] = value);
+        var saved = action.Capture();
+        active = second;
+        action.Apply();
+        Assert.AreEqual(100u, values[first]);
+        Assert.AreEqual(10u, values[second]);
+        Assert.IsTrue(action.Verify());
+        action.Restore(saved);
+        Assert.AreEqual(25u, values[first]);
+        Assert.AreEqual(10u, values[second]);
+        Assert.AreEqual(second, active);
+        Assert.IsTrue(action.VerifyRestored(saved));
+        Assert.ThrowsExactly<InvalidOperationException>(() => action.Restore("101"));
+        Assert.ThrowsExactly<InvalidOperationException>(() => action.Restore($"{{\"SchemeId\":\"{first}\",\"Ac\":101}}"));
+        Assert.AreEqual(25u, values[first]);
+    }
+
+    [TestMethod]
+    public void Multi_value_snapshot_rejects_unexpected_missing_or_duplicate_names_before_any_writer()
+    {
+        var action = new OptimizationCatalog(includeDynamic: false).Get("graphics.tdr-default");
+        var values = new[] { "TdrDelay", "TdrDdiDelay", "TdrLevel", "TdrDebugMode" }.ToDictionary(name => name,
+            _ => new OptimizationCatalog.RegistryValueSnapshot(false, RegistryValueKind.Unknown, null));
+        action.ValidateSnapshot(System.Text.Json.JsonSerializer.Serialize(values));
+        values["Unexpected"] = new(true, RegistryValueKind.DWord, "7");
+        Assert.ThrowsExactly<InvalidOperationException>(() => action.ValidateSnapshot(System.Text.Json.JsonSerializer.Serialize(values)));
+        values.Remove("Unexpected"); values.Remove("TdrDelay");
+        Assert.ThrowsExactly<InvalidOperationException>(() => action.ValidateSnapshot(System.Text.Json.JsonSerializer.Serialize(values)));
+        Assert.ThrowsExactly<InvalidOperationException>(() => action.ValidateSnapshot("{\"TdrDelay\":null,\"TdrDelay\":null}"));
+    }
+
+    [TestMethod]
+    public void Synthetic_operation_load_and_history_fail_closed_on_tampering()
+    {
+        var root = Path.Combine(AppContext.BaseDirectory, $"security-operations-{Guid.NewGuid():N}");
+        try
+        {
+            var service = new BackupService(root);
+            var manifest = new OperationManifest
+            {
+                Status = "Applying",
+                Actions = [new()
+            {
+                ActionId = "gaming.game-mode", OriginalState = "{\"Exists\":true,\"Kind\":4,\"Value\":\"0\"}", Attempted = true
+            }]
+            };
+            manifest.DirectoryPath = Path.Combine(root, $"{manifest.CreatedAt:yyyyMMdd-HHmmss}-{manifest.Id:N}");
+            service.Save(manifest);
+            Assert.AreEqual(manifest.Id, service.Load(manifest.Id)!.Id);
+            Assert.HasCount(1, service.LoadHistory());
+            Assert.IsEmpty(Directory.GetFiles(manifest.DirectoryPath, "*.tmp"));
+            var path = Path.Combine(manifest.DirectoryPath, "manifest.json");
+            var json = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!;
+            json["SchemaVersion"] = 999;
+            File.WriteAllText(path, json.ToJsonString());
+            Assert.ThrowsExactly<InvalidOperationException>(() => service.Load(manifest.Id));
+            Assert.ThrowsExactly<InvalidOperationException>(() => service.LoadHistory());
+            json["SchemaVersion"] = 3; json["Id"] = Guid.NewGuid().ToString();
+            File.WriteAllText(path, json.ToJsonString());
+            Assert.ThrowsExactly<InvalidOperationException>(() => service.Load(manifest.Id));
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    [TestMethod]
+    public void A_rejected_prewrite_record_does_not_poison_the_previous_recovery_journal()
+    {
+        var root = Path.Combine(AppContext.BaseDirectory, $"security-attempt-{Guid.NewGuid():N}");
+        try
+        {
+            var service = new BackupService(root);
+            var manifest = new OperationManifest { Status = "Applying" };
+            manifest.DirectoryPath = Path.Combine(root, $"{manifest.CreatedAt:yyyyMMdd-HHmmss}-{manifest.Id:N}");
+            service.RecordAttempt(manifest, new()
+            {
+                ActionId = "gaming.game-mode",
+                OriginalState = "{\"Exists\":false,\"Kind\":0,\"Value\":null}",
+                Attempted = true
+            });
+            Assert.ThrowsExactly<InvalidOperationException>(() => service.RecordAttempt(manifest, new()
+            {
+                ActionId = "gaming.hags",
+                OriginalState = "{\"Exists\":true,\"Kind\":4,\"Value\":\"bad\"}",
+                Attempted = true
+            }));
+            Assert.HasCount(1, manifest.Actions);
+            Assert.HasCount(1, service.Load(manifest.Id)!.Actions);
+            service.Save(manifest);
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    [TestMethod]
+    public void Privileged_journal_ACL_rejects_interactive_owners_writers_and_null_DACLs()
+    {
+        var security = new System.Security.AccessControl.FileSecurity();
+        security.SetSecurityDescriptorSddlForm("O:BAG:BAD:P(A;;FA;;;BA)(A;;FA;;;SY)");
+        Assert.IsTrue(JournalStorage.HasTrustedAcl(security));
+        security.SetSecurityDescriptorSddlForm("O:BUG:BAD:P(A;;FA;;;BA)(A;;FA;;;SY)");
+        Assert.IsFalse(JournalStorage.HasTrustedAcl(security));
+        security.SetSecurityDescriptorSddlForm("O:BAG:BAD:P(A;;FA;;;BA)(A;;FA;;;SY)(A;;FW;;;BU)");
+        Assert.IsFalse(JournalStorage.HasTrustedAcl(security));
+        security.SetSecurityDescriptorSddlForm("O:BAG:BAD:NO_ACCESS_CONTROL");
+        Assert.IsFalse(JournalStorage.HasTrustedAcl(security));
+    }
+
+    [TestMethod]
+    public void Journal_storage_rejects_path_escape_and_never_imports_untrusted_legacy_history()
+    {
+        var root = Path.Combine(AppContext.BaseDirectory, $"security-store-{Guid.NewGuid():N}");
+        try
+        {
+            var store = new JournalStorage(root);
+            Assert.ThrowsExactly<InvalidOperationException>(() => store.CheckPath(Path.Combine(root, "..", "outside.json")));
+            JournalStorage.RequireNoLegacyJournals(root);
+            Directory.CreateDirectory(Path.Combine(root, "operations", "old-operation"));
+            Assert.ThrowsExactly<InvalidOperationException>(() => JournalStorage.RequireNoLegacyJournals(root));
+            Assert.IsEmpty(Directory.GetFiles(root, "*", SearchOption.AllDirectories));
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    [TestMethod]
     public void Incomplete_operation_is_flagged_for_recovery()
     {
         var manifest = new OperationManifest

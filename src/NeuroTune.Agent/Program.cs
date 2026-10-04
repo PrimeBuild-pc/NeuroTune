@@ -426,7 +426,7 @@ OptimizationRun ReconcileRun(RunIdRequest request, OptimizationCatalog actionCat
 
     if (run.State == OptimizationRunState.Applying && manifest.Status == "Completed")
     {
-        var restart = run.ApprovedActionIds.Select(actionCatalog.Get).Any(action => action.RequiresRestart);
+        var restart = backupService.RequiresRestart(manifest);
         return service.RecordApplyCompleted(run.Id, restart);
     }
     if (run.State == OptimizationRunState.Applying)

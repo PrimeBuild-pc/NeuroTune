@@ -64,6 +64,7 @@ try {
             Select-Object -First 1 -ExpandProperty FullName
         if (-not $agent) { throw 'Installed NeuroTune.Agent.exe was not found.' }
         $dataRoot = Join-Path $env:LOCALAPPDATA 'NeuroTune'
+        $journalRoot = Join-Path (Join-Path $env:ProgramData 'NeuroTune-journals') ([Security.Principal.WindowsIdentity]::GetCurrent().User.Value)
 
         function Invoke-Agent([string]$Command, [object]$Body = @{}) {
             $start = [Diagnostics.ProcessStartInfo]::new($agent, $Command)
@@ -91,14 +92,19 @@ try {
         function New-ValidationRun {
             if (-not $script:validationProfile) { $script:validationProfile = (Invoke-Agent scan).profile }
             $run = Invoke-Agent run-create @{ profile = $script:validationProfile; goals = @{} }
-            $path = Join-Path $dataRoot "runs\$($run.id)\run.json"
-            $journal = [IO.File]::ReadAllText($path)
-            $journal = [regex]::Replace($journal, '"State":\s*1', '"State": 5', 1)
-            $journal = $journal.Replace('"Diagnosis": null', '"Diagnosis": {"Summary":"Deterministic VM writer validation.","Findings":[],"Recommendations":[],"Conflicts":[],"ConsentQuestion":"Apply the selected registered action?"}')
-            $journal = $journal.Replace('"PlannerStopReason": ""', '"PlannerStopReason": "vm-validation-fixture"')
-            $journal = $journal.Replace('"BaselineSessionIds": []', '"BaselineSessionIds": ["' + [guid]::NewGuid().ToString('D') + '"]')
+            # VM-only prewrite fixture, not evidence of a real matched workload measurement.
+            $path = Join-Path $journalRoot "runs\$($run.id)\run.json"
+            $journal = [IO.File]::ReadAllText($path) | ConvertFrom-Json
+            $journal.State = 5
+            $journal.Diagnosis = @{ Summary = 'Deterministic VM writer validation.'; Findings = @(); Recommendations = @(); Conflicts = @(); ConsentQuestion = 'Apply the selected registered action?' }
+            $journal.PlannerStopReason = 'vm-validation-fixture'
+            $journal.BaselineSessionIds = @([guid]::NewGuid().ToString('D'))
+            foreach ($from in 1..4) {
+                $journal.Transitions += @{ AtUtc = [DateTimeOffset]::UtcNow.ToString('o'); From = $from; To = $from + 1; Reason = 'VM-only prewrite fixture' }
+            }
             $temporary = "$path.vmtest.tmp"
-            [IO.File]::WriteAllText($temporary, $journal, [Text.UTF8Encoding]::new($false))
+            [IO.File]::WriteAllText($temporary, ($journal | ConvertTo-Json -Depth 32), [Text.UTF8Encoding]::new($false))
+            Set-Acl -LiteralPath $temporary -AclObject (Get-Acl -LiteralPath $path)
             Move-Item -LiteralPath $temporary -Destination $path -Force
             $prepared = Invoke-Agent run-get @{ runId = $run.id }
             if ($prepared.state -ne 'baselineReady' -or -not $prepared.diagnosis -or @($prepared.baselineSessionIds).Count -ne 1) {
@@ -190,8 +196,8 @@ try {
             [regex]::Match(($text -join ' '), '[0-9a-fA-F-]{36}').Value.ToLowerInvariant()
         }
 
-        function Core-ParkingValue {
-            $scheme = Active-Scheme
+        function Core-ParkingValue([string]$Scheme = '') {
+            if (-not $Scheme) { $Scheme = Active-Scheme }
             $output = & powercfg.exe /qh $scheme 54533251-82be-4824-96c1-47b60b740d00 0cc5b647-c1df-4637-891a-dec35c318583
             if ($LASTEXITCODE -ne 0) { throw 'powercfg could not query the effective core-parking value.' }
             $values = [regex]::Matches(($output -join ' '), '0x([0-9a-fA-F]{8})')
@@ -236,13 +242,14 @@ try {
             [pscustomobject]@{ id='system.power-throttling-default'; hive='LocalMachine'; path='SYSTEM\CurrentControlSet\Control\Power\PowerThrottling'; original=@((Value 'PowerThrottlingOff' $true 'String' '1')); applied=@((Value 'PowerThrottlingOff' $false)) }
         )
 
-            $operationRoot = Join-Path $env:LOCALAPPDATA 'NeuroTune\operations'
+            $operationRoot = Join-Path $journalRoot 'operations'
             foreach ($definition in $definitions) {
                 $actualState = $null
                 $stateCaptured = $false
                 try {
                     $actualState = if ($definition.power) { Active-Scheme } elseif ($definition.coreParking) {
-                        Core-ParkingValue
+                        $actualScheme = Active-Scheme
+                        Core-ParkingValue $actualScheme
                     } else { @(Get-RegistryStates $definition) }
                     $stateCaptured = $true
                     if ($definition.power) {
@@ -294,7 +301,21 @@ try {
                         throw "Apply restore point missing for $($definition.id)."
                     }
 
+                    $gpuRecovery = $definition.id.StartsWith('gaming.gpu-')
+                    if ($gpuRecovery) { Remove-Item -LiteralPath $gpuStore -Force }
+                    if ($definition.coreParking) {
+                        $alternate = if ($actualScheme -eq '381b4222-f694-41f0-9685-ff5bb260df2e') { '8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c' } else { '381b4222-f694-41f0-9685-ff5bb260df2e' }
+                        $alternateBefore = Core-ParkingValue $alternate
+                        & powercfg.exe /setactive $alternate | Out-Null
+                    }
                     Invoke-Agent rollback @{ operationId = $applied.id; runId = $run.Id } | Out-Null
+                    if ($gpuRecovery) { [IO.File]::WriteAllText($gpuStore, "[$gpuTargetJson]", [Text.UTF8Encoding]::new($false)) }
+                    if ($definition.coreParking) {
+                        if ((Active-Scheme) -ne $alternate -or (Core-ParkingValue $alternate) -ne $alternateBefore -or (Core-ParkingValue $actualScheme) -ne $beforeJson) {
+                            throw 'Core-parking rollback changed the active/alternate scheme or missed the captured target.'
+                        }
+                        & powercfg.exe /setactive $actualScheme | Out-Null
+                    }
                     $afterRollbackJson = if ($definition.power) { Active-Scheme } elseif ($definition.coreParking) { Core-ParkingValue } else { Json-State @(Get-RegistryStates $definition) }
                     if ($afterRollbackJson -cne $beforeJson) {
                         throw "Rollback raw state/type mismatch for $($definition.id): $afterRollbackJson"
@@ -322,13 +343,15 @@ try {
                     rollbackValueAndKind = 'passed'
                     rollbackRestorePoint = 'passed'
                     manifest = 'Rollback completed'
+                    dynamicCacheRemoval = if ($gpuRecovery) { 'passed' } else { 'not-applicable' }
+                    coreParkingSchemeSwitch = if ($definition.coreParking) { 'passed' } else { 'not-applicable' }
                 }
                 } finally {
                     if ($stateCaptured) {
                         if ($definition.power) { & powercfg.exe /setactive $actualState | Out-Null }
                         elseif ($definition.coreParking) {
-                            & powercfg.exe /setacvalueindex SCHEME_CURRENT 54533251-82be-4824-96c1-47b60b740d00 0cc5b647-c1df-4637-891a-dec35c318583 $actualState | Out-Null
-                            & powercfg.exe /setactive SCHEME_CURRENT | Out-Null
+                            & powercfg.exe /setacvalueindex $actualScheme 54533251-82be-4824-96c1-47b60b740d00 0cc5b647-c1df-4637-891a-dec35c318583 $actualState | Out-Null
+                            & powercfg.exe /setactive $actualScheme | Out-Null
                         } else { Set-RegistryStates $definition @($actualState) }
                     }
                 }
@@ -343,7 +366,7 @@ try {
     })
     $report.results = @($guestResults | Select-Object actionId, inspectBefore, applyAndVerify,
         rawAppliedState, registryExport, applyRestorePoint, rollbackValueAndKind,
-        rollbackRestorePoint, manifest)
+        rollbackRestorePoint, manifest, dynamicCacheRemoval, coreParkingSchemeSwitch)
     $report.status = 'passed'
 }
 catch {
