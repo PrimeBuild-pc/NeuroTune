@@ -28,16 +28,18 @@ public static class PresentMonImporter
         if (frameColumn < 0)
             throw new InvalidOperationException("The CSV does not contain a supported PresentMon frame-time column.");
         var processColumn = Find(index, "ProcessName", "Application");
+        if (processColumn < 0) throw new InvalidOperationException("The PresentMon CSV must identify its process (ProcessName or Application).");
+        if (index.Count != headers.Length) throw new InvalidOperationException("Duplicate PresentMon columns are not supported.");
         var modeColumn = Find(index, "PresentMode");
         var expectedProcess = Path.GetFileNameWithoutExtension(processName);
+        if (string.IsNullOrWhiteSpace(expectedProcess)) throw new InvalidOperationException("Select an executable before importing frame times.");
         var frames = new List<double>();
         var modes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         while (!parser.EndOfData)
         {
             var fields = parser.ReadFields();
-            if (fields is null || frameColumn >= fields.Length) continue;
-            if (processColumn >= 0 && processColumn < fields.Length &&
-                !string.Equals(Path.GetFileNameWithoutExtension(fields[processColumn]), expectedProcess, StringComparison.OrdinalIgnoreCase))
+            if (fields is null || fields.Length != headers.Length || string.IsNullOrWhiteSpace(fields[processColumn])) continue;
+            if (!string.Equals(Path.GetFileNameWithoutExtension(fields[processColumn]), expectedProcess, StringComparison.OrdinalIgnoreCase))
                 continue;
             if (!double.TryParse(fields[frameColumn], NumberStyles.Float, CultureInfo.InvariantCulture, out var milliseconds) ||
                 !double.IsFinite(milliseconds) || milliseconds is < .05 or > 10_000)
@@ -54,7 +56,7 @@ public static class PresentMonImporter
         var p95 = Percentile(frames, .95);
         var p99 = Percentile(frames, .99);
         var stutterThreshold = Math.Max(50, p50 * 2);
-        return new("PresentMon CSV (local aggregate)", frames.Count, frames.Sum(),
+        return new("PresentMon CSV (local aggregate; session provenance unverified)", frames.Count, frames.Sum(),
             1000 / mean, 1000 / p99, p50, p95, p99,
             frames.LongCount(value => value > stutterThreshold), modes.Order(StringComparer.OrdinalIgnoreCase).Take(20).ToList());
     }

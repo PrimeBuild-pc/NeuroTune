@@ -629,12 +629,7 @@ public sealed class SystemProfiler
     {
         try
         {
-            var start = new ProcessStartInfo(fileName) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
-            foreach (var argument in arguments) start.ArgumentList.Add(argument);
-            using var process = Process.Start(start) ?? throw new InvalidOperationException($"Cannot start {fileName}.");
-            var output = process.StandardOutput.ReadToEnd().Trim();
-            process.WaitForExit();
-            return process.ExitCode == 0 ? output : "Unavailable";
+            return WindowsCommand.Run(fileName, arguments).Trim();
         }
         catch { return "Unavailable"; }
     }

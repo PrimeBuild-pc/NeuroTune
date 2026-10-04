@@ -78,6 +78,7 @@ $results = foreach ($vmName in $VmNames) {
             if (-not $agent -or -not $app) { throw 'Installed app or agent executable not found.' }
             if (Get-Service -Name PawnIO -ErrorAction SilentlyContinue) { throw 'PawnIO service was unexpectedly installed.' }
             $dataRoot = Join-Path $env:LOCALAPPDATA 'NeuroTune'
+            $journalRoot = Join-Path (Join-Path $env:ProgramData 'NeuroTune-journals') ([Security.Principal.WindowsIdentity]::GetCurrent().User.Value)
 
             function Invoke-Agent([string]$Command, [object]$Body = @{}) {
                 $start = [Diagnostics.ProcessStartInfo]::new($agent, $Command)
@@ -101,14 +102,19 @@ $results = foreach ($vmName in $VmNames) {
             function New-ValidationRun {
                 if (-not $script:validationProfile) { $script:validationProfile = (Invoke-Agent scan).profile }
                 $run = Invoke-Agent run-create @{ profile = $script:validationProfile; goals = @{} }
-                $path = Join-Path $dataRoot "runs\$($run.id)\run.json"
-                $journal = [IO.File]::ReadAllText($path)
-                $journal = [regex]::Replace($journal, '"State":\s*1', '"State": 5', 1)
-                $journal = $journal.Replace('"Diagnosis": null', '"Diagnosis": {"Summary":"Deterministic VM writer validation.","Findings":[],"Recommendations":[],"Conflicts":[],"ConsentQuestion":"Apply the selected registered actions?"}')
-                $journal = $journal.Replace('"PlannerStopReason": ""', '"PlannerStopReason": "vm-validation-fixture"')
-                $journal = $journal.Replace('"BaselineSessionIds": []', '"BaselineSessionIds": ["' + [guid]::NewGuid().ToString('D') + '"]')
+                # VM-only prewrite fixture, not evidence of a real matched workload measurement.
+                $path = Join-Path $journalRoot "runs\$($run.id)\run.json"
+                $journal = [IO.File]::ReadAllText($path) | ConvertFrom-Json
+                $journal.State = 5
+                $journal.Diagnosis = @{ Summary = 'Deterministic VM writer validation.'; Findings = @(); Recommendations = @(); Conflicts = @(); ConsentQuestion = 'Apply the selected registered actions?' }
+                $journal.PlannerStopReason = 'vm-validation-fixture'
+                $journal.BaselineSessionIds = @([guid]::NewGuid().ToString('D'))
+                foreach ($from in 1..4) {
+                    $journal.Transitions += @{ AtUtc = [DateTimeOffset]::UtcNow.ToString('o'); From = $from; To = $from + 1; Reason = 'VM-only prewrite fixture' }
+                }
                 $temporary = "$path.vmtest.tmp"
-                [IO.File]::WriteAllText($temporary, $journal, [Text.UTF8Encoding]::new($false))
+                [IO.File]::WriteAllText($temporary, ($journal | ConvertTo-Json -Depth 32), [Text.UTF8Encoding]::new($false))
+                Set-Acl -LiteralPath $temporary -AclObject (Get-Acl -LiteralPath $path)
                 Move-Item -LiteralPath $temporary -Destination $path -Force
                 $prepared = Invoke-Agent run-get @{ runId = $run.id }
                 if ($prepared.state -ne 'baselineReady' -or -not $prepared.diagnosis -or @($prepared.baselineSessionIds).Count -ne 1) {
@@ -245,7 +251,7 @@ $results = foreach ($vmName in $VmNames) {
             if ($applied.status -ne 'Completed' -or @($applied.actions).Count -ne 12 -or @($applied.actions | Where-Object { -not $_.applied }).Count) {
                 throw 'All-action Apply/Verify did not complete.'
             }
-            $manifest = Get-ChildItem (Join-Path $env:LOCALAPPDATA 'NeuroTune\operations') -Filter manifest.json -Recurse |
+            $manifest = Get-ChildItem (Join-Path $journalRoot 'operations') -Filter manifest.json -Recurse |
                 Where-Object { (Get-Content -Raw $_.FullName | ConvertFrom-Json).id -eq $applied.id } |
                 Select-Object -First 1 -ExpandProperty FullName
             if (-not (Test-Path -LiteralPath $manifest)) { throw 'Operation manifest missing.' }
@@ -265,7 +271,7 @@ $results = foreach ($vmName in $VmNames) {
             $beforeCrashApply = @(Invoke-Agent actions)
             $crashRun = New-ValidationRun
             $crashApply = Start-AgentForCrash apply @{ actionIds = $using:actionIds; highRiskConfirmed = $true; runId = $crashRun.Id }
-            $operations = Join-Path $env:LOCALAPPDATA 'NeuroTune\operations'
+            $operations = Join-Path $journalRoot 'operations'
             $deadline = (Get-Date).AddSeconds(20)
             do {
                 $candidate = Get-ChildItem -Path $operations -Filter manifest.json -Recurse -ErrorAction SilentlyContinue |

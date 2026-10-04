@@ -16,6 +16,10 @@ Include the affected version, reproduction steps, expected impact, and a contact
 - The engine stops before making changes if it cannot verify a new restore point or export required Registry keys.
 - Every action attempt is journaled before execution and verified after application.
 - Automatic and manual rollback restore actions in reverse order and verify the saved state.
+- Privileged operation/run journals live under `%ProgramData%\NeuroTune-journals\<user SID>`, with Administrators/SYSTEM ownership and access only. Existing unsafe owners/ACLs and reparse paths are rejected, not silently repaired. A same-user non-elevated process is not trusted to provide recovery state.
+- Rollback validates the complete manifest, action IDs, exact snapshot fields/names/types/values and target identity before any restore. GPU target metadata and custom-plan IDs survive loss of the disposable cache or staged `.pow`; core-parking recovery targets the saved scheme, not `SCHEME_CURRENT`.
+- Journals use a flushed temporary file and atomic replacement. This is not a power-loss certification; interruption and storage-failure acceptance remain VM gates.
+- Opposing states for one setting are rejected during approval and engine preflight. Trusted Windows utilities use absolute system paths, concurrent bounded pipe drains and deadlines.
 - API keys and OpenRouter-issued OAuth keys are protected with DPAPI `CurrentUser` and redacted from local logs.
 - OpenRouter browser authorization uses PKCE, a random CSRF state, a loopback callback, and a two-minute timeout.
 - Built-in provider endpoints cannot be edited. Custom remote providers require HTTPS, HTTP is loopback-only, and authenticated HTTP redirects are disabled.
@@ -27,5 +31,9 @@ Include the affected version, reproduction steps, expected impact, and a contact
 ## Known Limitations
 
 NeuroTune currently runs with administrator privileges because it changes system settings. A compromised Windows account or tampered executable can bypass application-level controls. Alpha builds are unsigned and must be checked against the SHA-256 value produced by the build pipeline.
+
+Legacy `%LocalAppData%\NeuroTune\operations` and `runs` journals are not automatically imported or trusted. Before upgrading, finish/review recovery with the previous build and archive these directories only after preserving independent backups and resolving old writes. The new build blocks journal operations while legacy entries remain. Do not copy legacy JSON into the protected store or delete pending recovery data to bypass this gate.
+
+PresentMon imports require process attribution but remain user-supplied data with unverified session provenance. Missing metric coverage or hard-fault collection cannot justify a favorable Keep recommendation.
 
 End-to-end restore behavior still requires validation across the supported Windows virtual-machine matrix. Use alpha builds only on disposable systems or PCs with an independent backup.

@@ -70,6 +70,17 @@ public sealed class MeasurementTests
     }
 
     [TestMethod]
+    [DataRow("MsBetweenPresents")]
+    [DataRow("MsBetweenPresents,ProcessName")]
+    public void PresentMon_import_rejects_missing_process_identity_in_headers_or_rows(string header)
+    {
+        var rows = string.Join('\n', Enumerable.Repeat("10", 3000));
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            PresentMonImporter.Parse(header + "\n" + rows, "selected-game"),
+            "Unattributed frames must not become verified measurements for the selected process.");
+    }
+
+    [TestMethod]
     public void Repeated_comparison_produces_a_conservative_keep_or_rollback_recommendation()
     {
         ComparisonMetric[] improvements =
@@ -84,6 +95,72 @@ public sealed class MeasurementTests
         Assert.AreEqual(ComparisonDecision.Rollback, MeasurementService.Recommend(ComparisonLevel.Repeated, improvements.Reverse().Select((item, index) =>
             index < 2 ? item with { Outcome = ComparisonOutcome.Regression } : item with { Outcome = ComparisonOutcome.Improvement }).ToList()).Decision);
         Assert.AreEqual(ComparisonDecision.InsufficientEvidence, MeasurementService.Recommend(ComparisonLevel.Exploratory, improvements).Decision);
+    }
+
+    [TestMethod]
+    public void Comparison_never_recommends_keep_when_new_driver_latency_and_faults_regress()
+    {
+        var baseline = Enumerable.Range(0, 3).Select(_ => Session(MeasurementLabel.Baseline)).ToList();
+        var candidate = Enumerable.Range(0, 3).Select(_ => Session(MeasurementLabel.Candidate)).ToList();
+        var result = MeasurementService.Compare(new(baseline.Select(item => item.Id).ToList(), candidate.Select(item => item.Id).ToList()), baseline, candidate);
+        Assert.AreNotEqual(ComparisonDecision.Keep, result.Recommendation);
+        Assert.IsTrue(result.Metrics.Any(metric => metric.Outcome == ComparisonOutcome.Regression));
+
+        static MeasurementSession Session(MeasurementLabel label) => new()
+        {
+            Id = Guid.NewGuid(),
+            Label = label,
+            ProcessName = "game",
+            HardFaultsEnabled = true,
+            HardwareFingerprint = "same",
+            ConfigurationFingerprint = "same",
+            State = MeasurementSessionState.Completed,
+            Report = new TraceReport
+            {
+                SchemaVersion = 2,
+                Quality = new(30_000, 1, 0, [], 100, true),
+                Interrupts = label == MeasurementLabel.Baseline
+                    ? [new("dpc", "common.sys", 0, TraceAnalyzer.Describe([100], 30_000))]
+                    : [new("dpc", "common.sys", 0, TraceAnalyzer.Describe([50], 30_000)),
+                        new("dpc", "new.sys", 0, TraceAnalyzer.Describe([100_000], 30_000))],
+                HardFaults = label == MeasurementLabel.Baseline ? []
+                    : [new("process-1", "game", TraceAnalyzer.Describe([500_000], 30_000))]
+            }
+        };
+    }
+
+    [TestMethod]
+    public void Coverage_changes_or_missing_fault_collection_never_turn_into_zero_cost_keep()
+    {
+        var baseline = Enumerable.Range(0, 3).Select(_ => Session(MeasurementLabel.Baseline)).ToList();
+        var candidate = Enumerable.Range(0, 3).Select(_ => Session(MeasurementLabel.Candidate)).ToList();
+        var request = new MeasurementCompareRequest(baseline.Select(item => item.Id).ToList(), candidate.Select(item => item.Id).ToList());
+        var comparison = MeasurementService.Compare(request, baseline, candidate);
+        Assert.AreEqual(ComparisonDecision.InsufficientEvidence, comparison.Recommendation);
+        Assert.IsTrue(comparison.RejectionReasons.Any(reason => reason.Contains("coverage", StringComparison.OrdinalIgnoreCase)));
+        Assert.IsFalse(comparison.Metrics.Any(metric => metric.EvidenceId.Contains("extra.sys", StringComparison.Ordinal)));
+        candidate[0] = Session(MeasurementLabel.Candidate, hardFaults: true);
+        request = request with { CandidateSessionIds = candidate.Select(item => item.Id).ToList() };
+        comparison = MeasurementService.Compare(request, baseline, candidate);
+        Assert.AreEqual(ComparisonDecision.InsufficientEvidence, comparison.Recommendation);
+        Assert.IsTrue(comparison.RejectionReasons.Any(reason => reason.Contains("Hard-fault", StringComparison.Ordinal)));
+
+        static MeasurementSession Session(MeasurementLabel label, bool hardFaults = false) => new()
+        {
+            Id = Guid.NewGuid(),
+            Label = label,
+            ProcessName = "game",
+            HardFaultsEnabled = hardFaults,
+            State = MeasurementSessionState.Completed,
+            Report = new TraceReport
+            {
+                Quality = new(30_000, 1, 0, [], 100, true),
+                Interrupts = label == MeasurementLabel.Baseline
+                    ? [new("dpc", "common.sys", 0, TraceAnalyzer.Describe([100], 30_000))]
+                    : [new("dpc", "common.sys", 0, TraceAnalyzer.Describe([50], 30_000)),
+                        new("dpc", "extra.sys", 0, TraceAnalyzer.Describe([40], 30_000))]
+            }
+        };
     }
 
     [TestMethod]
