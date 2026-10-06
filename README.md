@@ -3,11 +3,19 @@
   <p><strong>AI-powered Windows 11 optimizer — free and open source.</strong></p>
   <p>Measure first. Let your AI investigate. Review every change.</p>
   <p>
-    <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-b6acf3?style=flat-square" alt="MIT licensed"></a>
-    <img src="https://img.shields.io/badge/Windows-11_x64-0078D4?style=flat-square" alt="Windows 11 x64">
-    <img src="https://img.shields.io/badge/status-unsigned_alpha-f1cb8d?style=flat-square" alt="Unsigned alpha">
-    <img src="https://img.shields.io/badge/AI-bring_your_own_model-9388ff?style=flat-square" alt="Bring your own model">
-    <img src="https://img.shields.io/badge/local_LLM-supported-2ea44f?style=flat-square" alt="Local LLM support">
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-b6acf3?style=plastic" alt="MIT licensed"></a>
+    <img src="https://img.shields.io/badge/Windows-11_x64-0078D4?style=plastic&amp;logo=windows&amp;logoColor=white" alt="Windows 11 x64">
+    <img src="https://img.shields.io/badge/status-unsigned_alpha-f1cb8d?style=plastic" alt="Unsigned alpha">
+    <img src="https://img.shields.io/badge/AI-bring_your_own_model-9388ff?style=plastic" alt="Bring your own model">
+    <img src="https://img.shields.io/badge/local_LLM-supported-2ea44f?style=plastic" alt="Local LLM support">
+  </p>
+  <p>
+    <a href="https://tauri.app/"><img src="https://img.shields.io/badge/Tauri-2-24C8DB?style=plastic&amp;logo=tauri&amp;logoColor=white" alt="Tauri 2"></a>
+    <a href="https://react.dev/"><img src="https://img.shields.io/badge/React-19-087EA4?style=plastic&amp;logo=react&amp;logoColor=white" alt="React 19"></a>
+    <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-6-3178C6?style=plastic&amp;logo=typescript&amp;logoColor=white" alt="TypeScript 6"></a>
+    <a href="https://dotnet.microsoft.com/"><img src="https://img.shields.io/badge/.NET-8-512BD4?style=plastic&amp;logo=dotnet&amp;logoColor=white" alt=".NET 8"></a>
+    <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/Rust-native_bridge-8B4513?style=plastic&amp;logo=rust&amp;logoColor=white" alt="Rust native bridge"></a>
+    <a href="https://vite.dev/"><img src="https://img.shields.io/badge/Vite-8-646CFF?style=plastic&amp;logo=vite&amp;logoColor=white" alt="Vite 8"></a>
   </p>
   <p>
     <a href="#highlights">Highlights</a> ·
@@ -20,6 +28,36 @@
 </div>
 
 <p>NeuroTune combines <strong>local measurements</strong>, an <strong>AI investigation</strong> and a <strong>bounded Windows execution engine</strong> to investigate performance, latency, networking, stability and privacy/security. It is not a one-click tweak pack: a recommendation is a hypothesis, not proof of a benefit.</p>
+
+<a name="interface"></a>
+<h2>Inside NeuroTune</h2>
+<table>
+  <tr>
+    <td width="50%" valign="top" align="center">
+      <p><strong>Overview · Dark</strong></p>
+      <a href="docs/screenshots/neurotune-dark.png"><img src="docs/screenshots/neurotune-dark.png" alt="Current NeuroTune dark overview with the N logo, grouped navigation and evidence-led workflow" width="100%"></a>
+      <p><sub>Your workspace, provider status and visible workflow.</sub></p>
+    </td>
+    <td width="50%" valign="top" align="center">
+      <p><strong>Overview · Light</strong></p>
+      <a href="docs/screenshots/neurotune-light.png"><img src="docs/screenshots/neurotune-light.png" alt="Current NeuroTune overview in light mode with the same N logo and workflow" width="100%"></a>
+      <p><sub>The same controls with a native-style light appearance.</sub></p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top" align="center">
+      <p><strong>Diagnosis setup</strong></p>
+      <a href="docs/screenshots/neurotune-diagnosis.png"><img src="docs/screenshots/neurotune-diagnosis.png" alt="Diagnosis setup showing separate measured optimization and advisory audit modes, objective and workload selection" width="100%"></a>
+      <p><sub>Choose the objective, investigation mode and workload.</sub></p>
+    </td>
+    <td width="50%" valign="top" align="center">
+      <p><strong>Privacy &amp; security</strong></p>
+      <a href="docs/screenshots/neurotune-security.png"><img src="docs/screenshots/neurotune-security.png" alt="Privacy and security page showing AI advice, separate Defender tabs and credential/execution/recovery boundaries" width="100%"></a>
+      <p><sub>Advice, Defender operations and permissions stay separate.</sub></p>
+    </td>
+  </tr>
+</table>
+<p align="center"><sub>Click any image for full size. Captured from the current frontend with a demo local-model configuration and a mocked Agent: no personal PC data, fabricated benchmark gains, native operations or provider calls.</sub></p>
 
 <blockquote>
   <p><strong>NeuroTune v0.8.0-alpha.1 is an unsigned alpha for controlled testing, not a stable/general release.</strong> Current sources still require a rebuilt, exact-candidate installer and fresh Windows 11 VM acceptance. Old installers, historical test results and a green build badge do not certify the current sources. Use a disposable VM for system-changing tests and keep an independent backup.</p>
@@ -46,26 +84,6 @@
     <td valign="top"><h3>08 · Source-visible by design</h3><p>MIT-licensed code, registered actions and documented limits. No arbitrary model-generated command execution, generic BIOS writer or automatic security-disable shortcut.</p></td>
   </tr>
 </table>
-
-<a name="interface"></a>
-<h2>The current interface</h2>
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/neurotune-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/neurotune-light.png">
-    <img src="docs/screenshots/neurotune-dark.png" alt="Current NeuroTune overview with the N logo, grouped navigation and evidence-led workflow" width="100%">
-  </picture>
-</p>
-<p align="center"><sub>Current frontend, captured with an empty mocked Agent. No personal PC data, fabricated benchmark gains, native operations or provider calls.</sub></p>
-<details>
-  <summary><strong>Explore diagnosis setup and privacy/security</strong></summary>
-  <h3>Choose an objective, a mode and a workload</h3>
-  <p>Measured optimization and Advisory audit are separate choices. A preset specializes the prompt; it cannot grant new permissions.</p>
-  <img src="docs/screenshots/neurotune-diagnosis.png" alt="Diagnosis setup showing the objective, separate measured/audit modes, workload selection and consent text" width="100%" loading="lazy">
-  <h3>Privacy advice is not scanner authorization</h3>
-  <p>Opening this page does not start a scan, AI request, download or system change. Scanner operations and manual remediation remain separate.</p>
-  <img src="docs/screenshots/neurotune-security.png" alt="Privacy and security page showing AI advice, separate Defender tabs and credential/execution/recovery boundaries" width="100%" loading="lazy">
-</details>
 
 <a name="workflow"></a>
 <h2>From evidence to a decision</h2>
@@ -176,7 +194,8 @@ cd ..
 <hr>
 <p align="center"><strong>Evidence before claims. Approval before writes. Recovery before moving on.</strong></p>
 <p align="center">
-  <a href="https://github.com/PrimeBuild-pc/NeuroTune/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/PrimeBuild-pc/NeuroTune/build.yml?branch=main&amp;style=flat-square&amp;label=main%20build" alt="Build status of the main branch, not release acceptance"></a>
-  <a href="https://github.com/PrimeBuild-pc/NeuroTune/issues"><img src="https://img.shields.io/github/issues/PrimeBuild-pc/NeuroTune?style=flat-square" alt="Open issues"></a>
-  <a href="https://github.com/PrimeBuild-pc/NeuroTune/stargazers"><img src="https://img.shields.io/github/stars/PrimeBuild-pc/NeuroTune?style=flat-square" alt="GitHub stars"></a>
+  <a href="https://github.com/PrimeBuild-pc/NeuroTune/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/PrimeBuild-pc/NeuroTune/build.yml?branch=main&amp;style=plastic&amp;logo=githubactions&amp;logoColor=white&amp;label=main%20build" alt="Build status of the main branch, not release acceptance"></a>
+  <a href="https://github.com/PrimeBuild-pc/NeuroTune/commits/main"><img src="https://img.shields.io/github/last-commit/PrimeBuild-pc/NeuroTune?style=plastic&amp;logo=git&amp;logoColor=white" alt="Last commit"></a>
+  <a href="https://github.com/PrimeBuild-pc/NeuroTune/issues"><img src="https://img.shields.io/github/issues/PrimeBuild-pc/NeuroTune?style=plastic&amp;logo=github" alt="Open issues"></a>
+  <a href="https://github.com/PrimeBuild-pc/NeuroTune/stargazers"><img src="https://img.shields.io/github/stars/PrimeBuild-pc/NeuroTune?style=plastic&amp;logo=github" alt="GitHub stars"></a>
 </p>

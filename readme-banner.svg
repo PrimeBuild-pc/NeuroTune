@@ -1,32 +1,32 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="370" viewBox="0 0 1200 370" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
   <title id="title">NeuroTune — AI-powered Windows 11 optimizer. Free and open source.</title>
-  <desc id="desc">The current NeuroTune N logo. Measure first, choose your AI, review every change. MIT licensed; alpha software.</desc>
+  <desc id="desc">The current purple and white NeuroTune N app icon, prominently beside the wordmark. Evidence, intelligence and local control. Measure first, choose your AI and review every change. MIT licensed; unsigned alpha.</desc>
   <defs>
-    <linearGradient id="surface" x2="1" y2="1"><stop stop-color="#10141c"/><stop offset="1" stop-color="#1b2230"/></linearGradient>
-    <radialGradient id="glow"><stop stop-color="#9388ff" stop-opacity=".14"/><stop offset="1" stop-color="#9388ff" stop-opacity="0"/></radialGradient>
+    <linearGradient id="surface" x2="1" y2="1"><stop stop-color="#1b2230"/><stop offset=".55" stop-color="#10141c"/><stop offset="1" stop-color="#201d36"/></linearGradient>
+    <linearGradient id="edge" x2="0" y2="1"><stop stop-color="#d7d1ff" stop-opacity=".4"/><stop offset=".5" stop-color="#9388ff" stop-opacity=".08"/><stop offset="1" stop-color="#9388ff" stop-opacity=".2"/></linearGradient>
+    <linearGradient id="band" x2="0" y2="1"><stop stop-color="#283041"/><stop offset=".08" stop-color="#1b2230"/><stop offset="1" stop-color="#10141c"/></linearGradient>
+    <radialGradient id="halo"><stop stop-color="#9388ff" stop-opacity=".22"/><stop offset="1" stop-color="#9388ff" stop-opacity="0"/></radialGradient>
   </defs>
-  <rect width="1200" height="370" rx="24" fill="url(#surface)"/>
-  <circle cx="1032" cy="169" r="200" fill="url(#glow)"/>
-  <g fill="none" stroke="#655da7">
-    <circle cx="1032" cy="169" r="110" stroke-opacity=".45"/>
-    <circle cx="1032" cy="169" r="146" stroke-opacity=".22"/>
-    <path d="M922 169H1142M1032 59V279" stroke-opacity=".35"/>
-  </g>
-  <g fill="#9388ff"><circle cx="1032" cy="23" r="3"/><circle cx="1142" cy="169" r="4"/><circle cx="922" cy="169" r="4"/></g>
-  <svg x="968" y="105" width="128" height="128" viewBox="0 0 64 64" fill="none">
+  <rect width="1200" height="360" rx="24" fill="url(#surface)"/>
+  <rect x="1" y="1" width="1198" height="358" rx="23" fill="none" stroke="url(#edge)"/>
+  <circle cx="158" cy="168" r="150" fill="url(#halo)"/>
+  <path d="M1016 62H1112V222H1052M1052 222V246M976 101H1068V184" fill="none" stroke="#655da7" stroke-opacity=".38" stroke-width="2"/>
+  <g fill="#9388ff"><circle cx="1016" cy="62" r="4"/><circle cx="976" cy="101" r="4"/><circle cx="1052" cy="246" r="4"/></g>
+  <svg x="76" y="84" width="164" height="164" viewBox="0 0 64 64" fill="none">
     <rect x="1" y="1" width="62" height="62" rx="17" fill="#10141c" stroke="#655da7" stroke-width="1.5"/>
     <path d="M10 46L19 18H27L39 36L45 18H53L44 46H36L24 28L18 46Z" fill="#9388ff"/>
     <path d="M27 18L39 36L36 46L24 28Z" fill="#f4f7fb"/>
   </svg>
   <g font-family="Segoe UI,Arial,sans-serif">
-    <text x="76" y="63" fill="#b6acf3" font-size="15" font-weight="600" letter-spacing="3">EVIDENCE · INTELLIGENCE · CONTROL</text>
-    <text x="72" y="163" fill="#f4f7fb" font-size="96" font-weight="700" letter-spacing="-4">NeuroTune</text>
-    <text x="78" y="214" fill="#f4f7fb" font-size="28">AI-powered Windows 11 optimizer.</text>
-    <text x="78" y="254" fill="#b6acf3" font-size="28">Free and open source.</text>
-    <path d="M78 290H1122" stroke="#343d4e"/>
-    <text x="78" y="332" fill="#bdc7d5" font-size="18">Measure first.</text>
-    <text x="290" y="332" fill="#bdc7d5" font-size="18">Choose your AI.</text>
-    <text x="550" y="332" fill="#bdc7d5" font-size="18">Review every change.</text>
-    <text x="1122" y="332" text-anchor="end" fill="#b6acf3" font-size="16" font-weight="600">MIT / ALPHA</text>
+    <text x="276" y="68" fill="#b6acf3" font-size="16" font-weight="600" letter-spacing="3">WINDOWS INTELLIGENCE. LOCAL CONTROL.</text>
+    <text x="271" y="164" fill="#f4f7fb" font-size="94" font-weight="700" letter-spacing="-4">NeuroTune</text>
+    <text x="276" y="211" fill="#f4f7fb" font-size="29">AI-powered Windows 11 optimizer.</text>
+    <text x="276" y="252" fill="#b6acf3" font-size="29">Free and open source.</text>
+    <rect x="56" y="286" width="1088" height="50" rx="12" fill="url(#band)" stroke="#394253"/>
+    <text x="80" y="318" fill="#d7d1ff" font-size="18" font-weight="600">Measure first.</text>
+    <path d="M300 299V323M565 299V323M925 299V323" stroke="#394253"/>
+    <text x="324" y="318" fill="#d7d1ff" font-size="18" font-weight="600">Choose your AI.</text>
+    <text x="589" y="318" fill="#d7d1ff" font-size="18" font-weight="600">Review every change.</text>
+    <text x="1120" y="318" text-anchor="end" fill="#b6acf3" font-size="16" font-weight="600">MIT / ALPHA</text>
   </g>
 </svg>
