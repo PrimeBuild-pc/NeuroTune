@@ -1,6 +1,6 @@
 <div align="center">
-  <img src="readme-banner.svg" alt="NeuroTune — AI-guided Windows optimization with verified rollback" width="100%">
-  <p><strong>AI-assisted Windows optimization with safety boundaries and reliable rollback.</strong></p>
+  <img src="readme-banner.svg" alt="NeuroTune — measurement-led Windows optimization with verified rollback" width="100%">
+  <p><strong>Measure first. Review the AI's proposal. Change only what you approve.</strong></p>
   <p>
     <a href="https://github.com/PrimeBuild-pc/NeuroTune/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/PrimeBuild-pc/NeuroTune?style=plastic&amp;logo=git&amp;logoColor=white"></a>
     <a href="https://github.com/PrimeBuild-pc/NeuroTune/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/PrimeBuild-pc/NeuroTune?style=plastic&amp;logo=github"></a>
@@ -20,152 +20,138 @@
 
 <p align="center"><img src="docs/screenshots/neurotune-dark.png" alt="NeuroTune desktop overview in dark mode" width="100%"></p>
 
-<hr>
+## What NeuroTune is
 
-<h2>⚡ What NeuroTune Does</h2>
+NeuroTune is a Windows 11 desktop app for investigating performance, latency and stability problems, then testing approved, reversible Windows changes. It combines **local measurements**, an **AI investigation** and a **typed execution engine**. It is not a one-click tweak pack: a recommendation is a hypothesis, not proof of a benefit.
 
-<ol>
-  <li>Collects a local Windows hardware and software profile.</li>
-  <li>Collects measurements and sends sanitized evidence and any explicitly reviewed supporting files to your selected model.</li>
-  <li>Lets the AI investigate and propose typed actions or review-only manual guidance; only registered actions can be executed.</li>
-  <li>Creates a System Restore point and Registry backups before changing anything.</li>
-  <li>Applies verified optimizations and records the previous state for one-click rollback.</li>
-</ol>
+> **v0.8.0-alpha.1 is an unsigned alpha for controlled testing, not a stable/general release.** Source security fixes still need a rebuilt, exact-candidate installer and fresh Windows 11 VM acceptance. Old installers, historical test results and a green build badge do not certify the current sources. Use a disposable VM for system-changing tests and keep an independent backup.
 
-<h2>🔒 Safety Model</h2>
+## How it works
 
-<table>
-  <thead>
-    <tr>
-      <th>Protection</th>
-      <th>Behavior</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>Typed capability registry</td>
-      <td>The LLM can select known <code>ActionId</code> values. Generated scripts remain reviewable artifacts and have no execution path inside NeuroTune.</td>
-    </tr>
-    <tr>
-      <td>Exact evidence provenance</td>
-      <td>Each model finding must cite an exact provided evidence ID and value. User reports/screenshots remain unverified; provenance checks do not prove an interpretation or performance benefit.</td>
-    </tr>
-    <tr>
-      <td>Fail-closed backups</td>
-      <td>No optimization runs if the required restore point or Registry backup fails.</td>
-    </tr>
-    <tr>
-      <td>Transactional execution</td>
-      <td>Actions are applied and verified individually; failures trigger reverse-order rollback.</td>
-    </tr>
-    <tr>
-      <td>Protected credentials</td>
-      <td>API keys are encrypted for the current Windows user with DPAPI and excluded from logs.</td>
-    </tr>
-    <tr>
-      <td>Profile transparency</td>
-      <td>The application shows the exact evidence facts sent to the provider and redacts the Windows username and device name.</td>
-    </tr>
-  </tbody>
-</table>
+```mermaid
+flowchart TD
+    A[Choose goal and running workload] --> B[Local scan]
+    B --> C{Workload selected?}
+    C -->|Yes| D[Three matching Baseline captures]
+    C -->|No| E[One system-wide diagnostic]
+    D --> F[Local trace analysis and quality checks]
+    E --> F
+    F --> G[Consented AI investigation and read-only follow-ups]
+    G --> H[Review proposal - nothing applied]
+    H --> I[Finish without changes]
+    H -->|Valid workload Baseline and explicit approval| J[Recheck actions and create backups]
+    J --> K[Apply and verify selected actions]
+    K --> L[Restart if required]
+    L --> M[Three matching Candidate captures]
+    M --> N[Compare and choose Keep or Rollback]
+    K -->|Failure or interruption| O[Verified rollback or visible recovery required]
+```
 
-<blockquote>
-  <strong>Important:</strong> System optimization always carries risk. Test NeuroTune in a Windows virtual machine before using it on a primary PC, and keep an independent backup.
-</blockquote>
+1. **Collect locally.** Inventory covers hardware, Windows settings, drivers, devices, software and services. Choose overall performance, system latency, networking or stability; these specialize the AI prompt, not a preset list of tweaks. BIOS reading is a separate opt-in.
+2. **Measure before diagnosis.** Complete diagnosis gives you time to return to an already-running game/app, records three Baselines and checks them locally. Neither AI runs during captures; decorative motion stops. Without a workload, one system-wide diagnostic can inform the investigation but **cannot unlock apply**. You must keep the scene and settings repeatable yourself.
+3. **Investigate with consent.** Your selected model receives prepared evidence and may request bounded, fixed read-only Windows observations. It can challenge local heuristics. The default budget is 12 turns / 10 minutes, configurable within limits. Failure is reported, not replaced with a supposedly successful automatic plan.
+4. **Review and approve.** Proposals show evidence, risk, uncertainty, trade-offs and reversal requirements. Select some registered actions, all available recommendations or none. High-risk actions require separate confirmation. Manual guidance and generated scripts have no execution path inside NeuroTune.
+5. **Apply, verify, recover.** The engine checks availability, approval identity and conflicting selections, then creates a verified System Restore point, required Registry exports and original-state snapshots. It journals attempts and verifies changes. Failure triggers reverse-order rollback; incomplete recovery stays visible rather than being labelled success.
+6. **Test the result.** Collect matching Candidates after any required restart. A 1+1 comparison is exploratory; the repeated decision gate needs at least 3+3 valid captures. Drift, invalid traces, missing coverage or new regressions must not become a favorable Keep recommendation. The AI can separately explain aggregates, but cannot change metrics or the user's decision.
 
-<h2>Features</h2>
+For an interpretable experiment, test **one hypothesis/change at a time**. The engine can execute multiple approved, nonconflicting actions, but that does not isolate each action's contribution.
 
-<ul>
-  <li><strong>Deep evidence inventory:</strong> 83 typed Registry probes plus BCD, drivers, devices, filters, software, firmware, DIMMs, power, gaming, networking, runtime, and startup state.</li>
-  <li><strong>Flexible model connections:</strong> OpenRouter, OpenAI, Anthropic, DeepSeek, any OpenAI-compatible or Anthropic-compatible API, Ollama, LM Studio, and vLLM.</li>
-  <li><strong>Official browser authorization:</strong> OpenRouter OAuth and official Sign in with ChatGPT for eligible plan/credits, with PKCE and encrypted local credentials; API-key billing stays separate.</li>
-  <li><strong>Native web UI:</strong> Tauri 2 and React with high-contrast light/dark themes, Windows appearance synchronization, a branded readiness-driven startup and restrained CSS motion. Decorative motion is disabled for reduced-motion users and during observed captures.</li>
-  <li><strong>One complete diagnosis:</strong> choose objectives and a running workload, then automatically collect evidence and three matching traces before the AI investigation. Without a workload, a single system-wide diagnostic remains non-benchmark evidence. Actual phases/logs, elapsed time and cancellation replace mandatory intermediate buttons.</li>
-  <li><strong>AI-led investigation:</strong> the model may challenge local heuristics and request new bounded read-only Windows observations. Default 12-turn/10-minute investigation budget is configurable; manual proposals outside the executable catalog remain visible. See <a href="docs/DETERMINISTIC_CONTROLS.md">investigation/execution boundaries</a>.</li>
-  <li><strong>Optional supporting reports/screenshots:</strong> up to 8 user files (4 images), editable inert-text previews and explicit image/privacy consent. The selected main provider receives unverified supplemental evidence; no external app is launched and screenshot pixels are not saved in local run history. See <a href="docs/DETERMINISTIC_CONTROLS.md">formats, limits and provenance</a>.</li>
-  <li><strong>Optional managed System One:</strong> opt-in Rizzo Flow topic classification with pinned downloads, private Python/runtime, real install smoke test, cancel/resume/removal, non-admin one-shot inference and recorder exclusion. Advisory only; no speed or accuracy guarantee.</li>
-  <li><strong>Read-only comparison explanation:</strong> explicitly ask the selected main AI to interpret numerical results without replacing metrics, authorizing actions or changing the keep/rollback decision.</li>
-  <li><strong>Goal-aware diagnosis:</strong> four investigation presets specialize the AI prompt toward overall performance, system latency, network optimization or system stability—not predetermined tweaks. Workload context, preservation notes, risk and approval stay independent; saved FPS/efficiency goals remain compatible.</li>
-  <li><strong>Explicit conflict graph:</strong> names the exact settings and values involved, including timer, filter/VPN, overlay, memory, device, power, and recovery relationships.</li>
-  <li><strong>Cancellable scans:</strong> cancellation terminates only the matching agent process tree and never keeps a partial profile.</li>
-  <li><strong>Reviewable payload limits:</strong> advanced local-evidence tools expose fact count, UTF-8 size, privacy classes and the enforced single-pass evidence limit without adding a mandatory intermediate step.</li>
-  <li><strong>Exact local baselines:</strong> versioned CPU and memory references match exact component identifiers; unknown hardware reports <code>baseline unavailable</code>.</li>
-  <li><strong>User-controlled plans:</strong> risk-ordered AI proposals include evidence, expected impact, trade-offs, uncertainty and reversibility. Select some, all executable recommendations, or none; review-only guidance/scripts cannot gain write authority.</li>
-  <li><strong>Current allowlisted actions:</strong> power, gaming, graphics, visual, memory, GPU-timeout, and legacy TCP repairs with local capture, verification, and rollback.</li>
-  <li><strong>Local latency diagnostics:</strong> bounded system-wide or workload WPR captures, live per-core times, complete ISR/DPC aggregates, hard pagefaults and local spike timelines. Repeated workload comparisons and raw-trace deletion remain built in; interrupt-to-process latency is not yet measured.</li>
-  <li><strong>Optional BIOS inspection:</strong> opt-in firmware/memory facts and an optional user-approved local SCEWIN export or offline import. Driver risks and unavailable values are explicit; BIOS writing is not enabled.</li>
-  <li><strong>Shareable hardware matrix collector:</strong> a transparent, no-admin, offline CMD/PowerShell bundle records redacted AMD/NVIDIA, driver, CPU-set, and current interrupt-policy facts without changing the PC.</li>
-  <li><strong>Local operation history:</strong> Per-action state snapshots and rollback from the desktop interface.</li>
-  <li><strong>Honest telemetry boundary:</strong> low-level capabilities remain read-only and unavailable or driver-not-approved until a separate adapter and driver trust review is complete.</li>
-</ul>
+## Where the AI ends and Windows execution begins
 
-<h2>Contribute an AMD/NVIDIA hardware report</h2>
+```mermaid
+flowchart LR
+    UI[Tauri / React interface] -->|Restricted command bridge| AG[Local .NET Agent]
+    AG -->|Scan and ETW / WPR analysis| EV[Prepared evidence]
+    EV -->|User consent| AI[Selected remote or local model]
+    AI -->|Untrusted structured proposals| AG
+    AG -->|Local validation and explicit approval| EX[Registered Windows actions]
+    EX --> JR[Protected snapshots and recovery journals]
+```
 
-<p>Download or copy <code>tools/hardware-collector</code>, then double-click <code>Collect-NeuroTune-HardwareReport.cmd</code>. The dated JSON created beside it can be shared for the physical GPU/driver matrix. The collector does not require administrator rights, connect to the internet, install anything, or write system settings. Its PowerShell source and privacy exclusions are included in the same folder.</p>
+| Boundary | What it means |
+|---|---|
+| AI is advisory | Exact evidence citations are checked, but they do not prove the model's interpretation or optimal tuning. Models cannot supply arbitrary commands, write paths or Registry targets. |
+| Execution is local and bounded | Only registered `ActionId` implementations can write. Current capabilities include qualified power/core-parking, gaming/display, per-app GPU preference, page-file and memory/TDR/legacy TCP repair actions. Availability depends on the actual machine. |
+| Backups are mandatory | Missing prerequisites, restore-point/backup failures or untrusted journals stop execution. Restore points and application rollback are not substitutes for an independent backup. |
+| Privileged recovery is protected | Operation/run journals accept only trusted Administrators/SYSTEM ownership and permissions. Unsafe ACLs, reparse paths, corrupt identities and unsupported schemas are rejected, not silently repaired. |
+| No hidden expansion of authority | Generated scripts stay inert. GPU IRQ-affinity candidates remain read-only; there is no generic BIOS writer, firmware flashing, security-disable shortcut or arbitrary cleanup. |
 
-<h2>Requirements</h2>
+## Measurements: useful evidence, not universal proof
 
-<ul>
-  <li>A Microsoft-supported Windows 11 build, x64</li>
-  <li>Administrator privileges</li>
-  <li>System Protection enabled on the Windows drive</li>
-  <li>A supported API credential, OpenRouter browser account, eligible ChatGPT plan authorization, or local OpenAI-compatible model server</li>
-  <li>For source builds: .NET 8 SDK, Node.js 24, Rust stable, and the Visual Studio C++ desktop workload</li>
-</ul>
+- ETW/WPR analysis provides scheduler Ready Time, per-core activity, ISR/DPC distributions, driver aggregates, hard pagefaults and local spike timelines. Raw traces are analyzed locally and deleted after successful analysis unless you choose to retain them.
+- Scheduling and interrupt traces **do not measure FPS, ping/jitter or end-to-end input latency**. Interrupt-to-process latency and firmware/SMI stalls remain unmeasured; NeuroTune does not yet claim full LatencyMon parity.
+- PresentMon-compatible CSV imports provide frame aggregates only with process attribution. They remain user-supplied evidence with **unverified session provenance**.
+- A driver name, high spike, changed interrupt share or low-occupancy core is not causal proof. Unknown/missing data is not zero. Physical AMD/NVIDIA workload repeatability and exact recovery remain release gates.
 
-<h2>Build from Source</h2>
+## Providers, optional features and privacy
 
-<p>Run the following commands from an elevated PowerShell terminal:</p>
+**Main AI:** OpenRouter, OpenAI API, Anthropic, DeepSeek, compatible custom APIs, or loopback servers such as Ollama, LM Studio and vLLM. Official browser authorization is available for OpenRouter and eligible ChatGPT plans/credits; availability and limits are provider-controlled. There is no automatic provider or API-billing fallback. See the [provider guide](docs/PROVIDERS.md).
 
-<pre><code>git clone https://github.com/PrimeBuild-pc/NeuroTune.git
+Local scans, captures and numerical analysis do not call a model. Consented diagnosis sends prepared evidence to the **selected provider**; a local endpoint keeps that request local, while remote providers apply their own processing/retention policies. Raw ETL is never sent. Common identity/path redaction is best-effort, **not guaranteed anonymization**.
+
+| Optional feature | Consent and limits |
+|---|---|
+| Supporting reports/screenshots | Up to 8 files, including 4 images, with prepared previews and separate transmission consent. Reports are inert text; images require model-vision/cost confirmation. **Pixels are not anonymized** and may be resent each turn. Report text/metadata persist locally; screenshot pixels are transient. User files do not become verified measurements. |
+| System One assistant | Default-off topic advice via a managed local Rizzo component or a separately consented OpenRouter classifier. Local setup downloads multi-GB third-party assets; cloud use has separate credentials/costs. Neither can approve writes. No speed/accuracy guarantee; non-admin workers are not filesystem/network sandboxes. |
+| BIOS inspection / SCEWIN | BIOS reads are opt-in. Offline imports are unverified. Export requires a user-supplied, hash-approved privileged package and additional consent; third-party drivers can affect the system. No AMI binaries are bundled, no protections are weakened and no BIOS write command is exposed. Live board compatibility remains unverified. |
+
+Full formats, limits and evidence rules: [investigation boundaries](docs/DETERMINISTIC_CONTROLS.md). Third-party trust and acceptance: [optional components](docs/SCEWIN_SYSTEM_ONE.md).
+
+## Local data and upgrades
+
+| Location | Contents |
+|---|---|
+| `%LocalAppData%\NeuroTune` | Settings, DPAPI-encrypted API/OAuth credentials, redacted logs, measurement reports, optionally retained ETL and disposable caches/components. |
+| `%ProgramData%\NeuroTune-journals\<Windows user SID>\operations` | Privileged operation manifests, original-state snapshots and required Registry exports. |
+| `%ProgramData%\NeuroTune-journals\<Windows user SID>\runs` | Privileged run evidence, approvals, transitions, comparison decisions and recovery links. |
+
+The protected journals use Administrators/SYSTEM access, bounded reads and flushed atomic replacement. Actual ACL denial, interruption and storage-failure behavior still require VM acceptance. DPAPI protects credentials for the Windows user; it does not defend against every compromised process/account or a tampered elevated executable.
+
+**Before upgrading from legacy journals:** use the previous build to review/finish recovery, preserve independent backups and resolve prior writes, then archive the reviewed `%LocalAppData%\NeuroTune\operations` and `runs` directories. The new store does not import them and blocks journal operations while legacy entries remain. **Never delete pending recovery or copy old JSON into protected storage to bypass the gate.** See [SECURITY.md](SECURITY.md).
+
+## Requirements and source builds
+
+- A Microsoft-supported **Windows 11 x64** build and WebView2 runtime.
+- Administrator privileges for the desktop app; System Protection enabled for applying changes.
+- A supported model connection for AI diagnosis; not needed for local scan/measurement tools.
+- For builds: .NET 8 SDK, Node.js 24, Rust stable and Visual Studio's C++ desktop workload.
+
+From PowerShell:
+
+```powershell
+git clone https://github.com/PrimeBuild-pc/NeuroTune.git
 cd NeuroTune
 dotnet restore
 dotnet build --configuration Release
-dotnet test --configuration Release
 cd ui
 npm ci
 npm test
-npm run tauri dev</code></pre>
+npm run typecheck
+npm run lint
+npm run tauri dev
+```
 
-<h3>Publish a Self-Contained Build</h3>
+Launching the app requires the normal Windows UAC approval. Integration tests and writer/installer checks belong in a disposable VM; use the [test guide](docs/TESTING.md) rather than running system-changing tests on your primary PC.
 
-<pre><code>cd ui
-npm ci
-npm run tauri -- build --bundles nsis</code></pre>
+To build and package an unsigned installer and portable archive:
 
-<p>The GitHub Actions workflow produces a <code>NeuroTune-win-x64</code> artifact containing the unsigned per-machine NSIS installer, a no-install portable ZIP with both self-contained agents, and <code>SHA256SUMS</code>.</p>
+```powershell
+# From ui/
+npm run tauri -- build --bundles nsis
+cd ..
+./scripts/package-release.ps1
+```
 
-<h2>Local Data</h2>
+CI produces the `NeuroTune-win-x64` artifact with a per-machine NSIS installer, a complete portable ZIP containing both self-contained agents, and `SHA256SUMS`. **Portable means no installation, not no elevation or no persistent data.** Optional model weights, SCEWIN tools and vendor drivers are not bundled. SHA-256 checks identify bytes; they do not authenticate an unsigned publisher or establish safety.
 
-<p>Settings, DPAPI-encrypted API keys, redacted logs, Registry exports, and rollback manifests are stored in:</p>
+## Documentation and contributing
 
-<pre><code>%LocalAppData%\NeuroTune</code></pre>
+- [Security policy and upgrade safety](SECURITY.md) · [Alpha release notes](RELEASE_NOTES.md)
+- [Test guide](docs/TESTING.md) · [Current gates and historical validation matrix](docs/VALIDATION_MATRIX.md)
+- [Provider guide](docs/PROVIDERS.md) · [Investigation/execution boundaries](docs/DETERMINISTIC_CONTROLS.md)
+- [Optional SCEWIN / System One](docs/SCEWIN_SYSTEM_ONE.md) · [Privacy and Windows security](docs/PRIVACY_SECURITY.md)
+- Historical evidence: [local latency validation](docs/LOCAL_LATENCY_VALIDATION.md), [PawnIO trust review](docs/PAWNIO_TRUST_REVIEW.md), [repository privacy audit](docs/SECURITY_AUDIT_2026-08-02.md). These are scoped records, not current release certifications.
 
-<p>No API key or runtime profile is committed to this repository.</p>
+To contribute hardware inventory, use the [source-visible hardware collector](tools/hardware-collector/README.md). It runs offline without administrator rights, traces or settings changes. Review its dated JSON before sharing; inventory is not a performance benchmark.
 
-<h2>Project Status</h2>
-
-<p>
-  NeuroTune v0.8.0-alpha.1 is an <strong>unsigned alpha</strong> intended for controlled testing. The project is MIT-licensed and
-  produces an unsigned NSIS installer, a no-install portable ZIP, and SHA-256 checksums.
-  Generated scripts may be reviewed or saved, but NeuroTune executes only typed, locally registered, reversible
-  capabilities. Destructive cleanup and arbitrary model-generated writes remain excluded.
-</p>
-
-<h2>Documentation</h2>
-
-<ul>
-  <li><a href="ROADMAP.md">Product roadmap and release criteria</a></li>
-  <li><a href="docs/IMPLEMENTATION_PLAN.md">Implementation plan</a></li>
-  <li><a href="docs/DESIGN_SYSTEM.md">Design system and theme contract</a></li>
-  <li><a href="docs/PROVIDERS.md">Cloud, custom, OAuth, and local provider guide</a></li>
-  <li><a href="docs/TESTING.md">Alpha test guide</a></li>
-  <li><a href="docs/SCEWIN_SYSTEM_ONE.md">Optional SCEWIN and managed System One scope</a></li>
-  <li><a href="docs/DETERMINISTIC_CONTROLS.md">Deterministic vetoes versus opinionated planning policies</a></li>
-  <li><a href="docs/VALIDATION_MATRIX.md">VM, accessibility, scaling, and hardware validation matrix</a></li>
-  <li><a href="docs/PAWNIO_TRUST_REVIEW.md">PawnIO / LibreHardwareMonitor trust decision</a></li>
-  <li><a href="docs/SECURITY_AUDIT_2026-08-02.md">Pre-publication security and privacy audit</a></li>
-  <li><a href="RELEASE_NOTES.md">v0.8.0-alpha.1 release notes</a></li>
-  <li><a href="LICENSE">MIT license</a></li>
-  <li><a href="SECURITY.md">Security policy</a></li>
-</ul>
+NeuroTune is [MIT-licensed](LICENSE). Third-party packages and models retain their own licenses and trust requirements. Report vulnerabilities privately through [Security advisories](SECURITY.md), not public issues containing secrets or full PC profiles.

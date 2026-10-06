@@ -8,7 +8,10 @@ describe('optional local assistant and measure-first preparation', () => {
   it('does not start/download anything in the initial UI and labels scores as advisory', () => {
     const panel = renderToStaticMarkup(<SystemOnePanel/>);
     expect(panel).toContain('Not installed');
-    expect(panel).not.toContain('checked=""');
+    const consents = panel.match(/<input[^>]+type="checkbox"[^>]*>/g) ?? [];
+    expect(consents).toHaveLength(1);
+    expect(consents[0]).not.toContain('checked=""');
+    expect(panel.match(/type="radio"/g)).toHaveLength(6);
     expect(panel).toContain('No resident server or automatic startup download');
     const note = renderToStaticMarkup(<SystemOneNotes items={[{ phase: 'analysis', domain: 'drivers', status: 'ok', score: 0.8, seconds: 2.1,
       detail: '<script>not executable</script>', evidenceIds: [] }]}/>);
