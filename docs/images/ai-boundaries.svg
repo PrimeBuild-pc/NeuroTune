@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="642" viewBox="0 0 1200 642" role="img" aria-labelledby="title desc">
+  <title id="title">The AI advises. The local engine enforces. You decide.</title>
+  <desc id="desc">Local scans and trace analysis do not call a model. Prepared evidence is sent only with consent to your chosen local or remote model. Model proposals are untrusted and have no direct Windows write authority. Local validation, explicit approval, valid Baselines and backups gate registered actions. Protected journals support verification and rollback. AI cannot change metrics, approve writes or execute generated scripts.</desc>
+  <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#9388ff"/></marker></defs>
+  <rect width="1200" height="642" rx="24" fill="#10141c"/>
+  <g font-family="Segoe UI,Arial,sans-serif">
+    <text x="48" y="62" fill="#f4f7fb" font-size="32" font-weight="650">The AI advises. The engine enforces. You decide.</text>
+    <text x="48" y="103" fill="#bdc7d5" font-size="22">Three roles. No direct model-to-Windows write path.</text>
+    <g fill="#1b2230" stroke="#394253">
+      <rect x="48" y="147" width="336" height="271" rx="16"/>
+      <rect x="432" y="147" width="336" height="271" rx="16" stroke="#655da7" stroke-dasharray="6 5"/>
+      <rect x="816" y="147" width="336" height="271" rx="16"/>
+    </g>
+    <g fill="none" stroke="#9388ff" stroke-width="2.5" marker-end="url(#arrow)"><path d="M388 277H426"/><path d="M772 277H810"/></g>
+    <g fill="#b6acf3" font-size="18" font-weight="600" letter-spacing="2">
+      <text x="72" y="184">ON YOUR PC</text><text x="456" y="184">LOCAL OR REMOTE</text><text x="840" y="184">ON YOUR PC</text>
+    </g>
+    <g fill="#f4f7fb" font-size="28" font-weight="600">
+      <text x="72" y="230">Collect &amp; measure</text><text x="456" y="230">Your chosen model</text><text x="840" y="230">Validate &amp; execute</text>
+    </g>
+    <g fill="#bdc7d5" font-size="22">
+      <text x="72" y="280">Hardware + Windows facts</text><text x="72" y="320">ETW / WPR analysis</text><text x="72" y="360">Quality + numeric comparison</text>
+      <text x="456" y="280">Consented prepared evidence</text><text x="456" y="320">Bounded read-only follow-ups</text><text x="456" y="360">Untrusted structured proposals</text>
+      <text x="840" y="280">Registered Windows actions</text><text x="840" y="320">Protected recovery journals</text><text x="840" y="360">Verify + rollback</text>
+    </g>
+    <g fill="#b6acf3" font-size="19" font-weight="600">
+      <text x="72" y="397">No model calls during collection</text><text x="456" y="397">No write authority</text><text x="840" y="397">No arbitrary model commands</text>
+    </g>
+    <rect x="48" y="450" width="1104" height="104" rx="16" fill="#26223e" stroke="#655da7"/>
+    <text x="72" y="489" fill="#f4f7fb" font-size="25" font-weight="600">The write gate is local, not an AI promise.</text>
+    <text x="72" y="528" fill="#d7d1ff" font-size="22">Valid workload Baselines + explicit approval + registered action + verified backups</text>
+    <text x="48" y="599" fill="#bdc7d5" font-size="21">Raw ETL stays local. Generated scripts stay inert. The model cannot change metrics or approve writes.</text>
+  </g>
+</svg>
