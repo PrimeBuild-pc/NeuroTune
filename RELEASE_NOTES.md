@@ -65,6 +65,15 @@ use a disposable VM for system-changing acceptance tests.
 - **Readiness-driven dark startup:** branded pre-JS presentation, no artificial
   minimum delay and no wait for optional model discovery. Restrained CSS motion
   stops for reduced-motion users and observed recording intervals.
+- **Calmer desktop interface and modern identity:** a geometric signal-path N
+  across startup, overview, sidebar, favicon and Windows icons; grouped provider
+  controls, clearer review selection and trace-history hierarchy. Motion's
+  shared navigation indicator stops immediately for quiet/reduced policies.
+  Printed reports retain manual/script proposals and provenance.
+- **Native watchdog pipe isolation:** standard response handles are made
+  non-inheritable before capture startup. The watchdog no longer holds the
+  Rust IPC pipes open until the capture deadline, restoring timely Start,
+  Stop and Cancel without removing the independent watchdog.
 
 ## Execution and privacy boundaries
 
@@ -80,18 +89,43 @@ Prepared report text and file names/hashes remain in local run evidence;
 screenshot pixels are transient. Best-effort redaction is not guaranteed
 anonymization. Review all previews before consenting to cloud transmission.
 
+## Source security fixes — candidate validation pending
+
+Current sources harden absolute Windows utility resolution, bounded process
+output/deadlines, protected recovery journals and complete rollback validation.
+GPU/custom-plan recovery survives missing disposable inputs; core parking
+restores the captured scheme. Opposing actions and mismatched journal IDs are
+rejected. PresentMon imports require process attribution but retain unverified
+provenance; missing coverage/new regressions cannot justify favorable Keep.
+NuGet CI now rejects reported vulnerabilities and incomplete audits.
+
+These changes are not certified by existing installers. A final source commit,
+fresh CI/audits and a rebuilt exact-candidate Windows 11 VM pass are required.
+See [security and upgrade safety](SECURITY.md).
+
 ## Validation and remaining acceptance
 
-- Local automated validation: **99 .NET, 28 UI and 2 Rust tests passed**, plus
-  typecheck/lint, formatting and production/native builds. Elevated CI without a
-  verified standard-user token checks safe worker refusal, not inference;
-  local unelevated tests
-  exercise Unicode/environment isolation and cancellation. Rust audit is a CI
-  gate. Vitest/mocker is patched to 4.1.11 for GHSA-82fw-gwwq-j7x9.
+- Latest local **mixed working-tree** validation: **115 selected .NET, 33 UI
+  and 2 Rust tests passed**, plus format/build/typecheck/lint/clippy. Backend
+  WindowsIntegration, persisted-session Stop and synthetic DPAPI persistence,
+  and Rust subprocess-tree cancellation were excluded. Earlier 99-test/native
+  checks are historical. These results do not certify the selectively committed
+  sources, production journal ACLs or an installer. Elevated CI without a
+  verified standard-user token checks safe worker refusal, not inference.
+  Rust audit is a CI gate; fresh online audits remain pending. Vitest/mocker
+  in the local lockfile is patched to 4.1.11 for GHSA-82fw-gwwq-j7x9.
 - Mocked browser checks cover orchestration, four presets, separate consent,
   final review/decline, keyboard, reduced motion and a narrow/scaled layout.
   Supporting-file checks use the published agent for actual local normalization,
   PNG bounds, report redaction and hashes; recording and main AI are mocked.
+- An instrumented Release WebView2 on Windows 11 build 26200 passed real
+  rendering/light/dark/keyboard/reduced-motion checks and elevated WPR
+  watchdog/analysis/Stop/Cancel smoke. The 30-second system-wide trace was
+  quality-valid with zero lost events. Test-owned data/raw ETL were deleted;
+  WPR was stopped and no Agent/Telemetry processes remained. Production was
+  rebuilt without diagnostic browser flags; tested Agent/frontend hashes match.
+  This predates the source security fixes and is not exact-candidate installer
+  acceptance, a game benchmark, overhead evaluation or actual DPI acceptance.
 - Real elevated complete diagnosis against a representative workload, all
   cancellation/app-close paths and native cold-start anti-flash presentation
   still need desktop acceptance. Historic VM results are not fresh validation
@@ -118,13 +152,26 @@ See [investigation and execution boundaries](docs/DETERMINISTIC_CONTROLS.md),
 
 ## Distribution and verification
 
-The release assets are an unsigned per-machine NSIS installer, a portable ZIP
+Stable/general distribution remains blocked. Existing v0.8 assets predate the
+security corrections; rebuild and validate one definitive candidate before
+publishing replacement assets. Actual protected-store ACL creation/denial,
+UAC/sidecar integrity, interruption/I/O recovery, missing dynamic inputs and
+legacy upgrade handling remain VM gates.
+
+The packaging outputs are an unsigned per-machine NSIS installer, a portable ZIP
 with both self-contained agents and `SHA256SUMS`. Windows SmartScreen may warn:
 PrimeBuild does not provide an Authenticode signature for this free alpha.
 Verify the downloaded asset's SHA-256 against `SHA256SUMS` before running it.
 
-"Portable" means installation is not required; settings, reports, encrypted
-credentials and rollback data still live under `%LocalAppData%\NeuroTune`.
+"Portable" means installation is not required, not that elevation or persistent
+data is unnecessary. Settings, measurements and DPAPI-encrypted credentials live
+under `%LocalAppData%\NeuroTune`; privileged operation/run journals and Registry
+exports now live under `%ProgramData%\NeuroTune-journals\<Windows user SID>`.
+Legacy LocalAppData `operations`/`runs` are not imported: finish/review recovery
+with the previous build, preserve independent backups and archive reviewed
+journals only after resolving old writes. Never delete pending recovery or
+copy legacy JSON into the protected store to bypass the block.
+
 The ZIP/installer contains no user's credentials, optional model weights,
 SCEWIN binaries or vendor drivers. Optional downloads require their own consent
 and third-party license/trust review; NeuroTune's MIT license does not grant

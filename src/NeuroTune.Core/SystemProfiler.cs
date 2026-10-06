@@ -10,7 +10,7 @@ namespace NeuroTune;
 public sealed class SystemProfiler
 {
     public SystemProfile Collect(Action<string>? progress = null, bool optionalTelemetryConsent = false,
-        bool registerGameTargets = false, bool firmwareReadConsent = false)
+        bool registerGameTargets = false, bool firmwareReadConsent = false, bool privacySecurityReadConsent = false)
     {
         var profile = new SystemProfile();
         RunPhase("Hardware and firmware", () =>
@@ -63,6 +63,8 @@ public sealed class SystemProfiler
                 row => row["Name"]?.ToString() ?? "").Where(x => x.Length > 0).Take(100).ToList();
             profile.PolicyConflicts = FindPolicyConflicts(profile);
         });
+        if (privacySecurityReadConsent)
+            RunPhase("Privacy and Windows security (read-only)", () => profile.PrivacySecurity = WindowsSecurityAudit.ReadAll());
         return profile;
 
         void RunPhase(string name, Action collect)
@@ -77,7 +79,7 @@ public sealed class SystemProfiler
     }
 
     private static int CountFacts(SystemProfile profile) =>
-        profile.Gpus.Count + profile.Disks.Count + profile.WindowsSettings.Count + profile.GamingSettings.Count +
+        profile.Gpus.Count + profile.Disks.Count + profile.WindowsSettings.Count + profile.PrivacySecurity.Count + profile.GamingSettings.Count +
         profile.NetworkAdapters.Count + profile.NetworkSettings.Count + profile.HardwareCapabilities.Count +
         profile.FirmwareAndMemory.Count + profile.ComponentIdentities.Count + profile.FactoryBaselines.Count +
         profile.TelemetryCapabilities.Count + profile.BootConfiguration.Count + profile.PerformanceRegistry.Count +
@@ -629,12 +631,7 @@ public sealed class SystemProfiler
     {
         try
         {
-            var start = new ProcessStartInfo(fileName) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
-            foreach (var argument in arguments) start.ArgumentList.Add(argument);
-            using var process = Process.Start(start) ?? throw new InvalidOperationException($"Cannot start {fileName}.");
-            var output = process.StandardOutput.ReadToEnd().Trim();
-            process.WaitForExit();
-            return process.ExitCode == 0 ? output : "Unavailable";
+            return WindowsCommand.Run(fileName, arguments).Trim();
         }
         catch { return "Unavailable"; }
     }

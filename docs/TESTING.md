@@ -1,6 +1,11 @@
 # Alpha Test Guide
 
 Use a disposable Windows virtual machine. Do not use a primary PC for the first validation cycle.
+This is a procedure, not proof that every step passed. Bind acceptance to one
+final commit/installer SHA-256; old v0.7 and pre-hardening v0.8 results are historical.
+See [the current gates](VALIDATION_MATRIX.md#current-candidate-not-release-certified).
+Provider calls, optional downloads/drivers and system-changing tests require
+explicit authorization; routine local checks do not grant it.
 
 ## Prerequisites
 
@@ -32,6 +37,58 @@ Use a disposable Windows virtual machine. Do not use a primary PC for the first 
 - With reduced motion, all decorative animations/transitions are disabled. With a capture already recording at startup, they stay disabled; before automated/manual WPR startup they freeze until capture finalization/cancellation is observed. Navigating away from an active manual capture conservatively keeps motion frozen until another authoritative refresh.
 - Run `node artifacts/check-startup-motion.cjs` against a local preview to check pre-JS presentation, readiness/error release, nonblocking discovery, capture freeze, reduced motion, keyboard access and narrow layout.
 
+### Instrumented native UI / WPR smoke
+
+Use an isolated diagnostic Release build; never distribute it with a debugger.
+From the repository root in an elevated PowerShell, after approving the normal
+Windows UAC prompt:
+
+```powershell
+$config = Get-Content ui/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
+$config.app.windows[0] | Add-Member -NotePropertyName additionalBrowserArgs -NotePropertyValue '--remote-debugging-address=127.0.0.1 --remote-debugging-port=9224' -Force
+$config.app.windows[0] | Add-Member -NotePropertyName dataDirectory -NotePropertyValue 'ui-polish-native-validation' -Force
+New-Item artifacts -ItemType Directory -Force | Out-Null
+$config | ConvertTo-Json -Depth 32 | Set-Content artifacts/native-polish.conf.json
+Push-Location ui
+npm run tauri -- build --no-bundle --config ../artifacts/native-polish.conf.json
+Pop-Location
+$app = Start-Process (Resolve-Path ui/src-tauri/target/release/neurotune.exe) -PassThru
+# Requires Playwright; use PLAYWRIGHT_PATH if installed outside this repository.
+node scripts/check-native-ui.cjs
+# Separate opt-in: real system-wide watchdog/analysis/Stop/Cancel smoke.
+$env:NATIVE_CAPTURE = '1'
+try { node scripts/check-native-ui.cjs } finally { Remove-Item Env:NATIVE_CAPTURE }
+```
+
+The native checker attaches only to `http://tauri.localhost/`, preserves the
+real immutable command bridge, refuses an existing recording, does not select
+another provider or request inference, and cleans up only its own capture IDs.
+It validates static/quiet motion, actual trace quality and raw-trace deletion,
+not benchmark gains or overhead. Manual Stop/Cancel use a 120-second watchdog
+budget but end early; that shortened trace is not a benchmark. The normal
+watchdog smoke records 30 seconds. The result includes tested Agent/frontend
+hashes in `artifacts/native-polish-validation.json`.
+
+Close only the test instance after confirming recording has ended, check
+`wpr -status` and absence of orphan Agent/Telemetry processes, then rebuild the
+**production** installer without the override before packaging:
+
+```powershell
+$app.CloseMainWindow()
+$app.WaitForExit()
+wpr -status
+Push-Location ui
+npm run tauri -- build --bundles nsis
+Pop-Location
+./scripts/package-release.ps1
+```
+
+Rebuilding clears diagnostic browser arguments; the isolated WebView directory
+does not replace the user's normal UI preferences. Logical viewport emulation
+inside WebView2 does not substitute for changing actual Windows DPI or testing
+Narrator/cold-start frame continuity. Do not run installer/writer validation on
+the primary PC; installation/uninstallation and recovery still belong in a VM.
+
 ## 2. Local Scan and Privacy
 
 1. Open **Advanced tools → Local evidence → Scan this PC** without requesting an AI diagnosis.
@@ -56,11 +113,78 @@ Use a disposable Windows virtual machine. Do not use a primary PC for the first 
 
 ### Prompt-specialized analysis presets
 
-- Check **Performance complessive**, **Latenza del sistema**, **Ottimizzazione rete**, **Stabilità del sistema** in both complete and advanced diagnosis. Selected helper text explains investigation focus, not automatic tweaks; preserve notes/workload and risk independently. Keyboard/150%/reduced-motion/narrow view remain usable.
+- Check **Performance complessive**, **Latenza del sistema**, **Ottimizzazione rete**, **Stabilità del sistema**, **Privacy e sicurezza Windows** in both complete and advanced diagnosis. Selected helper text explains investigation focus, not automatic tweaks; preserve notes/workload and risk independently. Keyboard/150%/reduced-motion/narrow view remain usable.
 - For each focus, run the mocked planner-loop tests: every turn includes the selected application-owned focus plus the same authority, uncertainty and evidence rules. Readers remain available across domains. Goals survive run save/load; recommendations/approved IDs are not prepopulated by the preset.
 - Check latency/overall prompts do not treat scheduling as input latency/FPS, network does not invent ping/jitter/path tests, and stability does not automatically stress-test, repair or reset the PC. Comparison explanation uses focus but cannot replace numerical metrics/decisions.
 - Restore saved FPS/efficiency runs without converting their IDs/goals; their labelled legacy selection remains visible. Reject invalid objective/risk enums. A changed current UI goal must not bypass persisted matching-goal checks.
 - Run `node artifacts/check-complete-diagnosis.cjs` against a local preview for four-option selection, helper descriptions, same-goal request forwarding, keyboard and no-write mocked acceptance. This does not prove live AI compliance or hardware improvements.
+
+### Privacy/security audit and separate Defender operations
+
+Read [scope, sources and limits](PRIVACY_SECURITY.md) first. Routine checks:
+`dotnet test tests/NeuroTune.Tests --filter 'FullyQualifiedName~PrivacySecurityTests|FullyQualifiedName~AuditChecklistTests|FullyQualifiedName~PlannerLoopTests'`,
+`cd ui; npm test`, and `node scripts/check-privacy-security.cjs` against a local
+preview (Playwright installed or `PLAYWRIGHT_PATH` configured). The browser
+checker mocks **every** agent command, including scans and provider work.
+
+Mandatory coverage source tests exercise weak/malformed model output, budgeted
+repair, missing/partial/unavailable checks, forged consent and sources, imported
+reports, bounded task projections and restarted/legacy journal validation.
+Reports must show all 15 checks in five areas before AI conclusions; unknown,
+empty, truncated or uncited observations cannot become verified evidence.
+Verify print, light/dark, source IDs and hostile-text escaping with browser mocks.
+Current reports always leave antivirus-scan unverified because scan operations
+are not linked to audit evidence: command return/history does not satisfy it.
+TronScript is not registered or executable, and selecting the preset must remain
+inert. Do not run actual startup/task readers, providers, scans or cleanup tools
+for routine source tests; validate native module/projection behavior only in the
+separately authorized VM procedure below.
+
+In an explicitly authorized **disposable Windows 11 VM**, bound to the rebuilt
+Agent/frontend/installer hashes:
+
+1. Selecting the privacy objective must preserve the selected investigation
+   mode, goals and unchecked scanner consents. Independently choose audit-only:
+   no workload selector, warmup, WPR start, ETL analysis, Baseline or Apply.
+   Verify persisted/restarted audit mode and backend rejection of approval,
+   Apply and linked measurements; measured privacy runs keep all existing gates.
+2. Review the prepared evidence before provider consent. Confirm no threat
+   resource/exclusion paths, process command lines, account IDs or event messages
+   leave the reader. Check Unknown/unavailable, missing registry values, policy
+   versus preference, edition/build/MDM and different elevated-user contexts.
+   Complete audit must pause on the prepared sanitized-evidence preview before
+   any provider request; cancel sends nothing and continuing requires an explicit
+   second consent. Advanced audit uses its existing local preview and diagnosis
+   consent. Model/provider calls require independent authorization; use mocks
+   otherwise.
+3. Read Defender status without scanning. Check Normal/passive/alternative AV,
+   disabled/unavailable/module failure, busy/unknown state, outdated signatures,
+   more than 40 detections, and empty history. None certifies a clean PC.
+4. For separately consented quick/full scans, require resource, remediation and
+   network/cloud/sample consents **plus** final confirmation. Cancelling that
+   confirmation must launch nothing. Observe actual Windows Security start/end
+   and scan coverage versus command return; latest-event idle may be stale.
+   Do not weaken protections/exclusions or claim cancellation from app closure.
+5. Interrupt/close the client and restart: the protected pre-command journal
+   must prevent repeating an uncertain scan. Acknowledgment requires reviewing
+   Windows Security and idle evidence; a live owned scanner must reject it.
+   Verify scan/recorder-start concurrency, long scans/deadlines, command failure,
+   busy state after return, and recording/measured-run refusal without cancelling
+   an existing workload or antivirus task. Never kill an unrelated AV service.
+6. Verify scan-journal owner/ACL and medium-integrity read/write/rename/deletion
+   denial under `%ProgramData%\\NeuroTune-journals\\<SID>\\defender-scans`; malformed
+   or unsafe/reparse journals fail closed before scanning. Mock ACL/schema tests
+   do not replace real token/installation acceptance.
+7. Remediation remains Windows Security → Protection history. EICAR testing
+   requires **additional explicit authorization** and isolation; never use real
+   malware. Observe configured quarantine/sample behavior and disclose data loss
+   and unsupported reversal. Do not infer maliciousness from unsigned metadata.
+8. Check optional Autoruns/Sigcheck links and unverified, redacted text imports;
+   NeuroTune must not download/run them, accept EULAs, query VirusTotal or upload
+   files. Test light/dark, real DPI, keyboard, Narrator and native app restart.
+
+No live scanner, quarantine, VM ACL, native UI or installer acceptance has been
+performed for this feature; source/mock checks do not replace live acceptance.
 
 ### Optional supporting files
 
@@ -90,6 +214,16 @@ Use a disposable Windows virtual machine. Do not use a primary PC for the first 
 9. Confirm that the action returns to its original state, the manifest reports
    **Rollback completed**, and the kept run is terminal with a Rollback decision.
 10. Repeat with a second run and choose Rollback directly at the decision gate.
+
+### Security/recovery release checks
+
+- Journal location: `%ProgramData%\NeuroTune-journals\<user SID>\operations` and `runs`, not LocalAppData. Verify owner and ACL on root, SID directory, children and replaced files; use the linked medium-integrity token to prove read/write/rename/deletion is denied. A user-owned pre-created root or reparse path must fail closed without ACL repair.
+- On an upgrade VM, retain a pending legacy journal: reads/new writes must stop with an explicit manual-review message. Recover using the previous build and archive only reviewed legacy data; never promote editable old JSON to trusted recovery state.
+- Reject unknown schemas, malformed/duplicate/missing Registry/BCD fields, invalid value kinds, unknown actions, contradictory state flags and journal ID/directory mismatch before any writer.
+- `scripts/vm-action-integrity.ps1` now removes the GPU cache before rollback and changes the active scheme during core-parking recovery. Its deterministic run journal is a **VM-only writer fixture**, not a validated measurement. Its elevated replacement preserves protected ACLs and a valid transition history.
+- Separately stage an approved `.pow` in the VM, apply with consent, delete the staged file, restart NeuroTune and restore the original active scheme and target existence without the source file.
+- Test I/O failure and interruption before/after capture, durable flush, apply and inverse restore. Process kill is not equivalent to sudden power loss; capture both limitations explicitly.
+- Rebuild one exact installer from the final tree; previous binaries/checksums and old VM results do not cover these changes. See [security and upgrade safety](../SECURITY.md) and [current release gates](VALIDATION_MATRIX.md#current-candidate-not-release-certified).
 
 ## 5. Recovery
 
@@ -211,6 +345,17 @@ Provisioning refuses to overwrite an existing VM or VM directory. Validation
 restores `Clean-NeuroTune-Alpha2` by default, so use it only with the disposable
 `NeuroTune-W11` guest created for this project. Passing
 `-SkipCheckpointRestore` never creates, deletes, or merges checkpoints.
+
+The 2026-10-04 v0.8 installer-only attempt in the existing `NeuroTune-W11`
+guest was blocked by rejected saved credentials before any installation.
+Healthy VM heartbeat/lock screen is not an installer pass. The test restored
+its own checkpoint, removed it, verified the original off state/resources/disk
+inventory and reclaimed temporary storage. Do not reset passwords, disable
+protections, repeatedly retry rejected credentials, or restore an unrelated
+baseline to force this gate. Use valid guest credentials and repeat install,
+installed-binary/resource checks, process smoke, Defender, uninstall and retained
+user-data verification. Current local failure/cleanup evidence is in
+`artifacts/vm-install-uninstall.json`; v0.7 results below are historical only.
 
 The 2026-08-31 automated Windows 11 reports cover installation, 16 targeted
 writer round trips (including page file, core parking, and per-app GPU

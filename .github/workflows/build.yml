@@ -30,7 +30,21 @@ jobs:
       - run: dotnet format NeuroTune.sln --verify-no-changes --no-restore
       - run: dotnet build --configuration Release --no-restore
       - run: dotnet test --configuration Release --no-build
-      - run: dotnet list NeuroTune.sln package --vulnerable --include-transitive
+      - name: Block known NuGet vulnerabilities (including transitive packages)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $raw = & dotnet list NeuroTune.sln package --vulnerable --include-transitive --format json
+          if ($LASTEXITCODE -ne 0) { throw 'NuGet vulnerability listing failed.' }
+          $report = ($raw -join "`n") | ConvertFrom-Json
+          if ($report.version -ne 1 -or -not $report.projects -or $report.problems) { throw 'Unexpected or incomplete NuGet audit report.' }
+          $vulnerable = @($report.projects | ForEach-Object { $_.frameworks } |
+            ForEach-Object { @($_.topLevelPackages) + @($_.transitivePackages) } |
+            Where-Object { $_.vulnerabilities })
+          if ($vulnerable.Count) {
+            $vulnerable | Select-Object id, resolvedVersion | Format-Table
+            throw 'Known vulnerable NuGet dependencies block this build.'
+          }
       - name: Verify MIT and release metadata
         shell: pwsh
         run: ./scripts/test-release-metadata.ps1

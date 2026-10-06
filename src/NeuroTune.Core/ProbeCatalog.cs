@@ -109,4 +109,39 @@ public static class ProbeCatalog
         new(@"registry:HKCU\Software\Microsoft\Windows\DWM\EnableAeroPeek", "Graphics", RegistryProbeHive.CurrentUser, @"Software\Microsoft\Windows\DWM", @"EnableAeroPeek", RegistryValueType.DWord, "Observe the effective graphics configuration without changing it."),
         new(@"registry:HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU\NoAutoRebootWithLoggedOnUsers", "Update", RegistryProbeHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU", @"NoAutoRebootWithLoggedOnUsers", RegistryValueType.DWord, "Observe the effective update configuration without changing it."),
     ];
+
+    // Audit readers only. No associated write capability or preferred policy state.
+    public static IReadOnlyList<ProbeDefinition> PrivacySecurityRegistry { get; } =
+    [
+        AuditProbe(RegistryProbeHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\DataCollection", "AllowTelemetry", "Diagnostic-data policy; 0 is not diagnostic-data-off on every edition. Verify edition/build and Settings."),
+        AuditProbe(RegistryProbeHive.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection", "AllowTelemetry", "Diagnostic-data preference snapshot, not proof of effective policy or zero connected-service data."),
+        AuditProbe(RegistryProbeHive.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo", "Enabled", "Advertising ID user preference; account/device policy may override."),
+        AuditProbe(RegistryProbeHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\AdvertisingInfo", "DisabledByGroupPolicy", "Advertising ID device policy; inspect applicability/management before recommending changes."),
+        AuditProbe(RegistryProbeHive.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Privacy", "TailoredExperiencesWithDiagnosticDataEnabled", "Tailored experiences user preference; no inference about diagnostic collection level."),
+        AuditProbe(RegistryProbeHive.CurrentUser, @"Software\Policies\Microsoft\Windows\CloudContent", "DisableTailoredExperiencesWithDiagnosticData", "Tailored experiences user policy; not an effective-policy attestation."),
+        AuditProbe(RegistryProbeHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\CloudContent", "DisableWindowsConsumerFeatures", "Consumer-experiences device policy; edition applicability matters, not a universal debloat instruction."),
+        AuditProbe(RegistryProbeHive.CurrentUser, @"Software\Microsoft\Speech_OneCore\Settings\OnlineSpeechPrivacy", "HasAccepted", "Online speech consent snapshot; disabling affects connected dictation."),
+        AuditProbe(RegistryProbeHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\InputPersonalization", "AllowInputPersonalization", "Online speech policy; distinguish local typing/inking personalization."),
+        AuditProbe(RegistryProbeHive.CurrentUser, @"Software\Microsoft\InputPersonalization", "RestrictImplicitInkCollection", "Inking personalization preference; inspect supported Settings and user needs."),
+        AuditProbe(RegistryProbeHive.CurrentUser, @"Software\Microsoft\InputPersonalization", "RestrictImplicitTextCollection", "Typing personalization preference, not proof of network transmission."),
+        AuditProbe(RegistryProbeHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\System", "EnableActivityFeed", "Activity policy snapshot; version-dependent, not equivalent to publishing/upload."),
+        AuditProbe(RegistryProbeHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\System", "PublishUserActivities", "Activity publishing policy snapshot; do not infer effective behavior from absence."),
+        AuditProbe(RegistryProbeHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\System", "UploadUserActivities", "Activity upload policy snapshot; applicability changes across Windows versions."),
+        AuditProbe(RegistryProbeHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\AppPrivacy", "LetAppsAccessLocation", "Location policy; per-app exceptions may override. No app/location history is read."),
+        AuditProbe(RegistryProbeHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\AppPrivacy", "LetAppsAccessCamera", "Camera app policy snapshot, not an inventory of individual grants or desktop-app access."),
+        AuditProbe(RegistryProbeHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\AppPrivacy", "LetAppsAccessMicrophone", "Microphone app policy snapshot; preserve meetings, recording and accessibility use."),
+        AuditProbe(RegistryProbeHive.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location", "Value", "Machine location consent; no service change or per-app history.", RegistryValueType.String),
+        AuditProbe(RegistryProbeHive.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\location", "Value", "User location consent; preserve needed location features and check effective Settings.", RegistryValueType.String),
+        AuditProbe(RegistryProbeHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\Windows Search", "AllowCloudSearch", "Cloud search policy snapshot; account/search functionality trade-offs require user review."),
+        AuditProbe(RegistryProbeHive.CurrentUser, @"Software\Policies\Microsoft\Windows\Explorer", "DisableSearchBoxSuggestions", "Search suggestions policy; applicability differs by build, not a universal Bing-disable recipe."),
+        AuditProbe(RegistryProbeHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\WindowsAI", "AllowRecallEnablement", "Recall availability policy; does not prove installation or active snapshot saving."),
+        AuditProbe(RegistryProbeHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\WindowsAI", "DisableAIDataAnalysis", "Recall saving-snapshots device policy; qualify supported build, edition and hardware."),
+        AuditProbe(RegistryProbeHive.CurrentUser, @"Software\Policies\Microsoft\Windows\WindowsAI", "DisableAIDataAnalysis", "Recall saving-snapshots user policy; do not remove packages or infer active recording."),
+        AuditProbe(RegistryProbeHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\System", "EnableSmartScreen", "SmartScreen device policy snapshot; preserve reputation protection, verify effective UI."),
+        AuditProbe(RegistryProbeHive.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer", "SmartScreenEnabled", "SmartScreen preference snapshot, not effective browser/app protection.", RegistryValueType.String),
+        AuditProbe(RegistryProbeHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU", "NoAutoUpdate", "Automatic-update policy snapshot; do not disable security updates for privacy."),
+    ];
+
+    private static ProbeDefinition AuditProbe(RegistryProbeHive hive, string path, string name, string interpretation,
+        RegistryValueType type = RegistryValueType.DWord) => new($"registry:{(hive == RegistryProbeHive.CurrentUser ? "HKCU" : "HKLM")}\\{path}\\{name}", "Privacy/security audit", hive, path, name, type, interpretation);
 }

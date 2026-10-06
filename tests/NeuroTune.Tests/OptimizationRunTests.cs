@@ -195,6 +195,26 @@ public sealed class OptimizationRunTests
     }
 
     [TestMethod]
+    public void Run_load_rejects_a_journal_id_that_does_not_match_its_requested_directory()
+    {
+        // Keep this regression's synthetic journal inside the repository test output.
+        var directory = Path.Combine(AppContext.BaseDirectory, $"security-run-{Guid.NewGuid():N}");
+        try
+        {
+            var service = new OptimizationRunService(directory);
+            var run = service.Create(Profile(), new TuningGoals());
+            var path = Path.Combine(run.DirectoryPath, "run.json");
+            var journal = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!;
+            journal["Id"] = Guid.NewGuid().ToString("D");
+            File.WriteAllText(path, journal.ToJsonString());
+
+            Assert.ThrowsExactly<InvalidOperationException>(() => service.Load(run.Id),
+                "Loading a requested run must not return a different journal identity.");
+        }
+        finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); }
+    }
+
+    [TestMethod]
     public void Run_uses_only_valid_baselines_and_releases_failed_run_measurements()
     {
         var directory = Path.Combine(Path.GetTempPath(), $"neurotune-run-{Guid.NewGuid():N}");
@@ -227,6 +247,28 @@ public sealed class OptimizationRunTests
             File.WriteAllText(path, File.ReadAllText(path).Replace("gaming.game-mode", "gaming.gpu-deadbeef.high", StringComparison.Ordinal));
 
             Assert.AreEqual("gaming.gpu-deadbeef.high", service.List().Single().ApprovedActionIds.Single());
+        }
+        finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); }
+    }
+
+    [TestMethod]
+    public async Task Approval_and_engine_reject_opposing_actions_before_any_system_write()
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, $"security-conflict-{Guid.NewGuid():N}");
+        try
+        {
+            var service = new OptimizationRunService(directory);
+            var run = service.Create(Profile(), new TuningGoals());
+            service.BeginDiagnosis(run.Id);
+            service.RecordDiagnosis(run.Id, Outcome());
+            service.AttachMeasurement(run.Id, Session(run.Id, MeasurementLabel.Baseline));
+            var catalog = new OptimizationCatalog();
+            Assert.ThrowsExactly<InvalidOperationException>(() => service.Approve(run.Id,
+                ["gaming.game-mode", "gaming.game-mode-off"], false, catalog));
+            Assert.AreEqual(OptimizationRunState.BaselineReady, service.Load(run.Id).State);
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                new OptimizationEngine(catalog, new BackupService()).ApplyAsync(["gaming.game-mode", "gaming.game-mode-off"]));
+            StringAssert.Contains(error.Message, "same target");
         }
         finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); }
     }

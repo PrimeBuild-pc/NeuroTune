@@ -114,6 +114,7 @@ public sealed class PlannerLoopTests
     [DataRow(OptimizationPriority.SystemLatency, "SYSTEM LATENCY")]
     [DataRow(OptimizationPriority.NetworkLatency, "NETWORK OPTIMIZATION")]
     [DataRow(OptimizationPriority.Stability, "SYSTEM STABILITY")]
+    [DataRow(OptimizationPriority.PrivacySecurity, "WINDOWS PRIVACY AND SECURITY")]
     [DataRow(OptimizationPriority.Fps, "LEGACY FRAME-RATE FOCUS")]
     [DataRow(OptimizationPriority.Efficiency, "LEGACY EFFICIENCY FOCUS")]
     public async Task Selected_focus_specializes_every_turn_without_changing_goals_tools_or_write_authority(OptimizationPriority priority, string marker)
@@ -122,7 +123,7 @@ public sealed class PlannerLoopTests
         var (listener, server, settings) = StartServer(new Func<string, string>[]
         {
             request => { Capture(request); return """{"kind":"requestInvestigation","toolId":"system-events","question":"Check relevant recent event metadata"}"""; },
-            request => { Capture(request); return """{"kind":"diagnosis","diagnosis":{"summary":"No supported change","findings":[{"title":"CPU","evidenceId":"system:cpu","currentValue":"CPU","assessment":"Observed metadata, not a measured improvement"}],"recommendations":[],"consentQuestion":"Finish without changes?"}}"""; }
+            request => { Capture(request); var reply = """{"kind":"diagnosis","diagnosis":{"summary":"No supported change","findings":[{"title":"CPU","evidenceId":"system:cpu","currentValue":"CPU","assessment":"Observed metadata, not a measured improvement"}],"recommendations":[],"consentQuestion":"Finish without changes?"}}"""; return priority == OptimizationPriority.PrivacySecurity ? WithUncheckedCoverage(reply) : reply; }
         });
         var goals = new TuningGoals { Priority = priority, RiskProfile = RiskProfile.Safe, Games = ["Workload"], Notes = "Preserve security and image quality" };
         var directory = Path.Combine(Path.GetTempPath(), $"neurotune-focus-{Guid.NewGuid():N}");
@@ -167,6 +168,70 @@ public sealed class PlannerLoopTests
             using var body = JsonDocument.Parse(request);
             prompts.Add(body.RootElement.GetProperty("messages")[0].GetProperty("content").GetString()!);
         }
+    }
+
+    [TestMethod]
+    public async Task Audit_planner_has_no_executable_catalog_and_downgrades_invented_write_authority()
+    {
+        Func<string, string> reply = request =>
+        {
+            using var body = JsonDocument.Parse(request);
+            var prompt = body.RootElement.GetProperty("messages")[0].GetProperty("content").GetString()!;
+            Assert.Contains("AUDIT ONLY", prompt);
+            Assert.Contains("no performance measurements are required", prompt);
+            Assert.Contains("WINDOWS PRIVACY AND SECURITY", prompt);
+            Assert.Contains("CURRENTLY AVAILABLE EXECUTION CAPABILITIES", prompt);
+            Assert.DoesNotContain("\"actionId\":\"gaming.game-mode\"", prompt);
+            return """{"kind":"diagnosis","diagnosis":{"summary":"Audit, not malware proof","findings":[{"title":"CPU","evidenceId":"system:cpu","currentValue":"CPU","assessment":"Metadata"}],"recommendations":[{"id":"bad","kind":"executableAction","actionId":"gaming.game-mode","title":"Model attempted a write","evidenceIds":["system:cpu"],"reason":"Review","risk":"low"}],"consentQuestion":"Apply?"}}""";
+        };
+        var (listener, server, settings) = StartServer([reply, reply]);
+        using (listener)
+        {
+            var outcome = await new LlmClient(new OptimizationCatalog()).PlanAsync(new SystemProfile { Cpu = "CPU" },
+                new TuningGoals { Priority = OptimizationPriority.PrivacySecurity }, settings, null, mode: InvestigationMode.AuditOnly);
+            await server;
+            Assert.IsFalse(outcome.UsedLocalFallback);
+            Assert.AreEqual(PlanRecommendationKind.ManualGuidance, outcome.Diagnosis.Recommendations.Single().Kind);
+            Assert.AreEqual("", outcome.Diagnosis.Recommendations.Single().ActionId);
+            Assert.Contains("without applying", outcome.Diagnosis.ConsentQuestion);
+        }
+    }
+
+    [TestMethod]
+    public async Task Audit_checklist_reminder_uses_existing_budget_and_never_forces_scanners_or_shell()
+    {
+        const string response = """{"kind":"diagnosis","diagnosis":{"summary":"Limited metadata report","findings":[],"recommendations":[],"consentQuestion":"Review?"}}""";
+        var prompts = new List<string>();
+        var (listener, server, settings) = StartServer(new Func<string, string>[]
+        {
+            request => { Capture(request); return response; },
+            request => { Capture(request); return WithUncheckedCoverage(response); }
+        });
+        settings.InvestigationMaxTurns = 2;
+        using (listener)
+        {
+            var outcome = await new LlmClient(new OptimizationCatalog()).PlanAsync(new SystemProfile(), new TuningGoals(), settings, null,
+                investigate: (_, _) => throw new AssertFailedException("The checklist must not force any tool execution"), mode: InvestigationMode.AuditOnly);
+            await server;
+            Assert.IsFalse(outcome.UsedLocalFallback); Assert.HasCount(2, prompts);
+            Assert.AreEqual("coverage-review", outcome.Audit[0].Kind); Assert.IsFalse(outcome.Audit[0].Accepted);
+            Assert.HasCount(15, outcome.Diagnosis.AuditCoverage); Assert.IsFalse(outcome.Diagnosis.AuditCoverageComplete);
+            foreach (var prompt in prompts)
+            {
+                Assert.Contains("MANDATORY AUDIT REPORT CHECKLIST", prompt); Assert.Contains("scheduled-tasks", prompt);
+                Assert.Contains("TronScript/cleanup suites are not registered diagnostics", prompt);
+                Assert.Contains("SAME budget", prompt); Assert.Contains("antivirus-scan", prompt);
+            }
+        }
+        void Capture(string request) { using var body = JsonDocument.Parse(request); prompts.Add(body.RootElement.GetProperty("messages")[0].GetProperty("content").GetString()!); }
+    }
+
+    private static string WithUncheckedCoverage(string content)
+    {
+        var root = System.Text.Json.Nodes.JsonNode.Parse(content)!;
+        root["diagnosis"]!["auditCoverage"] = JsonSerializer.SerializeToNode(AuditChecklist.Checks.Select(check => new AuditCheckAssessment
+        { CheckId = check.Id, Status = AuditCheckStatus.NotChecked, Assessment = "Evidence insufficient; explicit limited coverage" }));
+        return root.ToJsonString();
     }
 
     [TestMethod]
