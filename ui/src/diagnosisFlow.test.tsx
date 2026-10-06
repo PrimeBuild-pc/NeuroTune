@@ -6,7 +6,7 @@ import type { MeasurementSession, MeasurementWorkload, ScanResult, TuningGoals }
 
 const goals: TuningGoals = { priority: 'systemLatency', riskProfile: 'balanced', games: [], notes: '', gameContext: { game: '', version: '', launcher: '', graphicsApi: '', displayMode: '', vrr: '', vSync: '', symptoms: [], preserve: '' }, performanceInput: { userProvided: true, notes: '' } };
 const workload: MeasurementWorkload = { processId: 42, name: 'game', startTimeUtc: '2026-01-01T00:00:00Z', description: 'game' };
-function harness(options: { cancelDuringStart?: boolean; invalidQuality?: boolean; failedProvider?: boolean } = {}) {
+function harness(options: { cancelDuringStart?: boolean; invalidQuality?: boolean; failedProvider?: boolean; journalError?: string; activeRun?: boolean } = {}) {
   const calls: string[] = []; const requests: Array<{ command: string; payload: unknown }> = []; const sessions: MeasurementSession[] = []; let id = 0;
   const flow = new DiagnosisFlow(() => {}, {
     cancel: async () => true, wait: async () => {},
@@ -28,7 +28,13 @@ function harness(options: { cancelDuringStart?: boolean; invalidQuality?: boolea
           session.state = 'completed'; session.report = { schemaVersion: 1, quality: { isValid: !options.invalidQuality } } as MeasurementSession['report'];
           result = session; break;
         }
-        case 'run-create': result = { id: 'run', state: 'scanned' }; break;
+        case 'run-list':
+          if (options.journalError) throw new Error(options.journalError);
+          result = options.activeRun ? [{ id: 'retained', state: 'recoveryRequired' }] : []; break;
+        case 'run-create':
+          if (options.journalError) throw new Error(options.journalError);
+          if (options.activeRun) throw new Error('Finish or recover the active optimization run before creating another one.');
+          result = { id: 'run', state: 'scanned' }; break;
         case 'diagnose': result = { summary: options.failedProvider ? 'Provider failed; not an AI diagnosis' : 'AI result', recommendations: [] }; break;
         case 'run-get': result = { id: 'run', state: options.failedProvider ? 'hypothesizing' : !sessions.length ? 'proposalReady' : sessions[0].systemWide ? 'baselinePending' : 'baselineReady' }; break;
         case 'measurement-cancel': sessions[0].state = 'cancelled'; break;
@@ -43,6 +49,17 @@ function harness(options: { cancelDuringStart?: boolean; invalidQuality?: boolea
 const input = { goals, workload, durationSeconds: 30, optionalTelemetryConsent: false, firmwareReadConsent: false };
 
 describe('complete diagnosis lifecycle', () => {
+  it('checks journal access before collection in both modes and preserves the actionable native error', async () => {
+    const journalError = 'Legacy journals need manual review: C:\\Users\\VM-admin\\AppData\\Local\\NeuroTune\\runs';
+    for (const mode of ['measuredOptimization', 'auditOnly'] as const) {
+      const { flow, calls } = harness({ journalError });
+      await expect(flow.execute({ ...input, mode })).rejects.toThrow(journalError);
+      expect(calls).toEqual(['run-list']);
+    }
+    const retained = harness({ activeRun: true });
+    await expect(retained.flow.execute(input)).rejects.toThrow('retained diagnosis');
+    expect(retained.calls).toEqual(['run-list']);
+  });
   it('collects three matching traces before one model request, never invoking an apply command', async () => {
     const { flow, calls } = harness(); const result = await flow.execute(input);
     expect(result.sessions).toHaveLength(3);
