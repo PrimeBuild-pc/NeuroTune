@@ -23,13 +23,15 @@ internal sealed class JournalStorage(string directory, bool privileged = false)
     internal static void RequireNoLegacyJournals(string dataDirectory)
     {
         // Never silently abandon or elevate unsigned legacy recovery data.
-        foreach (var name in new[] { "operations", "runs" })
-        {
-            var legacy = Path.Combine(dataDirectory, name);
-            if (Path.Exists(legacy) && (File.GetAttributes(legacy).HasFlag(FileAttributes.ReparsePoint) ||
+        var blocked = new[] { "operations", "runs" }
+            .Select(name => Path.Combine(Path.GetFullPath(dataDirectory), name))
+            .Where(legacy => Path.Exists(legacy) && (File.GetAttributes(legacy).HasFlag(FileAttributes.ReparsePoint) ||
                 !Directory.Exists(legacy) || Directory.EnumerateFileSystemEntries(legacy).Any()))
-                throw new InvalidOperationException("Legacy journals need manual review: finish recovery with the previous build and archive the old operations/runs directories before upgrading. They are not imported into privileged storage.");
-        }
+            .ToArray();
+        if (blocked.Length > 0)
+            throw new InvalidOperationException($"Legacy journals need manual review. Blocking paths for the Windows account running NeuroTune: {string.Join("; ", blocked)}. " +
+                "Finish or review recovery with the previous build. Only after resolving old writes, move the reviewed folders to a backup outside the NeuroTune data directory. " +
+                "Copying folders or reinstalling does not clear this block. Do not delete pending recovery or import legacy journals into privileged storage.");
     }
 
     internal void EnsureDirectory(string path)
