@@ -29,6 +29,7 @@ export interface SystemProfile {
   disks: string[];
   activePowerPlan: string;
   windowsSettings: Record<string, string>;
+  privacySecurity?: Record<string, string>;
   gamingSettings: Record<string, string>;
   networkAdapters: string[];
   networkSettings: Record<string, string>;
@@ -55,6 +56,16 @@ export interface TelemetryCapability {
   status: 'supported' | 'unavailable' | 'blockedByHvci' | 'driverNotApproved';
   detail: string;
 }
+
+export interface DefenderReport {
+  status: 'observed' | 'unavailable'; readAtUtc: string; scanState: 'idle' | 'busy' | 'unknown';
+  protection?: { antivirusEnabled?: boolean; realTimeProtectionEnabled?: boolean; tamperProtected?: boolean; runningMode: string; signatureAgeDays?: number; signatureUpdatedAtUtc?: string; quickScanEndedAtUtc?: string; fullScanEndedAtUtc?: string };
+  preferences?: { cloudReporting?: number; sampleSubmission?: number; cloudBlockLevel?: number; excludedPathCount?: number; excludedProcessCount?: number; excludedExtensionCount?: number };
+  threats: Array<{ threatId?: string; name: string; severity?: number; isActive?: boolean; didThreatExecute?: boolean }>;
+  truncated: boolean; limitation: string;
+}
+export interface DefenderScanOperation { id: string; scanType: 'quick' | 'full'; requestedAtUtc: string; state: 'Running' | 'CommandReturned' | 'InterruptedOrFailed' | 'ReviewedAfterInterruption'; detail: string; }
+export interface DefenderScanResult { operation: DefenderScanOperation; report: DefenderReport; }
 
 export interface PerformanceSnapshot {
   cpuLoadPercent?: number;
@@ -120,7 +131,8 @@ export interface Recommendation {
   reviewWarnings: string[];
 }
 
-export type OptimizationPriority = 'balanced' | 'fps' | 'systemLatency' | 'networkLatency' | 'efficiency' | 'stability';
+export type OptimizationPriority = 'balanced' | 'fps' | 'systemLatency' | 'networkLatency' | 'efficiency' | 'stability' | 'privacySecurity';
+export type InvestigationMode = 'measuredOptimization' | 'auditOnly';
 
 export interface TuningGoals {
   priority: OptimizationPriority;
@@ -186,7 +198,15 @@ export interface DiagnosisFinding {
 
 export interface SystemOneAdvisory { phase: string; status: string; domain: string | null; score: number | null; seconds: number; detail: string; evidenceIds: string[]; }
 
+export interface AuditCheckAssessment {
+  checkId: string; area: string; label: string;
+  status: 'notChecked' | 'reviewed' | 'partial' | 'unavailable' | 'consentDenied';
+  evidenceIds: string[]; assessment: string;
+}
+
 export interface Diagnosis {
+  auditCoverage?: AuditCheckAssessment[];
+  auditCoverageComplete?: boolean;
   systemOneAdvisories?: SystemOneAdvisory[];
   summary: string;
   findings: DiagnosisFinding[];
@@ -219,6 +239,7 @@ export type OptimizationRunState = 'draft' | 'scanned' | 'hypothesizing' | 'base
 
 export interface OptimizationRun {
   id: string;
+  mode?: InvestigationMode; // Legacy schema-1 runs are measured optimizations.
   state: OptimizationRunState;
   requiresRecovery: boolean;
   goals: TuningGoals;

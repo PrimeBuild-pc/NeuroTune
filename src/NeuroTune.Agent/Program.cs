@@ -38,6 +38,10 @@ try
         "chatgpt-signout" => await ChatGptSignOut(Read<ChatGptSignInRequest>(input), settingsService),
         "models" => await Models(settingsService, catalog),
         "scan" => await Scan(catalog, settingsService, ReadOptional<ScanRequest>(input)),
+        "defender-status" => WindowsSecurityAudit.ReadDefender(),
+        "defender-scan-current" => new DefenderScanService().Current(),
+        "defender-scan" => await new DefenderScanService().StartAsync(Read<DefenderScanRequest>(input)),
+        "defender-scan-review" => new DefenderScanService().AcknowledgeInterruption(Read<DefenderScanReviewRequest>(input).ReviewedInWindowsSecurity),
         "support-preview" => SupportingAttachments.Preview(Read<SupportingAttachmentsRequest>(input)),
         "run-create" => CreateRun(Read<RunCreateRequest>(input)),
         "run-get" => new OptimizationRunService().Load(Read<RunIdRequest>(input).RunId),
@@ -66,7 +70,7 @@ try
         "measurement-frame-import" => new MeasurementService().ImportFrameTimes(Read<FrameTimeImportRequest>(input)),
         "measurement-list" => new MeasurementService().List(),
         "measurement-compare" => await CompareMeasurement(Read<MeasurementCompareRequest>(input)),
-        "measurement-explain" => await ExplainMeasurement(Read<MeasurementExplanationRequest>(input), settingsService, catalog),
+        "measurement-explain" => await ExplainMeasurement(Read<MeasurementExplanationAgentRequest>(input), settingsService, catalog),
         "measurement-topology" => new MeasurementService().Topology(),
         "measurement-gpu-candidates" => new MeasurementService().GpuAffinityCandidates(Read<GpuCandidateRequest>(input)),
         "measurement-gpu-affinity-inspect" => new MeasurementService().GpuAffinityPolicy(Read<GpuAffinityInspectRequest>(input)),
@@ -167,7 +171,8 @@ async Task<object> Models(SettingsService service, OptimizationCatalog actionCat
 async Task<object> Scan(OptimizationCatalog actionCatalog, SettingsService settingsService, ScanRequest? request)
 {
     var profileTask = Task.Run(() => new SystemProfiler().Collect(
-        phase => Console.Error.WriteLine(phase), request?.OptionalTelemetryConsent == true, true, request?.FirmwareReadConsent == true));
+        phase => Console.Error.WriteLine(phase), request?.OptionalTelemetryConsent == true, true, request?.FirmwareReadConsent == true,
+        request?.PrivacySecurityReadConsent == true));
     var snapshotTask = Task.Run(() => new PerformanceSnapshotService().Collect());
     await Task.WhenAll(profileTask, snapshotTask);
     var profile = await profileTask;
@@ -196,6 +201,7 @@ object AnalyzeLocal(DiagnoseRequest request)
 
 async Task<object> Diagnose(DiagnoseRequest request, SettingsService service, OptimizationCatalog actionCatalog)
 {
+    var language = ResponseLanguage.Read(request.Language);
     if (request.Profile is null || request.Goals is null)
         throw new InvalidOperationException("Diagnosis requires a system profile and tuning goals.");
     var settings = service.Load();
@@ -223,7 +229,8 @@ async Task<object> Diagnose(DiagnoseRequest request, SettingsService service, Op
     var report = LlmClient.MeasureEvidence(evidence);
     try
     {
-        var outcome = await new LlmClient(actionCatalog).PlanAsync(request.Profile, request.Goals, settings, key, measurementEvidence, attachments: attachments, imagesConfirmed: request.ImagesConfirmed);
+        var outcome = await new LlmClient(actionCatalog).PlanAsync(request.Profile, request.Goals, settings, key, measurementEvidence, attachments: attachments, imagesConfirmed: request.ImagesConfirmed,
+            mode: run?.Mode ?? InvestigationMode.MeasuredOptimization, language: language);
         if (run is not null)
         {
             if (outcome.UsedLocalFallback)
@@ -256,11 +263,12 @@ OptimizationRun CreateRun(RunCreateRequest request)
     var sessions = measurementService.List().Where(session => ids.Contains(session.Id)).ToList();
     if (sessions.Count != ids.Count)
         throw new InvalidOperationException("Every optimization run measurement must exist locally.");
-    return new OptimizationRunService().Create(request.Profile, request.Goals, sessions, request.Attachments, request.ImagesConfirmed);
+    return new OptimizationRunService().Create(request.Profile, request.Goals, sessions, request.Attachments, request.ImagesConfirmed, request.Mode);
 }
 
 MeasurementSession StartMeasurement(MeasurementStartRequest request)
 {
+    using var securityGate = DefenderScanService.EnterMeasurementGate();
     if (request.OptimizationRunId is { } runId)
     {
         var run = new OptimizationRunService().Load(runId);
@@ -273,6 +281,9 @@ MeasurementSession StartMeasurement(MeasurementStartRequest request)
         if (request.Label != expectedLabel)
             throw new InvalidOperationException($"This optimization run requires a {expectedLabel} measurement.");
     }
+    // Redirecting watchdog stdio alone still lets .NET inherit the Agent's original Rust IPC handles.
+    // Clear their inheritance before WPR starts; failure must not leave a capture without its watchdog.
+    ResponsePipes.PreventInheritance();
     var service = new MeasurementService(Console.Error.WriteLine);
     var session = service.Start(request, Path.Combine(AppContext.BaseDirectory, "NeuroTuneLatency.wprp"));
     StartWatchdog(session.Id);
@@ -301,14 +312,15 @@ async Task<MeasurementComparison> CompareMeasurement(MeasurementCompareRequest r
     return comparison;
 }
 
-async Task<string> ExplainMeasurement(MeasurementExplanationRequest request, SettingsService service, OptimizationCatalog actionCatalog)
+async Task<string> ExplainMeasurement(MeasurementExplanationAgentRequest request, SettingsService service, OptimizationCatalog actionCatalog)
 {
+    var language = ResponseLanguage.Read(request.Language);
     if (MeasurementService.HasActiveRecording()) throw new InvalidOperationException("Stop/cancel recording before asking the selected provider AI to explain results.");
     var comparison = new MeasurementService().Compare(request.Comparison);
     if (comparison.RejectionReasons.Count > 0) throw new InvalidOperationException("The comparison was rejected; the selected AI cannot bypass its validity checks.");
     var settings = service.Load();
     var key = await Credential(service, settings);
-    return await new LlmClient(actionCatalog).ExplainComparisonAsync(comparison, request.Goals, settings, key);
+    return await new LlmClient(actionCatalog).ExplainComparisonAsync(comparison, request.Goals, settings, key, language: language);
 }
 
 object? DeleteMeasurement(MeasurementIdRequest request)
@@ -365,6 +377,7 @@ async Task<OperationManifest> Apply(ApplyRequest request, OptimizationCatalog ac
     if (request.RunId == Guid.Empty)
         throw new InvalidOperationException("Every system write must belong to an optimization run.");
     var run = runService.Load(request.RunId);
+    if (run.Mode == InvestigationMode.AuditOnly) throw new InvalidOperationException("Audit-only runs cannot apply Windows changes.");
     if (run.State == OptimizationRunState.BaselineReady)
         run = runService.Approve(run.Id, request.ActionIds, request.HighRiskConfirmed, actionCatalog);
     else if (run.State == OptimizationRunState.Approved)
@@ -426,7 +439,7 @@ OptimizationRun ReconcileRun(RunIdRequest request, OptimizationCatalog actionCat
 
     if (run.State == OptimizationRunState.Applying && manifest.Status == "Completed")
     {
-        var restart = run.ApprovedActionIds.Select(actionCatalog.Get).Any(action => action.RequiresRestart);
+        var restart = backupService.RequiresRestart(manifest);
         return service.RecordApplyCompleted(run.Id, restart);
     }
     if (run.State == OptimizationRunState.Applying)
@@ -480,12 +493,14 @@ async Task<object?> Rollback(RollbackRequest request, OptimizationCatalog action
 sealed record AgentResponse(bool Ok, object? Data, string? Error);
 sealed record SaveProviderRequest(UserSettings Settings, string? ApiKey);
 sealed record DiagnoseRequest(SystemProfile? Profile, TuningGoals? Goals, List<Guid>? MeasurementSessionIds = null, Guid? RunId = null,
-    List<SupportingAttachment>? Attachments = null, bool ImagesConfirmed = false);
+    List<SupportingAttachment>? Attachments = null, bool ImagesConfirmed = false, JsonElement Language = default);
+sealed record MeasurementExplanationAgentRequest(MeasurementCompareRequest Comparison, TuningGoals Goals, JsonElement Language = default);
 sealed record ApplyRequest(List<string> ActionIds, bool HighRiskConfirmed, Guid RunId);
 sealed record RollbackRequest(Guid OperationId, Guid? RunId = null);
-sealed record ScanRequest(bool OptionalTelemetryConsent, bool FirmwareReadConsent = false);
+sealed record ScanRequest(bool OptionalTelemetryConsent, bool FirmwareReadConsent = false, bool PrivacySecurityReadConsent = false);
 sealed record RunCreateRequest(SystemProfile? Profile, TuningGoals? Goals, List<Guid>? MeasurementSessionIds = null,
-    List<SupportingAttachment>? Attachments = null, bool ImagesConfirmed = false);
+    List<SupportingAttachment>? Attachments = null, bool ImagesConfirmed = false, InvestigationMode Mode = InvestigationMode.MeasuredOptimization);
 sealed record RunIdRequest(Guid RunId);
+sealed record DefenderScanReviewRequest(bool ReviewedInWindowsSecurity);
 sealed record PowerPlanDirectoryRequest(string Directory);
 sealed record PowerPlanPathRequest(string Path);

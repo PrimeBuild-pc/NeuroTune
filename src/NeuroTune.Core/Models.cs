@@ -5,7 +5,8 @@ namespace NeuroTune;
 public enum LlmProvider { OpenRouter, OpenAI, Anthropic, DeepSeek, Custom, Local, ChatGpt }
 public enum ApiProtocol { OpenAiCompatible, Anthropic }
 public enum RiskLevel { Low, Medium, High }
-public enum OptimizationPriority { Balanced, Fps, SystemLatency, NetworkLatency, Efficiency, Stability }
+public enum OptimizationPriority { Balanced, Fps, SystemLatency, NetworkLatency, Efficiency, Stability, PrivacySecurity }
+public enum InvestigationMode { MeasuredOptimization, AuditOnly }
 public enum ConflictKind { Confirmed, Conditional, SuspiciousOverride, MissingEvidence }
 public enum EvidencePrivacy { General, SystemConfiguration, SoftwareInventory }
 public enum TelemetryStatus { Supported, Unavailable, BlockedByHvci, DriverNotApproved }
@@ -33,7 +34,7 @@ public sealed class UserSettings
 
 public sealed class SystemProfile
 {
-    public int SchemaVersion { get; set; } = 4;
+    public int SchemaVersion { get; set; } = 5;
     public DateTimeOffset CollectedAt { get; set; } = DateTimeOffset.Now;
     public string OperatingSystem { get; set; } = "Unavailable";
     public string Cpu { get; set; } = "Unavailable";
@@ -42,6 +43,7 @@ public sealed class SystemProfile
     public List<string> Disks { get; set; } = [];
     public string ActivePowerPlan { get; set; } = "Unavailable";
     public Dictionary<string, string> WindowsSettings { get; set; } = [];
+    public Dictionary<string, string> PrivacySecurity { get; set; } = [];
     public Dictionary<string, string> GamingSettings { get; set; } = [];
     public List<string> NetworkAdapters { get; set; } = [];
     public Dictionary<string, string> NetworkSettings { get; set; } = [];
@@ -199,6 +201,8 @@ public sealed class UserPerformanceInput
 public sealed class DiagnosisResult
 {
     public List<SystemOneAdvisory> SystemOneAdvisories { get; set; } = [];
+    public List<AuditCheckAssessment> AuditCoverage { get; set; } = [];
+    public bool AuditCoverageComplete => AuditChecklist.IsComplete(AuditCoverage);
     public string Summary { get; set; } = "";
     public List<DiagnosisFinding> Findings { get; set; } = [];
     public List<PlanRecommendation> Recommendations { get; set; } = [];
@@ -254,6 +258,7 @@ public sealed class ActionRecord
 {
     public string ActionId { get; set; } = "";
     public string OriginalState { get; set; } = "";
+    public string? RecoveryTarget { get; set; }
     public bool Attempted { get; set; }
     public bool Applied { get; set; }
     public bool RolledBack { get; set; }
@@ -263,7 +268,7 @@ public sealed class ActionRecord
 public sealed class OperationManifest
 {
     public List<SystemOneAdvisory> SystemOneAdvisories { get; set; } = [];
-    public int SchemaVersion { get; set; } = 2;
+    public int SchemaVersion { get; set; } = 3;
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid? OptimizationRunId { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;

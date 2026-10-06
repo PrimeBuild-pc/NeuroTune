@@ -1,5 +1,9 @@
 # Local latency implementation and validation — 2026-09-07
 
+**Historical record with follow-ups through 2026-09-30.** Dates, binaries,
+results and remaining checks below retain their original scope. Neither these
+results nor later native UI/WPR smoke certify the security-hardened candidate. See [current release gates](VALIDATION_MATRIX.md#current-candidate-not-release-certified).
+
 NeuroTune now records system-wide latency diagnostics without requiring a
 target process, using its existing WPR/TraceEvent engine. It does not depend on
 LatencyMon being installed. This is partial diagnostic coverage, not full

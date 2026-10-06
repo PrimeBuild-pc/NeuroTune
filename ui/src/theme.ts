@@ -1,4 +1,16 @@
+import { useSyncExternalStore } from 'react';
 import type { ThemePreference } from './types';
+
+const systemThemeQuery = '(prefers-color-scheme: dark)';
+function subscribeSystemTheme(change: () => void) {
+  const media = window.matchMedia(systemThemeQuery);
+  media.addEventListener('change', change);
+  return () => media.removeEventListener('change', change);
+}
+export function useResolvedTheme(preference: ThemePreference): 'light' | 'dark' {
+  const systemDark = useSyncExternalStore(subscribeSystemTheme, () => window.matchMedia(systemThemeQuery).matches, () => false);
+  return resolveTheme(preference, systemDark);
+}
 
 const storageKey = 'neurotune.theme';
 
@@ -12,7 +24,7 @@ export function loadThemePreference(): ThemePreference {
 }
 
 export function applyTheme(preference: ThemePreference): () => void {
-  const media = window.matchMedia('(prefers-color-scheme: dark)');
+  const media = window.matchMedia(systemThemeQuery);
   const update = () => {
     document.documentElement.dataset.theme = resolveTheme(preference, media.matches);
     document.documentElement.style.colorScheme = resolveTheme(preference, media.matches);

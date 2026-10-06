@@ -1,16 +1,18 @@
+import { t } from './i18n';
 import type { MeasurementSession, OptimizationAction, OptimizationPriority, Recommendation, RiskProfile } from './types';
 
 const analysisPresets: Array<{ id: OptimizationPriority; label: string; detail: string; legacy?: boolean }> = [
-  { id: 'balanced', label: 'Performance complessive', detail: 'Indaga i colli di bottiglia del workload, fluidità e prestazioni sostenute, valutando i compromessi.' },
-  { id: 'systemLatency', label: 'Latenza del sistema', detail: 'Indaga reattività, attese e stalli. Le tracce di scheduling non misurano la latenza input end-to-end.' },
-  { id: 'networkLatency', label: 'Ottimizzazione rete', detail: 'Indaga latenza, jitter, perdite, disconnessioni o throughput, distinguendo PC, rete locale e percorso esterno.' },
-  { id: 'stability', label: 'Stabilità del sistema', detail: 'Indaga crash, blocchi, reset ed errori ricorrenti, distinguendo sintomi, ipotesi e cause da verificare.' },
-  { id: 'fps', label: 'Frame rate (precedente)', detail: 'Mantiene il focus FPS del run salvato; non viene convertito in un altro obiettivo.', legacy: true },
-  { id: 'efficiency', label: 'Efficienza (precedente)', detail: 'Mantiene il focus energetico del run salvato; non viene convertito in un altro obiettivo.', legacy: true },
+  { id: 'balanced', label: 'Overall performance', detail: 'Investigate workload bottlenecks, smoothness and sustained performance, weighing trade-offs.' },
+  { id: 'systemLatency', label: 'System latency', detail: 'Investigate responsiveness, waits and stalls. Scheduling traces do not measure end-to-end input latency.' },
+  { id: 'networkLatency', label: 'Network optimization', detail: 'Investigate latency, jitter, loss, disconnections or throughput, distinguishing the PC, local network and external path.' },
+  { id: 'stability', label: 'System stability', detail: 'Investigate crashes, freezes, resets and recurring errors, distinguishing symptoms, hypotheses and causes to verify.' },
+  { id: 'privacySecurity', label: 'Windows privacy & security', detail: 'Investigate data collection, protections and detections. The preset starts no tweak, scanner or removal.' },
+  { id: 'fps', label: 'Frame rate (legacy)', detail: 'Keep the saved run’s FPS focus; it is not converted to another objective.', legacy: true },
+  { id: 'efficiency', label: 'Efficiency (legacy)', detail: 'Keep the saved run’s energy focus; it is not converted to another objective.', legacy: true },
 ];
 
 export function analysisPresetsFor(priority: OptimizationPriority) {
-  return analysisPresets.filter(item => !item.legacy || item.id === priority);
+  return analysisPresets.filter(item => !item.legacy || item.id === priority).map(item => ({ ...item, label: t(item.label), detail: t(item.detail) }));
 }
 
 export function selectActionIdsForProfile(
@@ -34,13 +36,13 @@ export function selectActionIdsForProfile(
 }
 
 export function planKindLabel(kind: Recommendation['kind']): string {
-  return ({
+  return t(({
     executableAction: 'NeuroTune action',
     manualGuidance: 'Manual guidance',
     scriptArtifact: 'Unverified script',
     externalResource: 'Verified resource',
     updateNotice: 'Official update notice',
-  } satisfies Record<Recommendation['kind'], string>)[kind];
+  } satisfies Record<Recommendation['kind'], string>)[kind]);
 }
 
 export function preparatoryBaselines(sessions: MeasurementSession[], selectedIds: Set<string>): MeasurementSession[] {

@@ -18,6 +18,7 @@ public sealed class OptimizationEngine
     {
         var actions = actionIds.Distinct(StringComparer.OrdinalIgnoreCase).Select(_catalog.Get).ToList();
         if (actions.Count == 0) throw new InvalidOperationException("Select at least one optimization.");
+        OptimizationCatalog.ValidateSelection(actions);
         if (actions.Any(action => action.Risk == RiskLevel.High) && !highRiskConfirmed)
             throw new InvalidOperationException("High-risk capabilities require a separate explicit confirmation.");
 
@@ -42,14 +43,21 @@ public sealed class OptimizationEngine
                 TestDelay();
                 foreach (var action in actions)
                 {
-                    var record = new ActionRecord { ActionId = action.Id, OriginalState = action.Capture(), Attempted = true };
-                    manifest.Actions.Add(record);
-                    _backup.Save(manifest);
+                    var record = new ActionRecord
+                    {
+                        ActionId = action.Id,
+                        OriginalState = action.Capture(),
+                        RecoveryTarget = action.RecoveryTarget,
+                        Attempted = true
+                    };
+                    action.ValidateSnapshot(record.OriginalState);
+                    _backup.RecordAttempt(manifest, record);
                     action.Apply();
                     if (!action.Verify()) throw new InvalidOperationException($"Verification failed for {action.Name}.");
                     record.Applied = true;
                     _backup.Save(manifest);
                 }
+                if (actions.Any(action => !action.Verify())) throw new InvalidOperationException("The final selected capability state was not preserved.");
                 manifest.After = _performance.Collect();
                 manifest.Status = "Completed";
                 _backup.Save(manifest);
@@ -77,6 +85,8 @@ public sealed class OptimizationEngine
         if (!acquired) throw new InvalidOperationException("Another NeuroTune operation is already running.");
         try
         {
+            // Resolve and validate every record before the first privileged restore, not after it.
+            _backup.Validate(manifest);
             _backup.CreateRestorePoint($"NeuroTune before rollback {manifest.Id:N}");
             manifest.Status = "Rolling back";
             _backup.Save(manifest);
@@ -96,9 +106,9 @@ public sealed class OptimizationEngine
         {
             try
             {
-                var action = _catalog.Get(record.ActionId);
+                var action = _catalog.ResolveRollback(record);
                 action.Restore(record.OriginalState);
-                if (!string.Equals(action.Capture(), record.OriginalState, StringComparison.Ordinal))
+                if (!action.VerifyRestored(record.OriginalState))
                     throw new InvalidOperationException("The restored state did not match the saved snapshot.");
                 record.RolledBack = true;
                 record.Error = null;

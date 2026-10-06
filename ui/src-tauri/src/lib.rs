@@ -24,6 +24,10 @@ const COMMANDS: &[&str] = &[
     "chatgpt-signout",
     "models",
     "scan",
+    "defender-status",
+    "defender-scan-current",
+    "defender-scan",
+    "defender-scan-review",
     "run-create",
     "support-preview",
     "run-get",
@@ -128,11 +132,47 @@ fn cancel_request(
     Ok(true)
 }
 
+#[cfg(target_os = "windows")]
+fn windows_tool(name: &str) -> Result<PathBuf, String> {
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetSystemDirectoryW(buffer: *mut u16, size: u32) -> u32;
+    }
+    if !matches!(name, "taskkill.exe" | "tasklist.exe" | "powershell.exe") {
+        return Err("Unsupported Windows tool".into());
+    }
+    let mut buffer = [0u16; 260];
+    let length = unsafe { GetSystemDirectoryW(buffer.as_mut_ptr(), buffer.len() as u32) } as usize;
+    if length == 0 || length >= buffer.len() {
+        return Err("Windows system directory is unavailable".into());
+    }
+    let directory = PathBuf::from(String::from_utf16_lossy(&buffer[..length]));
+    Ok(directory.join(if name == "powershell.exe" {
+        r"WindowsPowerShell\v1.0\powershell.exe"
+    } else {
+        name
+    }))
+}
+
+fn track_agent(
+    active: &mut HashMap<String, ActiveAgent>,
+    request_id: &str,
+    agent: ActiveAgent,
+) -> Result<(), String> {
+    match active.entry(request_id.to_string()) {
+        std::collections::hash_map::Entry::Vacant(entry) => {
+            entry.insert(agent);
+            Ok(())
+        }
+        std::collections::hash_map::Entry::Occupied(_) => Err("Duplicate agent request ID".into()),
+    }
+}
+
 fn terminate_process_tree(process_id: u32) -> Result<(), String> {
     let process_id = process_id.to_string();
     let mut last_error = String::new();
     for _ in 0..3 {
-        let output = Command::new("taskkill.exe")
+        let output = Command::new(windows_tool("taskkill.exe")?)
             .args(["/PID", &process_id, "/T", "/F"])
             .creation_flags(0x08000000)
             .stdout(Stdio::null())
@@ -184,19 +224,18 @@ fn run_agent(
     {
         let state = app.state::<AgentState>();
         let mut active = state.0.lock().map_err(|_| "Agent state is unavailable")?;
-        if active
-            .insert(
-                request_id.to_string(),
-                ActiveAgent {
-                    process_id: child.id(),
-                    cancellable: is_cancellable(command),
-                    cancelled: false,
-                },
-            )
-            .is_some()
-        {
+        if let Err(error) = track_agent(
+            &mut active,
+            request_id,
+            ActiveAgent {
+                process_id: child.id(),
+                cancellable: is_cancellable(command),
+                cancelled: false,
+            },
+        ) {
             let _ = child.kill();
-            return Err("Duplicate agent request ID".into());
+            let _ = child.wait();
+            return Err(error);
         }
     }
 
@@ -276,7 +315,8 @@ fn validate_request(request_id: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        cancel_request, is_cancellable, validate_request, ActiveAgent, AgentState, COMMANDS,
+        cancel_request, is_cancellable, track_agent, validate_request, windows_tool, ActiveAgent,
+        AgentState, COMMANDS,
     };
     #[cfg(target_os = "windows")]
     use std::os::windows::process::CommandExt;
@@ -296,14 +336,45 @@ mod tests {
         assert!(is_cancellable("system-one-install"));
         assert!(is_cancellable("measurement-explain"));
         assert!(!is_cancellable("apply"));
+        assert!(!is_cancellable("defender-scan")); // Killing the client is not reliable antivirus cancellation.
         assert!(!COMMANDS.contains(&"measurement-watchdog"));
         assert!(!COMMANDS.iter().any(|command| command.contains("script")));
+    }
+
+    #[test]
+    fn duplicate_request_preserves_the_original_process() {
+        let state = AgentState::default();
+        let mut active = state.0.lock().unwrap();
+        track_agent(
+            &mut active,
+            "same-id",
+            ActiveAgent {
+                process_id: 10,
+                cancellable: true,
+                cancelled: false,
+            },
+        )
+        .unwrap();
+        assert!(track_agent(
+            &mut active,
+            "same-id",
+            ActiveAgent {
+                process_id: 20,
+                cancellable: false,
+                cancelled: false
+            }
+        )
+        .is_err());
+        assert_eq!(active["same-id"].process_id, 10);
+        assert!(active["same-id"].cancellable);
+        assert!(windows_tool("taskkill.exe").unwrap().is_absolute());
+        assert!(windows_tool("../taskkill.exe").is_err());
     }
 
     #[cfg(target_os = "windows")]
     #[test]
     fn cancelling_fake_agent_terminates_its_blocking_subprocess() {
-        let mut fake_agent = Command::new("powershell.exe")
+        let mut fake_agent = Command::new(windows_tool("powershell.exe").unwrap())
             .args([
                 "-NoLogo",
                 "-NoProfile",
@@ -346,7 +417,7 @@ mod tests {
         let cancelled = cancel_request(&state.0, "fake-scan");
         if cancelled.is_err() {
             let _ = fake_agent.kill();
-            let _ = Command::new("taskkill.exe")
+            let _ = Command::new(windows_tool("taskkill.exe").unwrap())
                 .args(["/PID", &child_pid.to_string(), "/F"])
                 .creation_flags(0x08000000)
                 .status();
@@ -363,7 +434,7 @@ mod tests {
     #[cfg(target_os = "windows")]
     fn process_exists(process_id: u32) -> bool {
         let filter = format!("PID eq {process_id}");
-        let output = Command::new("tasklist.exe")
+        let output = Command::new(windows_tool("tasklist.exe").unwrap())
             .args(["/FI", &filter, "/FO", "CSV", "/NH"])
             .creation_flags(0x08000000)
             .output()

@@ -18,6 +18,17 @@ TestResults/
 settings.json
 operations/
 
+# Internal planning and local validation (kept on disk, not published)
+.agents/
+/ROADMAP.md
+/docs/DESIGN_SYSTEM.md
+/docs/IMPLEMENTATION_PLAN.md
+/docs/SESSION_HANDOFF.md
+/docs/AZIONI_MANUALI.md
+/docs/JACKPOT_LATENCY_SUITE_REVIEW.md
+/docs/SECURITY_RELEASE_FIXES.md
+/docs/validation/
+
 # OS
 Thumbs.db
 .DS_Store

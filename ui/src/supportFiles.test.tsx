@@ -30,8 +30,8 @@ describe('optional supporting files', () => {
     const html = renderToStaticMarkup(<SupportingFiles files={[report, { ...report, id: 'image', name: 'gpu-z.png', kind: 'image', contentType: 'image/png', content: 'fake-for-static-markup' }]} onFiles={() => {}} onReady={() => {}} onVision={() => {}} disabled={false}/>);
     expect(html).toContain('&lt;script&gt;do not execute&lt;/script&gt;');
     expect(html).not.toContain('<script>do not execute</script>');
-    expect(html).toContain('Il modello selezionato supporta immagini');
-    expect(html).toContain('NON sono anonimizzate'); expect(html).toContain('non vengono salvati');
-    expect(html).not.toContain('checked=""'); expect(html).toContain('Rimuovi gpu-z.png');
+    expect(html).toContain('The selected model supports images');
+    expect(html).toContain('NOT anonymized'); expect(html).toContain('not saved');
+    expect(html).not.toContain('checked=""'); expect(html).toContain('Remove gpu-z.png');
   });
 });

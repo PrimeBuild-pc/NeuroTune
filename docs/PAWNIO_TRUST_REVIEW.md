@@ -1,6 +1,10 @@
 # PawnIO / LibreHardwareMonitor trust review
 
-Decision: **do not integrate or install PawnIO in NeuroTune 0.5.0-alpha.2**.
+Historical decision: **do not integrate or install PawnIO in NeuroTune 0.5.0-alpha.2**.
+Pinned hashes/signature findings below apply only to the reviewed artifacts,
+not current upstream releases. Current NeuroTune sources still do not install
+or load PawnIO; optional WMI reads from an already user-managed monitor are
+not approval of its kernel driver.
 
 The review used pinned upstream sources and release artifacts without installing or executing the driver:
 
@@ -25,7 +29,7 @@ The official PawnIO installer had a valid Authenticode signature from namazso.eu
 
 ## Implemented NeuroTune boundary
 
-NeuroTune.Telemetry.exe is a separate, no-network process with JSON stdin/stdout, a single fixed capabilities command, a two-second caller timeout, and no arbitrary paths or commands. It runs only after separate UI consent. It currently returns driverNotApproved and contains no driver installation, loading, or IOCTL code.
+NeuroTune.Telemetry.exe is a separate, no-network process with JSON stdin/stdout, a single fixed capabilities command, a two-second caller timeout, and no arbitrary paths or commands. It runs only after separate UI consent. It returns driverNotApproved for unsupported low-level capabilities and contains no driver installation, loading, or IOCTL code. Later sources can also read existing LibreHardwareMonitor WMI sensor samples with consent; absent sensors stay unavailable and NeuroTune does not start/install the monitor.
 
 The licenses above do not enter the distributed product because NeuroTune does not copy, link, package, or execute PawnIO or LibreHardwareMonitor.
 

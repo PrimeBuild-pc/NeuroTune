@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="680" viewBox="0 0 1200 680" role="img" aria-labelledby="title desc">
+  <title id="title">Measured optimization, one visible gate at a time</title>
+  <desc id="desc">Collect local evidence, record three valid matching workload Baselines, investigate with your consented model, review and approve registered actions or finish without changes, back up and verify approved changes, record three matching Candidates and choose Keep or Rollback. Failed writes attempt rollback; unresolved recovery remains visible. Audit-only skips benchmarks and cannot Apply. A system-wide diagnostic cannot authorize writes.</desc>
+  <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#9388ff"/></marker></defs>
+  <rect width="1200" height="680" rx="24" fill="#10141c"/>
+  <g font-family="Segoe UI,Arial,sans-serif">
+    <text x="48" y="62" font-size="32" font-weight="650" fill="#f4f7fb">From evidence to a decision.</text>
+    <text x="48" y="103" font-size="22" fill="#bdc7d5">Measured optimization · a running workload · explicit approval</text>
+    <g fill="#1b2230" stroke="#394253">
+      <rect x="48" y="144" width="336" height="152" rx="16"/>
+      <rect x="432" y="144" width="336" height="152" rx="16"/>
+      <rect x="816" y="144" width="336" height="152" rx="16"/>
+      <rect x="816" y="352" width="336" height="152" rx="16" stroke="#9388ff"/>
+      <rect x="432" y="352" width="336" height="152" rx="16"/>
+      <rect x="48" y="352" width="336" height="152" rx="16"/>
+    </g>
+    <g fill="none" stroke="#9388ff" stroke-width="2.5" marker-end="url(#arrow)">
+      <path d="M387 220H426"/><path d="M771 220H810"/><path d="M984 299V346"/>
+      <path d="M813 428H774"/><path d="M429 428H390"/>
+    </g>
+    <g fill="#b6acf3" font-size="18" font-weight="600" letter-spacing="2">
+      <text x="72" y="180">01 / COLLECT</text><text x="456" y="180">02 / MEASURE</text><text x="840" y="180">03 / INVESTIGATE</text>
+      <text x="840" y="388">04 / YOUR DECISION</text><text x="456" y="388">05 / APPLY</text><text x="72" y="388">06 / COMPARE</text>
+    </g>
+    <g fill="#f4f7fb" font-size="26" font-weight="600">
+      <text x="72" y="224">Local system evidence</text><text x="456" y="224">3 workload Baselines</text><text x="840" y="224">Your selected AI</text>
+      <text x="840" y="432">Review the proposal</text><text x="456" y="432">Back up, then verify</text><text x="72" y="432">3 matching Candidates</text>
+    </g>
+    <g fill="#bdc7d5" font-size="21">
+      <text x="72" y="264">Hardware, Windows, drivers</text><text x="456" y="264">Local trace quality checks</text><text x="840" y="264">Consented read-only follow-ups</text>
+      <text x="840" y="472">Approve some, all or none</text><text x="456" y="472">Registered actions only</text><text x="72" y="472">Keep or verified rollback</text>
+    </g>
+    <text x="48" y="551" fill="#f1cb8d" font-size="21">Failed or interrupted write → rollback attempt; unresolved recovery stays visible.</text>
+    <path d="M48 580H1152" stroke="#394253"/>
+    <text x="48" y="616" fill="#b6acf3" font-size="21" font-weight="600">ADVISORY AUDIT</text>
+    <text x="270" y="616" fill="#bdc7d5" font-size="21">Local evidence → consented AI → report → finish. No benchmark. No Apply.</text>
+    <text x="48" y="652" fill="#bdc7d5" font-size="19">No workload? A system-wide diagnostic can inform advice, but cannot unlock Apply.</text>
+  </g>
+</svg>

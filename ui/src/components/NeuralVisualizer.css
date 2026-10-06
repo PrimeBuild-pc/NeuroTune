@@ -1,0 +1,26 @@
+.neural-core { position: relative; display: grid; place-content: center; justify-items: center; min-width: 0; margin: 0; padding: 24px; overflow: hidden; color: var(--accent-text); background: radial-gradient(ellipse at center, var(--environment-light), transparent 70%); }
+.core-diagram { position: relative; display: grid; place-items: center; width: 300px; height: 300px; }
+.core-signals { position: absolute; width: 100%; height: 100%; stroke: var(--accent-border); stroke-width: 1; }
+.core-signals circle { fill: var(--surface); stroke: var(--accent-text); }
+.core-chip { position: relative; width: 88px; height: 88px; }
+.core-chip img { display: block; width: 100%; height: 100%; }
+.orbit { position: absolute; border: 1px solid var(--accent-border); border-radius: 50%; pointer-events: none; }
+.orbit.one { width: 220px; height: 220px; }
+.orbit.two { width: 286px; height: 286px; opacity: .45; }
+.orbit::after { content: ''; position: absolute; left: 50%; top: -3px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent-text); }
+.neural-core figcaption { display: grid; gap: 7px; min-height: 36px; margin-top: 4px; text-align: center; }
+.neural-core figcaption strong { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.neural-core figcaption span { font-size: 11px; color: var(--muted-strong); }
+/* Only the signature core moves at rest. Active signals mirror real work, not invented progress. */
+@media (prefers-reduced-motion: no-preference) {
+  html:not([data-motion='quiet']) .neural-core:not([data-state='capture']) .orbit.one { animation: core-orbit 32s linear infinite; }
+  html:not([data-motion='quiet']) .neural-core:is([data-state='scan'], [data-state='trace'], [data-state='ai']) .orbit.two { animation: core-orbit 18s linear infinite reverse; }
+  html:not([data-motion='quiet']) .neural-core:is([data-state='scan'], [data-state='trace'], [data-state='ai']) .core-signals { animation: core-signal 2.4s ease-in-out infinite; }
+}
+@keyframes core-orbit { to { transform: rotate(360deg); } }
+@keyframes core-signal { 50% { opacity: .4; } }
+@media (forced-colors: active) {
+  .core-signals { stroke: CanvasText; }
+  .core-signals circle { fill: Canvas; stroke: CanvasText; }
+  .orbit { border-color: CanvasText; }
+}

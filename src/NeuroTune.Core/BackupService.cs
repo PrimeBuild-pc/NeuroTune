@@ -1,6 +1,6 @@
 using Microsoft.Win32;
-using System.Diagnostics;
 using System.Management;
+using System.Globalization;
 using System.Text.Json;
 
 namespace NeuroTune;
@@ -8,23 +8,30 @@ namespace NeuroTune;
 public sealed class BackupService
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
-    public static readonly string OperationsDirectory = Path.Combine(SettingsService.DataDirectory, "operations");
+    public static readonly string OperationsDirectory = Path.Combine(JournalStorage.UserDirectory, "operations");
+    private readonly JournalStorage _storage;
+    private readonly OptimizationCatalog _recoveryCatalog = new(includeDynamic: false);
+
+    public BackupService() => _storage = new(OperationsDirectory, privileged: true);
+    internal BackupService(string directory) => _storage = new(directory);
 
     public OperationManifest Prepare(IEnumerable<OptimizationAction> actions, Guid? operationId = null,
         Guid? optimizationRunId = null)
     {
+        var history = LoadHistory();
         var manifest = new OperationManifest
         {
             Id = operationId ?? Guid.NewGuid(),
             OptimizationRunId = optimizationRunId
         };
-        manifest.DirectoryPath = Path.Combine(OperationsDirectory, $"{manifest.CreatedAt:yyyyMMdd-HHmmss}-{manifest.Id:N}");
-        Directory.CreateDirectory(manifest.DirectoryPath);
+        if (history.Any(item => item.Id == manifest.Id)) throw new InvalidOperationException("An operation journal already uses this ID.");
+        manifest.DirectoryPath = Path.Combine(_storage.DirectoryPath, $"{manifest.CreatedAt.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}-{manifest.Id:N}");
+        _storage.EnsureDirectory(manifest.DirectoryPath);
         Save(manifest);
 
         manifest.RestorePoint = CreateRestorePoint($"NeuroTune {manifest.Id:N}");
         var backupDirectory = Path.Combine(manifest.DirectoryPath, "registry");
-        Directory.CreateDirectory(backupDirectory);
+        _storage.EnsureDirectory(backupDirectory);
         foreach (var path in actions.Select(x => x.RegistryExportPath).Where(x => x is not null).Distinct())
             ExportRegistry(path!, backupDirectory);
 
@@ -62,42 +69,95 @@ public sealed class BackupService
 
     public void Save(OperationManifest manifest)
     {
-        Directory.CreateDirectory(manifest.DirectoryPath);
-        AtomicWrite(Path.Combine(manifest.DirectoryPath, "manifest.json"), JsonSerializer.Serialize(manifest, JsonOptions));
+        Validate(manifest);
+        _storage.Write(Path.Combine(manifest.DirectoryPath, "manifest.json"), manifest, JsonOptions);
+    }
+
+    internal void RecordAttempt(OperationManifest manifest, ActionRecord record)
+    {
+        manifest.Actions.Add(record);
+        try { Save(manifest); }
+        catch
+        {
+            // This action has not run. Keep older valid records usable for automatic rollback.
+            manifest.Actions.Remove(record);
+            throw;
+        }
     }
 
     public IReadOnlyList<OperationManifest> LoadHistory()
     {
-        if (!Directory.Exists(OperationsDirectory)) return [];
-        return Directory.GetFiles(OperationsDirectory, "manifest.json", SearchOption.AllDirectories)
-            .Select(path =>
-            {
-                try
-                {
-                    var item = JsonSerializer.Deserialize<OperationManifest>(File.ReadAllText(path));
-                    if (item is not null) item.DirectoryPath = Path.GetDirectoryName(path)!;
-                    return item;
-                }
-                catch { return null; }
-            })
-            .Where(x => x is not null).Cast<OperationManifest>()
-            .OrderByDescending(x => x.CreatedAt).ToList();
+        // Corrupt recovery state must remain visible as an error, never disappear from the write gate.
+        _storage.CheckLegacyJournals();
+        return _storage.Directories().Select(path => LoadPath(Path.Combine(path, "manifest.json")))
+            .OrderByDescending(item => item.CreatedAt).ToList();
+    }
+
+    internal void Validate(OperationManifest manifest)
+    {
+        if (manifest.SchemaVersion != 3 || manifest.Id == Guid.Empty || manifest.OptimizationRunId == Guid.Empty ||
+            manifest.Actions is null || manifest.Actions.Count > 100 || manifest.SystemOneAdvisories is null ||
+            manifest.SystemOneAdvisories.Count > 100 || manifest.RestorePoint is null || manifest.RestorePoint.Length > 300 ||
+            manifest.Status is not ("Preparing" or "Backup completed" or "Applying" or "Completed" or "Error — automatic rollback" or
+                "Error — rollback incomplete" or "Error — rollback completed" or "Rolling back" or "Rollback incomplete" or "Rollback completed") ||
+            manifest.Error?.Length > 16_384 || manifest.Actions.Any(record => record is null) ||
+            manifest.Actions.Select(record => record.ActionId).Distinct(StringComparer.OrdinalIgnoreCase).Count() != manifest.Actions.Count ||
+            manifest.Actions.Sum(record => (long)(record.OriginalState?.Length ?? 0)) > 4 * 1024 * 1024)
+            throw new InvalidOperationException("The operation journal schema or records are invalid.");
+        if (manifest.Status is "Preparing" or "Backup completed" && manifest.Actions.Count != 0 ||
+            manifest.Status == "Completed" && (manifest.Actions.Count == 0 || manifest.Actions.Any(record => !record.Applied || record.RolledBack)) ||
+            manifest.Status is "Rollback completed" or "Error — rollback completed" && manifest.HasPendingRollback ||
+            manifest.Status is "Rollback incomplete" or "Error — rollback incomplete" && !manifest.HasPendingRollback)
+            throw new InvalidOperationException("The operation status does not match its records.");
+        var expected = Path.Combine(_storage.DirectoryPath, $"{manifest.CreatedAt.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}-{manifest.Id:N}");
+        if (!Path.GetFullPath(manifest.DirectoryPath).Equals(expected, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("The operation journal identity does not match its directory.");
+        _storage.CheckPath(expected);
+        foreach (var record in manifest.Actions)
+        {
+            if (string.IsNullOrWhiteSpace(record.ActionId) || record.ActionId.Length > 120 || record.Error?.Length > 16_384 ||
+                !record.Attempted)
+                throw new InvalidOperationException("The operation record is invalid.");
+            _recoveryCatalog.ResolveRollback(record);
+        }
+    }
+
+    public bool RequiresRestart(OperationManifest manifest)
+    {
+        Validate(manifest);
+        return manifest.Actions.Any(record => _recoveryCatalog.ResolveRollback(record).RequiresRestart);
+    }
+
+    private OperationManifest LoadPath(string path)
+    {
+        try
+        {
+            var content = _storage.Read(path);
+            using var json = JsonDocument.Parse(content);
+            if (!json.RootElement.TryGetProperty("SchemaVersion", out _) || !json.RootElement.TryGetProperty("Id", out _) ||
+                !json.RootElement.TryGetProperty("CreatedAt", out _) || !json.RootElement.TryGetProperty("Status", out _) ||
+                !json.RootElement.TryGetProperty("Actions", out _)) throw new JsonException("Missing required journal fields.");
+            var manifest = JsonSerializer.Deserialize<OperationManifest>(content) ?? throw new JsonException("The journal was empty.");
+            manifest.DirectoryPath = Path.GetDirectoryName(path)!;
+            Validate(manifest);
+            return manifest;
+        }
+        catch (Exception exception)
+        { throw new InvalidOperationException($"The operation journal is corrupt or untrusted: {path}", exception); }
     }
 
     public OperationManifest? Load(Guid id)
     {
         if (id == Guid.Empty) throw new InvalidOperationException("The operation ID was invalid.");
-        if (!Directory.Exists(OperationsDirectory)) return null;
-        var paths = Directory.GetDirectories(OperationsDirectory)
+        _storage.CheckLegacyJournals();
+        var paths = _storage.Directories()
             .Where(path => Path.GetFileName(path).EndsWith($"-{id:N}", StringComparison.OrdinalIgnoreCase))
-            .Select(path => Path.Combine(path, "manifest.json")).Where(File.Exists).ToList();
+            .Select(path => Path.Combine(path, "manifest.json")).ToList();
         if (paths.Count == 0) return null;
         if (paths.Count > 1) throw new InvalidOperationException("Multiple operation journals use the same ID.");
         try
         {
-            var manifest = JsonSerializer.Deserialize<OperationManifest>(File.ReadAllText(paths[0]))
-                ?? throw new JsonException("The operation journal was empty.");
-            manifest.DirectoryPath = Path.GetDirectoryName(paths[0])!;
+            var manifest = LoadPath(paths[0]);
             if (manifest.Id != id) throw new InvalidOperationException("The operation journal ID does not match its directory.");
             return manifest;
         }
@@ -125,19 +185,7 @@ public sealed class BackupService
         }
 
         var output = Path.Combine(outputDirectory, SafeName(registryPath) + ".reg");
-        var start = new ProcessStartInfo("reg.exe")
-        {
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true
-        };
-        foreach (var argument in new[] { "export", registryPath, output, "/y" }) start.ArgumentList.Add(argument);
-        using var process = Process.Start(start) ?? throw new InvalidOperationException("Cannot start reg.exe.");
-        _ = process.StandardOutput.ReadToEnd();
-        var error = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-        if (process.ExitCode != 0) throw new InvalidOperationException($"Registry backup failed: {error.Trim()}");
+        _ = WindowsCommand.Run("reg.exe", "export", registryPath, output, "/y");
     }
 
     private static bool RegistryPathExists(string registryPath)
@@ -150,10 +198,4 @@ public sealed class BackupService
 
     private static string SafeName(string path) => string.Concat(path.Select(x => char.IsLetterOrDigit(x) ? x : '_'));
 
-    private static void AtomicWrite(string path, string content)
-    {
-        var temporary = path + ".tmp";
-        File.WriteAllText(temporary, content);
-        File.Move(temporary, path, true);
-    }
 }
