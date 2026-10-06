@@ -24,6 +24,10 @@ const COMMANDS: &[&str] = &[
     "chatgpt-signout",
     "models",
     "scan",
+    "defender-status",
+    "defender-scan-current",
+    "defender-scan",
+    "defender-scan-review",
     "run-create",
     "support-preview",
     "run-get",
@@ -332,6 +336,7 @@ mod tests {
         assert!(is_cancellable("system-one-install"));
         assert!(is_cancellable("measurement-explain"));
         assert!(!is_cancellable("apply"));
+        assert!(!is_cancellable("defender-scan")); // Killing the client is not reliable antivirus cancellation.
         assert!(!COMMANDS.contains(&"measurement-watchdog"));
         assert!(!COMMANDS.iter().any(|command| command.contains("script")));
     }

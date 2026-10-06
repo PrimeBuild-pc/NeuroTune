@@ -1,11 +1,41 @@
 # Alpha validation matrix
 
-## Automated host and VM coverage
+## Current candidate: not release-certified
+
+Source hardening is pushed as `26d24730a3563eae68893a5d4ad3df9991ac8dc1`
+on `fix/local-security-release-blockers`. UI/branding/IPC changes remain local;
+choose a definitive candidate commit before building and certifying assets.
+
+Latest mixed-tree checks: 115 selected backend, 33 UI and 2 Rust tests passed;
+format/build/typecheck/lint/clippy passed. Backend WindowsIntegration,
+persisted-session Stop and synthetic DPAPI persistence, and Rust subprocess-tree
+cancellation were excluded. VM scripts were updated/parsed, not executed.
+These results do not validate real production ACLs or the final installer.
+
+| Exact-candidate gate | Status |
+|---|---|
+| Verified CI action/auditor pins, fresh CI and dependency/runtime/SAST audits | pending; synthetic NuGet gate checks are not a feed audit |
+| One rebuilt installer/portable ZIP tied to commit, CI and SHA-256 | pending; existing assets predate the source fixes |
+| Windows 11 install/uninstall, UAC and sidecar integrity | pending; previous v0.8 attempt stopped before installation |
+| Journal owner/ACL creation and medium-integrity read/write/rename/delete denial | pending; current ACL checks are synthetic |
+| Unsafe pre-created root/reparse refusal and legacy upgrade/manual recovery | pending |
+| Every writer, restart/interruption/I/O recovery, GPU cache and `.pow` removal, core-parking scheme switch | pending on the definitive candidate |
+| Physical workloads, accessibility and signing/unsigned-alpha policy | incomplete; historical results below do not close these gates |
+
+Privileged journals now use `%ProgramData%\NeuroTune-journals\<Windows user SID>`.
+See [upgrade safety](../SECURITY.md) and [test procedures](TESTING.md).
+Secret scanning requires separate authorization and redacted output.
+
+## Historical host and VM coverage
+
+The following records retain their original version/scope. A pass for v0.7,
+a pre-fix v0.8 binary or a hardware inventory is not a pass for the candidate.
 
 | Area | Supported Windows 11 VM | Historical Windows 10 result (unsupported) | Physical hardware |
 |---|---|---|---|
 | Gen 2, UEFI, Secure Boot, vTPM | required | required | n/a |
 | Memory Integrity | enabled and recorded | recorded when available | required before driver experiments |
+| v0.8.0-alpha.1 NSIS install/uninstall | blocked before installation: saved guest credential rejected | unsupported | installer SHA-256 `C274B573189FA222326B55562312910654F289A5E73526567F712BE60E0EB099`; not a VM pass |
 | v0.7.0-alpha.1 NSIS per-machine install, agent version, Defender, uninstall | passed on build 26200 | not repeated; v0.6 historical pass only | installer SHA-256 `8D33E53E0CDEBA56C09303C8E082F1BB68DDEDD25AAD06D96F80D1F829B79465` |
 | v0.7.0-alpha.1 run-aware apply/verify/rollback and interrupted Apply/Rollback recovery | passed | not repeated; v0.6 historical pass only | explicit `OptimizationRun`/`runId`; deterministic VM-only BaselineReady fixture; not a 3+3 quality-gate test |
 | v0.6.0-alpha.1 portable ZIP layout, agent response, and UI launch | passed on physical build 26200 | not repeated | complete ZIP contains UI, Agent, Telemetry, license, README, and release notes |
@@ -31,6 +61,18 @@ The former disposable `NeuroTune-W10` disk/checkpoint chain became unbootable
 and was replaced during v0.6 validation with a clean Windows 10 Pro 22H2
 installation. Those results remain reproducibility history only; the VM and
 its checkpoint are no longer required or maintained.
+
+On 2026-10-04 the v0.8 installer-only attempt used the existing, initially
+powered-off `NeuroTune-W11` on `D:` and a new owned checkpoint, not an old
+baseline or a VM copy. Windows reached its lock screen and heartbeat was healthy,
+but PowerShell Direct rejected the saved `NeuroTuneTest` credential. No installer
+or optimization action ran. The original off state, 8 GB / 4 vCPU configuration,
+attached disk path, checkpoint inventory and preexisting disk files were
+restored; test checkpoints/differencing disks were removed. Roughly 11 GiB of
+temporary host storage was reclaimed. Passwords and guest security were not
+changed. Local evidence: `artifacts/vm-install-uninstall.json` and the first
+attempt report. Valid guest authentication is still required before claiming
+v0.8 installation/uninstallation acceptance.
 
 On 2026-08-31 the recovered in-place `NeuroTune-W11` guest on `D:` passed the
 v0.7 run-aware validation without copying the VM or modifying its checkpoint

@@ -1,5 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="280" viewBox="0 0 1200 280" role="img" aria-labelledby="title desc">
-  <title id="title">NeuroTune</title><desc id="desc">AI-guided Windows optimization with verified rollback</desc><defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#100a25"/><stop offset="1" stop-color="#10253b"/></linearGradient><linearGradient id="g" x2="1"><stop stop-color="#a78bfa"/><stop offset="1" stop-color="#22d3ee"/></linearGradient><filter id="s"><feDropShadow dx="0" dy="8" stdDeviation="9" flood-color="#7c3aed" flood-opacity=".35"/></filter></defs>
-  <rect width="1200" height="280" rx="30" fill="url(#bg)"/><g transform="translate(85 48)" stroke="url(#g)" stroke-width="7" fill="#15122e" filter="url(#s)"><path d="M95 10c-48 0-68 34-59 70-40 20-32 80 12 91 13 29 55 28 72 5 28 23 70 7 68-27 38-22 26-74-7-84 2-35-40-61-67-37C110 18 104 10 95 10Z"/><path d="M95 35v120M55 65l40 24 44-29M49 125l46-17 52 32" fill="none"/><circle cx="95" cy="89" r="10" fill="#22d3ee" stroke="none"/></g>
-  <text x="350" y="125" fill="#f5f3ff" font-family="Segoe UI,Arial,sans-serif" font-size="68" font-weight="800">NeuroTune</text><text x="353" y="174" fill="#c4b5fd" font-family="Segoe UI,Arial,sans-serif" font-size="25">AI-guided Windows tuning · allowlisted · reversible</text>
+  <title id="title">NeuroTune</title>
+  <desc id="desc">AI-guided Windows optimization with verified rollback</desc>
+  <rect width="1200" height="280" rx="24" fill="#0b0e14"/>
+  <path d="M850 0V280M930 0V280M1010 0V280M1090 0V280M770 60H1200M770 140H1200M770 220H1200" stroke="#1a2230"/>
+  <circle cx="1010" cy="140" r="98" fill="none" stroke="#655da7" stroke-opacity=".45"/>
+  <circle cx="1010" cy="140" r="66" fill="none" stroke="#655da7" stroke-opacity=".35"/>
+  <svg x="72" y="64" width="152" height="152" viewBox="0 0 64 64" fill="none">
+    <rect x="1" y="1" width="62" height="62" rx="17" fill="#10141c" stroke="#655da7" stroke-width="1.5"/>
+    <path d="M10 46L19 18H27L39 36L45 18H53L44 46H36L24 28L18 46Z" fill="#9388ff"/>
+    <path d="M27 18L39 36L36 46L24 28Z" fill="#f4f7fb"/>
+  </svg>
+  <text x="264" y="131" fill="#f4f7fb" font-family="Segoe UI,Arial,sans-serif" font-size="62" font-weight="650" letter-spacing="-2">NeuroTune</text>
+  <text x="268" y="171" fill="#bdc7d5" font-family="Segoe UI,Arial,sans-serif" font-size="21">Evidence. Intelligence. Local control.</text>
+  <text x="268" y="208" fill="#96a5b8" font-family="Segoe UI,Arial,sans-serif" font-size="15">Windows tuning · allowlisted actions · verified rollback</text>
 </svg>

@@ -1,5 +1,12 @@
 # Repository security and privacy audit — updated 2026-09-01
 
+**Historical scoped evidence, not a current release audit.** Findings/counts
+below describe the reviewed refs at that date, not later commits or installers.
+No new secret scan was performed by the documentation revision. Confirm the
+GitHub Support outcome before marking residual PR refs resolved; current release
+security/upgrade requirements are in [SECURITY.md](../SECURITY.md) and
+[the validation matrix](VALIDATION_MATRIX.md#current-candidate-not-release-certified).
+
 ## Scope and method
 
 - Scanned the current tree and every commit reachable from local branches and

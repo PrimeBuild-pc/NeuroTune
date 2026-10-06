@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { agent } from './agent';
+import { t } from './i18n';
 import { prepareSupportingFile, supportAccept, supportLimits, validateSupportList } from './supportFiles';
 import type { SupportingAttachment } from './types';
 
@@ -22,8 +23,8 @@ export function SupportingFiles({ files, onFiles, onReady, onVision, disabled }:
   async function add(selected: File[]) {
     setBusy(true); setError(''); setReviewed(false); setVision(false);
     try {
-      if (files.length + selected.length > supportLimits.files) throw new Error('Maximum 8 optional files.');
-      if (images + selected.filter(file => /\.(png|jpe?g)$/i.test(file.name)).length > supportLimits.images) throw new Error('Maximum 4 screenshots.');
+      if (files.length + selected.length > supportLimits.files) throw new Error(t('Maximum 8 optional files.'));
+      if (images + selected.filter(file => /\.(png|jpe?g)$/i.test(file.name)).length > supportLimits.images) throw new Error(t('Maximum 4 screenshots.'));
       const candidates = [...files];
       for (const file of selected) { candidates.push(await prepareSupportingFile(file)); validateSupportList(candidates); }
       await preview(candidates);
@@ -35,23 +36,23 @@ export function SupportingFiles({ files, onFiles, onReady, onVision, disabled }:
     try { await preview(files); } catch (reason) { setError(String(reason)); } finally { setBusy(false); }
   }
   function remove(id: string) { onFiles(files.filter(item => item.id !== id)); if (files.length === 1) setDirty(false); setReviewed(false); setError(''); }
-  return <details className="supporting-files" open={Boolean(files.length)}>
-    <summary>Report e screenshot di supporto · opzionali ({files.length}/8)</summary>
-    <p>Puoi aggiungere export di CPU-Z, GPU-Z, HWiNFO e altre app, senza aprirle o eseguirle da NeuroTune. Contenuti forniti dall’utente, non misure verificate né prova che provengano da questo PC.</p>
-    <label className="support-picker"><span>Aggiungi report o screenshot</span><input type="file" accept={supportAccept} multiple disabled={disabled || busy} onChange={event => { const selected = Array.from(event.target.files ?? []); event.target.value = ''; if (selected.length) void add(selected); }}/></label>
-    <p className="muted-copy">Massimo 8 file, di cui 4 immagini. Report TXT/LOG/CSV/JSON/XML/HTML: sorgente ≤512 KiB, 40.000 caratteri per file, 80.000 complessivi; nessun taglio silenzioso. PNG/JPEG: sorgente ≤20 MiB/20 megapixel, preparati in PNG senza metadati aggiuntivi, ≤1600 px per lato e ≤768 KiB. Controlla che il testo rimanga leggibile dopo il ridimensionamento. PDF, archivi e programmi non sono accettati.</p>
-    {busy && <p role="status">Preparazione e controllo locale degli allegati… Nessun invio all’AI.</p>}
+  return <section className="supporting-files">
+    <h2>{t('Supporting reports and screenshots · optional ({count}/8)', { count: files.length })}</h2>
+    <p>{t('You can add exports from CPU-Z, GPU-Z, HWiNFO and other apps without opening or running them from NeuroTune. User-provided content, not verified measurements or proof that it comes from this PC.')}</p>
+    <label className="support-picker"><span>{t('Add reports or screenshots')}</span><input type="file" accept={supportAccept} multiple disabled={disabled || busy} onChange={event => { const selected = Array.from(event.target.files ?? []); event.target.value = ''; if (selected.length) void add(selected); }}/></label>
+    <p className="muted-copy">{t('Maximum 8 files, including 4 images. TXT/LOG/CSV/JSON/XML/HTML reports: source ≤512 KiB, 40,000 characters per file, 80,000 combined; no silent truncation. PNG/JPEG: source ≤20 MiB/20 megapixels, prepared as PNG without extra metadata, ≤1600 px per side and ≤768 KiB. Check that text remains readable after resizing. PDFs, archives and programs are not accepted.')}</p>
+    {busy && <p role="status">{t('Preparing and checking attachments locally… Nothing sent to AI.')}</p>}
     {error && <p role="alert" className="error-text">{error}</p>}
     <div className="support-list">{files.map(item => <article className="support-item" key={item.id}>
-      <div className="section-heading"><strong>{item.name}</strong><button className="ghost" disabled={disabled || busy} aria-label={`Rimuovi ${item.name}`} onClick={() => remove(item.id)}>Rimuovi</button></div>
-      <small>Fornito dall’utente · {item.kind === 'image' ? 'immagine non verificata' : 'testo non verificato'} · SHA-256 del contenuto preparato: <code>{dirty ? 'da ricalcolare' : item.sha256}</code></small>
-      {item.kind === 'image' ? <img src={`data:image/png;base64,${item.content}`} alt={`Anteprima dello screenshot ${item.name}`}/> : <label><span>Anteprima testuale modificabile · {item.name} (HTML mai eseguito)</span><textarea value={item.content} maxLength={supportLimits.reportCharacters} disabled={disabled || busy} rows={10} spellCheck={false} onChange={event => { onFiles(files.map(file => file.id === item.id ? { ...file, content: event.target.value } : file)); setDirty(true); setReviewed(false); }}/></label>}
+      <div className="section-heading"><strong>{item.name}</strong><button className="ghost" disabled={disabled || busy} aria-label={t('Remove {name}', { name: item.name })} onClick={() => remove(item.id)}>{t('Remove')}</button></div>
+      <small>{t('User-provided · {kind} · SHA-256 of prepared content:', { kind: item.kind === 'image' ? t('unverified image') : t('unverified text') })} <code>{dirty ? t('to be recalculated') : item.sha256}</code></small>
+      {item.kind === 'image' ? <img src={`data:image/png;base64,${item.content}`} alt={t('Screenshot preview {name}', { name: item.name })}/> : <label><span>{t('Editable text preview · {name} (HTML never executed)', { name: item.name })}</span><textarea value={item.content} maxLength={supportLimits.reportCharacters} disabled={disabled || busy} rows={10} spellCheck={false} onChange={event => { onFiles(files.map(file => file.id === item.id ? { ...file, content: event.target.value } : file)); setDirty(true); setReviewed(false); }}/></label>}
     </article>)}</div>
-    {dirty && <button className="secondary" disabled={disabled || busy} onClick={() => void refreshPreview()}>Aggiorna anteprima locale</button>}
+    {dirty && <button className="secondary" disabled={disabled || busy} onClick={() => void refreshPreview()}>{t('Refresh local preview')}</button>}
     {files.length > 0 && <>
-      <p className="muted-copy">La rimozione delle identità/righe sensibili nei report è solo best-effort. Le immagini NON sono anonimizzate: elimina dati personali o ritaglia lo screenshot prima di caricarlo. Nessuna acquisizione automatica del desktop. I testi preparati vengono conservati nelle evidenze del run; i pixel degli screenshot non vengono salvati nello storico locale.</p>
-      <label className="consent-toggle"><input type="checkbox" checked={reviewed} disabled={disabled || busy || dirty} onChange={event => setReviewed(event.target.checked)}/><span>Ho controllato le anteprime e autorizzo l’invio di questi contenuti al provider principale quando avvio la diagnosi.</span></label>
-      {images > 0 && <label className="consent-toggle"><input type="checkbox" checked={vision} disabled={disabled || busy} onChange={event => setVision(event.target.checked)}/><span>Il modello selezionato supporta immagini. Accetto il costo/consumo aggiuntivo: gli screenshot possono essere inviati a ogni turno dell’indagine. Nessun cambio automatico di modello/provider, OCR separato o scarto silenzioso.</span></label>}
+      <p className="muted-copy">{t('Removal of identities/sensitive lines in reports is best-effort only. Images are NOT anonymized: remove personal data or crop the screenshot before uploading. No automatic desktop capture. Prepared texts are retained in run evidence; screenshot pixels are not saved in local history.')}</p>
+      <label className="consent-toggle"><input type="checkbox" checked={reviewed} disabled={disabled || busy || dirty} onChange={event => setReviewed(event.target.checked)}/><span>{t('I reviewed the previews and authorize sending this content to the main provider when I start diagnosis.')}</span></label>
+      {images > 0 && <label className="consent-toggle"><input type="checkbox" checked={vision} disabled={disabled || busy} onChange={event => setVision(event.target.checked)}/><span>{t('The selected model supports images. I accept the additional cost/usage: screenshots may be sent at every investigation turn. No automatic model/provider switch, separate OCR or silent discard.')}</span></label>}
     </>}
-  </details>;
+  </section>;
 }

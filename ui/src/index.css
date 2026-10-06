@@ -1,6 +1,9 @@
 :root,
 :root[data-theme='light'] {
-  font-family: Inter, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
   color: #111827;
   background: #f4f6f9;
   font-synthesis: none;
@@ -14,7 +17,7 @@
   --hover: #edf0f5;
   --text: #111827;
   --muted-strong: #4b5b70;
-  --muted: #65748a;
+  --muted: #5f6e83;
   --border: #d8dee8;
   --border-strong: #adb8c7;
   --accent: #4f46e5;
@@ -39,7 +42,12 @@
   --code-bg: #f7f8fb;
   --code-text: #26354a;
   --shadow: 0 16px 40px rgba(31, 43, 61, .10);
-  --shadow-subtle: 0 5px 18px rgba(31, 43, 61, .05);
+  --shadow-subtle: 0 2px 8px rgba(31, 43, 61, .04);
+  --surface-edge: rgba(255, 255, 255, .8);
+  --chrome-surface: color-mix(in srgb, var(--surface) 88%, transparent);
+  --chrome-edge: color-mix(in srgb, var(--border) 75%, var(--surface-edge));
+  --environment-light: rgba(79, 70, 229, .09);
+  --environment-secondary: rgba(72, 128, 255, .035);
 }
 
 :root[data-theme='dark'] {
@@ -79,7 +87,10 @@
   --code-bg: #0c1119;
   --code-text: #d8e1ee;
   --shadow: 0 18px 46px rgba(0, 0, 0, .32);
-  --shadow-subtle: 0 6px 22px rgba(0, 0, 0, .18);
+  --shadow-subtle: 0 2px 10px rgba(0, 0, 0, .16);
+  --surface-edge: rgba(255, 255, 255, .065);
+  --environment-light: rgba(147, 136, 255, .13);
+  --environment-secondary: rgba(72, 128, 255, .06);
 }
 
 html, body, #root { min-width: 0; min-height: 100%; margin: 0; }

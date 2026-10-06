@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { CompleteDiagnosis } from './CompleteDiagnosis';
 import { DiagnosisFlow } from './diagnosisFlow';
-import type { MeasurementSession, MeasurementWorkload, TuningGoals } from './types';
+import type { MeasurementSession, MeasurementWorkload, ScanResult, TuningGoals } from './types';
 
 const goals: TuningGoals = { priority: 'systemLatency', riskProfile: 'balanced', games: [], notes: '', gameContext: { game: '', version: '', launcher: '', graphicsApi: '', displayMode: '', vrr: '', vSync: '', symptoms: [], preserve: '' }, performanceInput: { userProvided: true, notes: '' } };
 const workload: MeasurementWorkload = { processId: 42, name: 'game', startTimeUtc: '2026-01-01T00:00:00Z', description: 'game' };
@@ -30,7 +30,7 @@ function harness(options: { cancelDuringStart?: boolean; invalidQuality?: boolea
         }
         case 'run-create': result = { id: 'run', state: 'scanned' }; break;
         case 'diagnose': result = { summary: options.failedProvider ? 'Provider failed; not an AI diagnosis' : 'AI result', recommendations: [] }; break;
-        case 'run-get': result = { id: 'run', state: options.failedProvider ? 'hypothesizing' : sessions[0].systemWide ? 'baselinePending' : 'baselineReady' }; break;
+        case 'run-get': result = { id: 'run', state: options.failedProvider ? 'hypothesizing' : !sessions.length ? 'proposalReady' : sessions[0].systemWide ? 'baselinePending' : 'baselineReady' }; break;
         case 'measurement-cancel': sessions[0].state = 'cancelled'; break;
         case 'run-dismiss': break;
         default: throw new Error(`Unexpected command ${command}`);
@@ -84,18 +84,53 @@ describe('complete diagnosis lifecycle', () => {
       expect(calls).not.toContain('run-approve'); expect(calls).not.toContain('apply');
     }
   });
-  it('offers four prompt specializations and preserves a restored legacy selection without silently converting it', () => {
+  it('offers five prompt specializations and preserves a restored legacy selection without silently converting it', () => {
     const render = (priority: TuningGoals['priority']) => renderToStaticMarkup(<CompleteDiagnosis goals={{ ...goals, priority }} onGoals={() => {}} onStart={() => {}} onCancel={() => {}} blocked={false}/>);
     for (const priority of ['balanced', 'systemLatency', 'networkLatency', 'stability'] as const) {
       const html = render(priority);
-      expect(html).toContain('Performance complessive'); expect(html).toContain('Latenza del sistema'); expect(html).toContain('Ottimizzazione rete'); expect(html).toContain('Stabilità del sistema');
-      expect(html).toContain(`value="${priority}" selected=""`); expect(html).toContain('non applica tweak');
+      expect(html).toContain('Overall performance'); expect(html).toContain('System latency'); expect(html).toContain('Network optimization'); expect(html).toContain('System stability');
+      expect(html).toContain('Windows privacy &amp; security');
+      expect(html).toContain(`value="${priority}" selected=""`); expect(html).toContain('does not apply tweaks');
       expect(html).not.toContain('value="fps"'); expect(html).not.toContain('value="efficiency"');
     }
     expect(render('fps')).toContain('value="fps" selected=""'); expect(render('efficiency')).toContain('value="efficiency" selected=""');
   });
+  it('audit mode skips every WPR/workload stage and persists independently of the selected focus', async () => {
+    for (const priority of ['privacySecurity', 'balanced'] as const) {
+      const { flow, calls, requests } = harness();
+      const result = await flow.execute({ ...input, goals: { ...goals, priority }, mode: 'auditOnly', durationSeconds: 0 });
+      expect(result.sessions).toEqual([]); expect(result.run.state).toBe('proposalReady');
+      for (const command of ['measurement-start', 'measurement-analyze', 'measurement-cancel', 'apply', 'defender-scan']) expect(calls).not.toContain(command);
+      expect((requests.find(item => item.command === 'run-create')?.payload as { mode: string } | undefined)?.mode).toBe('auditOnly');
+      expect((requests.find(item => item.command === 'scan')?.payload as { privacySecurityReadConsent: boolean } | undefined)?.privacySecurityReadConsent).toBe(true);
+      const html = renderToStaticMarkup(<CompleteDiagnosis mode="auditOnly" goals={{ ...goals, priority }} onGoals={() => {}} onStart={() => {}} onCancel={() => {}} blocked={false}/>);
+      expect(html).toContain('Start AI audit'); expect(html).not.toContain('id="diagnosis-workload"'); expect(html).not.toContain('Seconds per trace');
+    }
+    const measured = harness();
+    await measured.flow.execute({ ...input, goals: { ...goals, priority: 'privacySecurity' } });
+    expect(measured.calls.filter(command => command === 'measurement-start')).toHaveLength(3);
+    const failed = harness({ failedProvider: true });
+    await expect(failed.flow.execute({ ...input, mode: 'auditOnly' })).rejects.toThrow('Provider failed');
+    expect(failed.calls).toContain('run-dismiss'); expect(failed.calls).not.toContain('apply');
+    const progress = renderToStaticMarkup(<CompleteDiagnosis mode="auditOnly" goals={goals} onGoals={() => {}} onStart={() => {}} onCancel={() => {}} blocked={false} progress={{ mode: 'auditOnly', stage: 'ai', message: 'Audit', startedAt: Date.now(), log: [] }}/>);
+    expect(progress).not.toContain('Prepare workload'); expect(progress).not.toContain('Trace analysis'); expect(progress).toContain('AI investigation');
+  });
+  it('audit preview waits for explicit approval and cancellation sends nothing to the provider', async () => {
+    const { flow, calls } = harness(); let approve: (() => void) | undefined; let ready: (() => void) | undefined;
+    const previewReady = new Promise<void>(resolve => { ready = resolve; });
+    const execution = flow.execute({ ...input, mode: 'auditOnly', reviewAudit: async () => { ready!(); await new Promise<void>(resolve => { approve = resolve; }); } });
+    await previewReady;
+    expect(calls).toContain('scan'); expect(calls).not.toContain('run-create'); expect(calls).not.toContain('diagnose');
+    approve!(); await execution; expect(calls).toContain('diagnose');
+    const cancelled = harness();
+    await expect(cancelled.flow.execute({ ...input, mode: 'auditOnly', reviewAudit: async () => { throw new Error('Preview cancelled'); } })).rejects.toThrow('Preview cancelled');
+    expect(cancelled.calls).not.toContain('diagnose'); expect(cancelled.calls).not.toContain('run-create');
+    const html = renderToStaticMarkup(<CompleteDiagnosis mode="auditOnly" goals={goals} onGoals={() => {}} onStart={() => {}} onCancel={() => {}} blocked auditPreview={{ sanitizedProfile: '<script>private</script>' } as ScanResult} progress={{ mode: 'auditOnly', stage: 'scan', message: 'Local only', startedAt: Date.now(), log: [] }}/>);
+    expect(html).toContain('no AI transmission'); expect(html).toContain('I authorize evidence transmission'); expect(html).toContain('Cancel without sending');
+    expect(html).toContain('&lt;script&gt;'); expect(html).not.toContain('<script>');
+  });
   it('renders actual phases, a timer and cancel control, without manufactured percentages', () => {
     const html = renderToStaticMarkup(<CompleteDiagnosis goals={goals} onGoals={() => {}} onStart={() => {}} onCancel={() => {}} blocked={false} progress={{ stage: 'ai', message: 'AI read-only follow-up · memory-pressure', startedAt: Date.now(), log: ['WPR recording', 'ETL quality checked'] }}/>);
-    expect(html).toContain('Actual operation log'); expect(html).toContain('Annulla diagnosi'); expect(html).toContain('role="timer"'); expect(html).not.toContain('role="progressbar"');
+    expect(html).toContain('Actual operation log'); expect(html).toContain('Cancel diagnosis'); expect(html).toContain('role="timer"'); expect(html).not.toContain('role="progressbar"');
   });
 });

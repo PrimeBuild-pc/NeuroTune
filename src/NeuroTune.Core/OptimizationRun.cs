@@ -33,7 +33,8 @@ public sealed record OptimizationRunTransition(
 
 public sealed class OptimizationRun
 {
-    public int SchemaVersion { get; init; } = 1;
+    public int SchemaVersion { get; init; } = 2;
+    public InvestigationMode Mode { get; init; } = InvestigationMode.MeasuredOptimization;
     public Guid Id { get; init; } = Guid.NewGuid();
     public DateTimeOffset CreatedAtUtc { get; init; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
@@ -108,11 +109,14 @@ public sealed class OptimizationRunService
     }
 
     public OptimizationRun Create(SystemProfile profile, TuningGoals goals,
-        IReadOnlyCollection<MeasurementSession>? baselineSessions = null, IReadOnlyList<SupportingAttachment>? attachments = null, bool imagesConfirmed = false)
+        IReadOnlyCollection<MeasurementSession>? baselineSessions = null, IReadOnlyList<SupportingAttachment>? attachments = null, bool imagesConfirmed = false,
+        InvestigationMode mode = InvestigationMode.MeasuredOptimization)
     {
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(goals);
         goals.Validate();
+        if (!Enum.IsDefined(mode) || mode == InvestigationMode.AuditOnly && baselineSessions?.Count > 0)
+            throw new InvalidOperationException("Audit-only runs cannot contain measurements, and the investigation mode must be known.");
         baselineSessions = (baselineSessions ?? []).Where(session => session.Label == MeasurementLabel.Baseline &&
             session.State == MeasurementSessionState.Completed && session.Report?.Quality.IsValid == true).ToList();
         var supporting = NeuroTune.SupportingAttachments.Normalize(attachments, imagesConfirmed);
@@ -121,6 +125,7 @@ public sealed class OptimizationRunService
         var run = new OptimizationRun
         {
             Goals = goals,
+            Mode = mode,
             EvidenceFacts = evidence.ToDictionary(fact => fact.Key, fact => fact.Value, StringComparer.Ordinal),
             SupportingAttachments = NeuroTune.SupportingAttachments.Describe(supporting),
             BaselineSessionIds = baselineSessions.Where(session => !session.SystemWide).Select(session => session.Id).Distinct().ToList(),
@@ -155,14 +160,17 @@ public sealed class OptimizationRunService
         var run = LoadExpected(id, OptimizationRunState.Hypothesizing);
         run.EvidenceFacts = LlmClient.AppendInvestigationEvidence(run.EvidenceFacts, outcome.AdditionalEvidence).ToDictionary(fact => fact.Key, fact => fact.Value, StringComparer.Ordinal);
         run.Diagnosis = outcome.Diagnosis;
+        if (AuditChecklist.Required(run.Mode, run.Goals)) AuditChecklist.Normalize(run.Diagnosis, run.EvidenceFacts);
+        if (run.Mode == InvestigationMode.AuditOnly) LlmClient.MakeAuditOnly(run.Diagnosis);
         run.PlannerAudit = outcome.Audit.ToList();
         run.PlannerStopReason = outcome.StopReason;
         run.UsedLocalFallback = outcome.UsedLocalFallback;
         run.RequestedProbeIds = outcome.Audit.Where(entry => entry.Accepted && entry.Kind is "requestEvidence" or "requestInvestigation")
             .SelectMany(entry => entry.EvidenceIds).Distinct(StringComparer.Ordinal).ToList();
         Move(run, OptimizationRunState.ProposalReady, "Provider proposal passed local validation");
-        Move(run, run.BaselineSessionIds.Count > 0 ? OptimizationRunState.BaselineReady : OptimizationRunState.BaselinePending,
-            run.BaselineSessionIds.Count > 0 ? "Existing quality-valid Baseline linked" : "A quality-valid Baseline is required before approval");
+        if (run.Mode != InvestigationMode.AuditOnly)
+            Move(run, run.BaselineSessionIds.Count > 0 ? OptimizationRunState.BaselineReady : OptimizationRunState.BaselinePending,
+                run.BaselineSessionIds.Count > 0 ? "Existing quality-valid Baseline linked" : "A quality-valid Baseline is required before approval");
         Save(run);
         return run;
     });
@@ -203,7 +211,7 @@ public sealed class OptimizationRunService
     {
         ArgumentNullException.ThrowIfNull(session);
         var run = LoadCore(id);
-        if (session.SystemWide || session.OptimizationRunId != id || session.State != MeasurementSessionState.Completed ||
+        if (run.Mode == InvestigationMode.AuditOnly || session.SystemWide || session.OptimizationRunId != id || session.State != MeasurementSessionState.Completed ||
             session.Report?.Quality.IsValid != true)
             throw new InvalidOperationException("The linked measurement is not a completed, quality-valid session from this optimization run.");
         if (session.Label == MeasurementLabel.Baseline)
@@ -229,8 +237,8 @@ public sealed class OptimizationRunService
         OptimizationCatalog catalog) => Advance(id, OptimizationRunState.BaselineReady,
         OptimizationRunState.Approved, "User approved selected capabilities", run =>
         {
-            if (run.Diagnosis is null)
-                throw new InvalidOperationException("A locally validated diagnosis is required before approval.");
+            if (run.Mode == InvestigationMode.AuditOnly || run.Diagnosis is null)
+                throw new InvalidOperationException("A measured optimization diagnosis is required before approval; audit-only runs cannot approve writes.");
             var actions = actionIds.Distinct(StringComparer.OrdinalIgnoreCase).Select(catalog.Get).ToList();
             if (actions.Count == 0) throw new InvalidOperationException("Select at least one optimization capability.");
             OptimizationCatalog.ValidateSelection(actions);
@@ -244,7 +252,7 @@ public sealed class OptimizationRunService
         OptimizationRunState.Approved, OptimizationRunState.Applying,
         "Started transactional capability apply", run =>
         {
-            if (operationId == Guid.Empty) throw new InvalidOperationException("The operation ID was invalid.");
+            if (run.Mode == InvestigationMode.AuditOnly || operationId == Guid.Empty) throw new InvalidOperationException("Audit-only runs cannot apply, and the operation ID must be valid.");
             run.OperationId = operationId;
             run.BootIdAtApply = bootIdAtApply ?? CurrentBootId();
         });
@@ -432,6 +440,8 @@ public sealed class OptimizationRunService
             using var json = JsonDocument.Parse(content);
             if (!json.RootElement.TryGetProperty("SchemaVersion", out _) || !json.RootElement.TryGetProperty("Id", out _) ||
                 !json.RootElement.TryGetProperty("State", out _)) throw new JsonException("Missing required run fields.");
+            if (json.RootElement.GetProperty("SchemaVersion").GetInt32() == 2 && !json.RootElement.TryGetProperty("Mode", out _))
+                throw new JsonException("Missing required investigation mode.");
             var run = JsonSerializer.Deserialize<OptimizationRun>(content);
             if (run is null) throw new JsonException("The optimization run was empty.");
             run.DirectoryPath = Path.GetDirectoryName(path)!;
@@ -456,13 +466,22 @@ public sealed class OptimizationRunService
 
     private static void Validate(OptimizationRun run)
     {
-        if (run.SchemaVersion != 1 || run.Id == Guid.Empty || !Enum.IsDefined(run.State) || !Enum.IsDefined(run.Decision) ||
+        if (run.SchemaVersion is not (1 or 2) || !Enum.IsDefined(run.Mode) || run.SchemaVersion == 1 && run.Mode != InvestigationMode.MeasuredOptimization || run.Id == Guid.Empty || !Enum.IsDefined(run.State) || !Enum.IsDefined(run.Decision) ||
             run.Goals is null || run.EvidenceFacts is null || run.RequestedProbeIds is null || run.ApprovedActionIds is null ||
             run.BaselineSessionIds is null || run.CandidateSessionIds is null || run.DiagnosticSessionIds is null ||
             run.Transitions is null || run.PlannerAudit is null || run.PlannerStopReason is null || run.BootIdAtApply is null ||
             run.OperationId == Guid.Empty || run.BaselineSessionIds.Concat(run.CandidateSessionIds).Concat(run.DiagnosticSessionIds).Contains(Guid.Empty))
             throw new InvalidOperationException("The optimization run schema or ID was invalid.");
         run.Goals.Validate();
+        if (run.Diagnosis is not null) AuditChecklist.ValidatePersisted(run.Diagnosis, run.EvidenceFacts);
+        if (run.Mode == InvestigationMode.AuditOnly &&
+            (run.OperationId is not null || run.ApprovedActionIds.Count > 0 || run.HighRiskConfirmed ||
+             run.BaselineSessionIds.Count + run.CandidateSessionIds.Count + run.DiagnosticSessionIds.Count > 0 || run.Comparison is not null ||
+             run.Decision is not (OptimizationRunDecision.Undecided or OptimizationRunDecision.Declined) ||
+             run.State is not (OptimizationRunState.Draft or OptimizationRunState.Scanned or OptimizationRunState.Hypothesizing or OptimizationRunState.ProposalReady or OptimizationRunState.Completed or OptimizationRunState.Failed) ||
+             run.Transitions.Any(step => step.To is not (OptimizationRunState.Scanned or OptimizationRunState.Hypothesizing or OptimizationRunState.ProposalReady or OptimizationRunState.Completed or OptimizationRunState.Failed)) ||
+             run.Diagnosis?.Recommendations.Any(item => item.Kind == PlanRecommendationKind.ExecutableAction) == true))
+            throw new InvalidOperationException("Audit-only journals cannot contain optimization approval, measurements or writes.");
         for (var index = 0; index < run.Transitions.Count; index++)
         {
             var transition = run.Transitions[index];
