@@ -502,7 +502,7 @@ function App() {
         <Navigation items={navigation.map(item => ({ ...item, label: t(item.label) }))} page={page} onPage={setPage} disabled={Boolean(diagnosisProgress) || securityBusy} quiet={quietMotion}/>
         <div className="sidebar-foot">
           <div className="security-chip"><ShieldCheck size={16}/><span>{t("Allowlisted actions")}</span></div>
-          <small>v0.8.0-alpha.1</small>
+          <small>v0.8.0-alpha.2</small>
         </div>
       </aside>
 
