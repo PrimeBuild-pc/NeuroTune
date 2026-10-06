@@ -1,16 +1,32 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="280" viewBox="0 0 1200 280" role="img" aria-labelledby="title desc">
-  <title id="title">NeuroTune</title>
-  <desc id="desc">AI-guided Windows optimization with verified rollback</desc>
-  <rect width="1200" height="280" rx="24" fill="#0b0e14"/>
-  <path d="M850 0V280M930 0V280M1010 0V280M1090 0V280M770 60H1200M770 140H1200M770 220H1200" stroke="#1a2230"/>
-  <circle cx="1010" cy="140" r="98" fill="none" stroke="#655da7" stroke-opacity=".45"/>
-  <circle cx="1010" cy="140" r="66" fill="none" stroke="#655da7" stroke-opacity=".35"/>
-  <svg x="72" y="64" width="152" height="152" viewBox="0 0 64 64" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="370" viewBox="0 0 1200 370" role="img" aria-labelledby="title desc">
+  <title id="title">NeuroTune — AI-powered Windows 11 optimizer. Free and open source.</title>
+  <desc id="desc">The current NeuroTune N logo. Measure first, choose your AI, review every change. MIT licensed; alpha software.</desc>
+  <defs>
+    <linearGradient id="surface" x2="1" y2="1"><stop stop-color="#10141c"/><stop offset="1" stop-color="#1b2230"/></linearGradient>
+    <radialGradient id="glow"><stop stop-color="#9388ff" stop-opacity=".14"/><stop offset="1" stop-color="#9388ff" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="1200" height="370" rx="24" fill="url(#surface)"/>
+  <circle cx="1032" cy="169" r="200" fill="url(#glow)"/>
+  <g fill="none" stroke="#655da7">
+    <circle cx="1032" cy="169" r="110" stroke-opacity=".45"/>
+    <circle cx="1032" cy="169" r="146" stroke-opacity=".22"/>
+    <path d="M922 169H1142M1032 59V279" stroke-opacity=".35"/>
+  </g>
+  <g fill="#9388ff"><circle cx="1032" cy="23" r="3"/><circle cx="1142" cy="169" r="4"/><circle cx="922" cy="169" r="4"/></g>
+  <svg x="968" y="105" width="128" height="128" viewBox="0 0 64 64" fill="none">
     <rect x="1" y="1" width="62" height="62" rx="17" fill="#10141c" stroke="#655da7" stroke-width="1.5"/>
     <path d="M10 46L19 18H27L39 36L45 18H53L44 46H36L24 28L18 46Z" fill="#9388ff"/>
     <path d="M27 18L39 36L36 46L24 28Z" fill="#f4f7fb"/>
   </svg>
-  <text x="264" y="131" fill="#f4f7fb" font-family="Segoe UI,Arial,sans-serif" font-size="62" font-weight="650" letter-spacing="-2">NeuroTune</text>
-  <text x="268" y="171" fill="#bdc7d5" font-family="Segoe UI,Arial,sans-serif" font-size="21">Evidence. Intelligence. Local control.</text>
-  <text x="268" y="208" fill="#96a5b8" font-family="Segoe UI,Arial,sans-serif" font-size="15">Windows tuning · allowlisted actions · verified rollback</text>
+  <g font-family="Segoe UI,Arial,sans-serif">
+    <text x="76" y="63" fill="#b6acf3" font-size="15" font-weight="600" letter-spacing="3">EVIDENCE · INTELLIGENCE · CONTROL</text>
+    <text x="72" y="163" fill="#f4f7fb" font-size="96" font-weight="700" letter-spacing="-4">NeuroTune</text>
+    <text x="78" y="214" fill="#f4f7fb" font-size="28">AI-powered Windows 11 optimizer.</text>
+    <text x="78" y="254" fill="#b6acf3" font-size="28">Free and open source.</text>
+    <path d="M78 290H1122" stroke="#343d4e"/>
+    <text x="78" y="332" fill="#bdc7d5" font-size="18">Measure first.</text>
+    <text x="290" y="332" fill="#bdc7d5" font-size="18">Choose your AI.</text>
+    <text x="550" y="332" fill="#bdc7d5" font-size="18">Review every change.</text>
+    <text x="1122" y="332" text-anchor="end" fill="#b6acf3" font-size="16" font-weight="600">MIT / ALPHA</text>
+  </g>
 </svg>
