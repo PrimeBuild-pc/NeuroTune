@@ -1,4 +1,4 @@
-// Capture the current frontend with an empty, mocked Agent. No scans, writes or AI calls.
+// Capture the current frontend with a demo provider and mocked Agent. No scans, writes or AI calls.
 // Run after `cd ui && npm run build && npm run preview`.
 // Set PLAYWRIGHT_PATH / CHROME_PATH when using an existing external browser installation.
 const assert = require('node:assert/strict');
@@ -31,7 +31,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
           if (command !== 'agent') throw Error('Unexpected bridge call: ' + command);
           window.readmeRequests.push(args.command);
           switch (args.command) {
-            case 'get-state': return { settings: { provider: 'local', providerName: 'Local model', protocol: 'openAiCompatible', baseUrl: 'http://127.0.0.1:11434/v1', model: '', requiresApiKey: false }, hasCredential: false, isRecording: false, chatGptAccounts: [] };
+            case 'get-state': return { settings: { provider: 'local', providerName: 'Local model', protocol: 'openAiCompatible', baseUrl: 'http://127.0.0.1:11434/v1', model: 'demo-local-model', requiresApiKey: false }, hasCredential: false, isRecording: false, chatGptAccounts: [] };
             case 'actions': case 'history': case 'run-list': case 'measurement-workloads': case 'measurement-list': return [];
             case 'defender-scan-current': return null;
             default: throw Error('Capture must not perform operations: ' + args.command);
@@ -49,19 +49,24 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
         document.activeElement?.blur();
       }, theme);
       await page.getByRole('heading', { name: 'A visible boundary at every step', exact: true }).waitFor();
-      await page.screenshot({ path: path.join(output, `neurotune-${theme}.png`), fullPage: true });
+      await page.screenshot({ path: path.join(output, `neurotune-${theme}.png`) });
     }
     await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; document.documentElement.style.colorScheme = 'dark'; });
     await page.getByRole('navigation').getByRole('button', { name: 'Complete diagnosis', exact: true }).click();
     await page.getByRole('group', { name: 'Investigation mode', exact: true }).waitFor();
-    await page.screenshot({ path: path.join(output, 'neurotune-diagnosis.png'), fullPage: true });
+    await page.screenshot({ path: path.join(output, 'neurotune-diagnosis.png') });
     await page.getByRole('navigation').getByRole('button', { name: 'Privacy & security', exact: true }).click();
     await page.getByRole('heading', { name: 'Privacy & security', exact: true }).first().waitFor();
-    await page.screenshot({ path: path.join(output, 'neurotune-security.png'), fullPage: true });
+    await page.screenshot({ path: path.join(output, 'neurotune-security.png') });
     assert.deepEqual(errors, []);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     const requests = await page.evaluate(() => window.readmeRequests);
     assert.ok(requests.every(command => ['get-state', 'actions', 'history', 'run-list', 'measurement-workloads', 'measurement-list', 'defender-scan-current'].includes(command)));
-    console.log('PASS: four current-UI screenshots, empty mocked state, no native operations or provider requests.');
+    for (const name of ['dark', 'light', 'diagnosis', 'security']) {
+      const png = fs.readFileSync(path.join(output, `neurotune-${name}.png`));
+      assert.equal(png.readUInt32BE(16), 1440);
+      assert.equal(png.readUInt32BE(20), 960);
+    }
+    console.log('PASS: four equal-size current-UI screenshots, demo configuration, no native operations or provider requests.');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
