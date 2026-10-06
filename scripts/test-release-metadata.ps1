@@ -10,7 +10,11 @@ if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
 $root = (Resolve-Path -LiteralPath $RepositoryRoot).Path
 $tauriConfig = Get-Content -LiteralPath (Join-Path $root 'ui/src-tauri/tauri.conf.json') -Raw | ConvertFrom-Json
 $package = Get-Content -LiteralPath (Join-Path $root 'ui/package.json') -Raw | ConvertFrom-Json
+# Node handles the lockfile's empty package key on both Windows PowerShell 5 and pwsh.
+$packageLock = (& node -e "const p=require(process.argv[1]); console.log(JSON.stringify({version:p.version,rootVersion:p.packages[''].version}))" (Join-Path $root 'ui/package-lock.json')) | ConvertFrom-Json
+if ($LASTEXITCODE -ne 0) { throw 'Cannot read npm lockfile versions.' }
 $cargo = Get-Content -LiteralPath (Join-Path $root 'ui/src-tauri/Cargo.toml') -Raw
+$cargoLock = Get-Content -LiteralPath (Join-Path $root 'ui/src-tauri/Cargo.lock') -Raw
 $license = Get-Content -LiteralPath (Join-Path $root 'LICENSE') -Raw
 $readme = Get-Content -LiteralPath (Join-Path $root 'README.md') -Raw
 $releaseNotes = Get-Content -LiteralPath (Join-Path $root 'RELEASE_NOTES.md') -Raw
@@ -27,8 +31,11 @@ if ($tauriConfig.bundle.windows.nsis.installMode -ne 'perMachine') {
 
 $versions = [ordered]@{
     npm = [string]$package.version
+    npmLock = [string]$packageLock.version
+    npmLockRoot = [string]$packageLock.rootVersion
     tauri = [string]$tauriConfig.version
     cargo = [regex]::Match($cargo, '(?m)^version[ \t]*=[ \t]*"([^"]+)"[ \t]*\r?$').Groups[1].Value
+    cargoLock = [regex]::Match($cargoLock, '(?m)^name[ \t]*=[ \t]*"neurotune"\r?\nversion[ \t]*=[ \t]*"([^"]+)"').Groups[1].Value
 }
 
 Get-ChildItem -LiteralPath (Join-Path $root 'src') -Filter '*.csproj' -Recurse | ForEach-Object {
