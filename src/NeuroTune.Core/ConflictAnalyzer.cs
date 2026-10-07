@@ -159,6 +159,7 @@ public static class ConflictAnalyzer
 
         var deviceIssue = facts.Keys.FirstOrDefault(key => key.StartsWith("device-issue:", StringComparison.Ordinal));
         var staleDriver = facts.FirstOrDefault(pair => pair.Key.StartsWith("driver:", StringComparison.Ordinal) &&
+            !pair.Value.Split('|').Skip(1).Take(1).Any(vendor => vendor.Trim().Equals("Microsoft", StringComparison.OrdinalIgnoreCase)) &&
             DateTime.TryParse(pair.Value.Split('|').Last().Trim(), out var date) && date < profile.CollectedAt.AddYears(-5));
         if (deviceIssue is not null && staleDriver.Key is not null)
             AddDirect("stale-driver-device-error", "Old driver record and device error coexist", ConflictKind.Conditional,

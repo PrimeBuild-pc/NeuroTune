@@ -67,6 +67,44 @@ recovery, compatibility, a clean PC or a performance gain.
    Review privacy and exact model image support before consenting. Scripts and
    downloads in AI proposals remain inert. See [investigation boundaries](DETERMINISTIC_CONTROLS.md).
 
+## Development branch: setup and before/after measurements
+
+These additions are source changes, not replacements for the published alpha.4
+packages. First-launch **Guided setup** stages optional sensor/firmware choices;
+only **Save choices and continue** persists them. Skip preserves existing
+permissions. PawnIO and BIOS writing remain unavailable. Configuring System One
+is not installing or enabling it: its separate consent/download controls remain.
+The guide is postponed during recording, active runs and journal/recovery errors.
+
+Record the same user-described idle conditions or repeatable workload scene.
+Complete diagnosis saves its initial report before contacting AI. Reports retain
+conditions and investigation preset; **Measurements** shows saved Before on the
+left and After on the right, survives restart, and exports local JSON on request.
+Exports can contain process/driver information: review before sharing. Session
+history can be searched by conditions and preset. Comparison and AI selection
+remain separate. Imported PresentMon evidence is still required for FPS claims.
+
+The after-capture button reuses the saved duration, conditions and workload,
+analyzes only that owned capture once, and leaves failed analysis explicitly
+retryable. For an active optimization run, restart verification and three matching
+reports on each side still gate evaluation. Idle-to-idle comparisons are diagnostic
+observations only, never evidence for Apply/Keep or input-latency/FPS gains.
+Mismatched conditions, quality, coverage or environments reject comparison.
+
+Run `node scripts/check-contextual-workflow.cjs` against the UI preview with
+Playwright available, along with the existing polish/review checks. It mocks every
+Agent command and covers both themes, setup/skip, owned capture analysis, export,
+restart persistence and narrow layout. Backend regressions cover exact action
+references, unknown/unprovided executors, Microsoft inbox-driver dates, virtual
+HAGS/firmware limits and diagnostic decision rejection. These checks do not
+establish native MSI support, actual provider acceptance or installer safety.
+The same browser check also simulates MSI Windows-reader results and imports
+synthetic UTF-8/UTF-16 setup exports, with explicit **SIMULATED** provenance,
+unknown/conflicting current values, secret omission and decode-error rejection.
+Real offline-parser tests complement, but do not turn, these fixtures into host
+BIOS observations. PawnIO is not required for either existing read/import path;
+no driver is installed, loaded or made an application prerequisite.
+
 ## Authorized host check: DeepSeek Flash, 2026-10-07
 
 Published alpha.3's failure was reproduced through the real Windows desktop

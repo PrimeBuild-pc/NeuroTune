@@ -12,6 +12,7 @@ const url = process.env.UI_PREVIEW_URL || 'http://127.0.0.1:4173/';
       const page = await browser.newPage({ viewport: { width: 907, height: 573 }, reducedMotion: 'reduce' });
       const errors = []; page.on('pageerror', error => errors.push(error.message));
       await page.addInitScript(ready => {
+        localStorage.setItem('neurotune.setupReviewed.v1', 'true'); // Existing configured session; onboarding has its own check.
         let next = 0;
         const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
         const proposal = (id, kind, risk, actionId = '') => ({ id, kind, risk, actionId, title: `${kind} ${risk} proposal`, reason: 'Evidence-backed hypothesis; no performance gain is assumed.', evidenceIds: ['test:local:fact'], resourceId: '', updateId: '', expectedImpact: 'Must be measured', uncertainty: 'Benefit is uncalibrated', reversibility: 'Review reversal procedure first', prerequisites: [], tradeoffs: ['Workload dependent'], requiresRestart: false, sourceReferences: [{ title: 'Official documentation', url: 'https://example.com/', grade: 'primary' }], scriptLanguage: 'PowerShell', script: 'Write-Output "Read-only preview"', reviewWarnings: kind === 'scriptArtifact' ? ['Unverified script; no executor'] : [] });
@@ -62,7 +63,7 @@ const url = process.env.UI_PREVIEW_URL || 'http://127.0.0.1:4173/';
         assert.equal(dialogs.length, 2);
         assert.ok(dialogs[1].includes('HIGH RISK'));
       } else {
-        await page.getByRole('button', { name: /All supported/ }).click();
+        await page.getByRole('button', { name: /Capability catalog/ }).click();
         assert.equal(await page.getByRole('button', { name: /unavailable registered action/ }).isDisabled(), true);
         const script = page.getByRole('article', { name: 'Unverified script: scriptArtifact high proposal' });
         assert.equal(await script.getByRole('button', { name: /Save script.*inert text file/ }).count(), 1);

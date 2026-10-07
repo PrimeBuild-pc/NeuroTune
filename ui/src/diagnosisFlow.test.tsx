@@ -68,9 +68,10 @@ describe('complete diagnosis lifecycle', () => {
     expect(calls.filter(command => command === 'diagnose')).toHaveLength(1);
     expect(calls).not.toContain('apply'); expect(calls).not.toContain('run-approve');
   });
-  it('keeps system-wide evidence diagnostic, not a workload baseline', async () => {
-    const { flow } = harness(); const result = await flow.execute({ ...input, workload: undefined });
+  it('keeps system-wide evidence diagnostic and saves user-described conditions and preset before AI', async () => {
+    const { flow, requests } = harness(); const result = await flow.execute({ ...input, workload: undefined, measurementConditions: '  Idle  ' });
     expect(result.sessions).toHaveLength(1); expect(result.run.state).toBe('baselinePending');
+    expect(requests.find(item => item.command === 'measurement-start')?.payload).toMatchObject({ conditions: 'Idle', analysisPreset: 'systemLatency', label: 'baseline', systemWide: true });
   });
   it('cancellation during startup waits for the owned session, then releases only its recorder', async () => {
     const { flow, calls } = harness({ cancelDuringStart: true });

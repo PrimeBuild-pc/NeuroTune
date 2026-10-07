@@ -14,9 +14,11 @@ export function ReviewPage({ diagnosis, supporting = [], actions, recommendation
   onPreset: (mode: RiskProfile | 'none') => void; onApply: () => void; onDismiss?: () => void;
 }) {
   const [view, setView] = useState<'recommended' | 'conflicts' | 'all'>('recommended');
+  const [showConfigured, setShowConfigured] = useState(false);
   if (!diagnosis) return <EmptyState icon={Bot} title={t('No diagnosis yet')} text={t('Scan the PC, choose your priorities, and ask the configured model for an evidence-backed diagnosis.')} action={onDiagnosis ? t('Complete diagnosis') : undefined} onAction={onDiagnosis}/>;
   const conflictActionIds = new Set(diagnosis.conflicts.flatMap(conflict => conflict.suggestedActionIds));
-  const visible = auditOnly ? [] : actions.filter(action => view === 'all' || (view === 'recommended' ? recommendations.has(action.id) : conflictActionIds.has(action.id)));
+  const visible = auditOnly ? [] : actions.filter(action => (showConfigured || !action.availability.alreadyApplied) &&
+    (view === 'all' || (view === 'recommended' ? recommendations.has(action.id) : conflictActionIds.has(action.id))));
   const selectedHighRisk = actions.filter(action => selected.has(action.id) && action.risk === 'high').length;
   const executable = diagnosis.recommendations.filter(item => item.kind === 'executableAction').length;
   return <div className="stack-lg report-root">
@@ -28,6 +30,7 @@ export function ReviewPage({ diagnosis, supporting = [], actions, recommendation
     {supporting.length > 0 && <details className="review-support"><summary>{t('Supporting attachments · user-provided, unverified ({count})', { count: supporting.length })}</summary><p>{t('Reports do not replace local benchmarks. Screenshot pixels are not retained in history; SHA-256 identifies only the prepared content.')}</p><ul>{supporting.map(item => <li key={item.id}><strong>{item.name}</strong> · {t(item.kind)} · <code>{item.sha256}</code></li>)}</ul></details>}
     {auditOnly && <section className="section-card"><h3>{t('Privacy and security audit · no changes')}</h3><p>{t('Observed settings do not prove actual traffic. Defender detections are distinct from suspicious metadata; an absence of detections does not certify a clean PC. Scanning and remediation require separate consent.')}</p></section>}
     {auditOnly && <section className="section-card"><h3>{t('Local observations · separate from AI interpretation')}</h3>{(['privacy', 'security'] as const).map(domain => <details key={domain}><summary>{domain === 'privacy' ? t('Privacy · preferences and policies, not measured traffic') : t('Security · protections and scanner summary, not a clean-PC certificate')}</summary><dl className="firmware-facts">{Object.entries(auditEvidence).filter(([id]) => id.startsWith(`audit:${domain}.`)).map(([id, value]) => <div key={id}><dt>{id.slice('audit:'.length)}</dt><dd>{value}</dd></div>)}</dl></details>)}</section>}
+    {diagnosis.recommendations.some(unresolvedExecutor) && <section className="section-card" role="status"><h3>{t('Some proposals have no validated action link')}</h3><p>{t('The AI supplied a missing or unknown action reference. Those proposals stay review-only, even if a similarly named capability exists. NeuroTune never guesses an executor or grants permission from a title.')}</p></section>}
     <PlanItemReview recommendations={diagnosis.recommendations}/>
     {diagnosis.conflicts.length > 0 && <details className="review-local"><summary>{t('Local hypotheses · not AI conclusions')}</summary><ConflictView conflicts={diagnosis.conflicts}/></details>}
     {!auditOnly && <section className="review-selection" aria-label={t('Executable action selection')}>
@@ -36,8 +39,10 @@ export function ReviewPage({ diagnosis, supporting = [], actions, recommendation
       <div className="plan-tabs" role="group" aria-label={t('Action visibility')}>
         <button aria-pressed={view === 'recommended'} className={view === 'recommended' ? 'active' : ''} onClick={() => setView('recommended')}>{t('AI recommended ({count})', { count: recommendations.size })}</button>
         <button aria-pressed={view === 'conflicts'} className={view === 'conflicts' ? 'active' : ''} onClick={() => setView('conflicts')}>{t('Local heuristic candidates ({count})', { count: conflictActionIds.size })}</button>
-        <button aria-pressed={view === 'all'} className={view === 'all' ? 'active' : ''} onClick={() => setView('all')}>{t('All supported ({count})', { count: actions.length })}</button>
+        <button aria-pressed={view === 'all'} className={view === 'all' ? 'active' : ''} onClick={() => setView('all')}>{t('Capability catalog ({count})', { count: actions.length })}</button>
       </div>
+      {view === 'all' && <p className="muted-copy">{t('This is the capability catalog, not a personalized recommendation. Ready means the registered operation is available, not that it will improve performance or that hardware support is certified.')}</p>}
+      <label className="consent-toggle"><input type="checkbox" checked={showConfigured} onChange={event => setShowConfigured(event.target.checked)}/><span><strong>{t('Show already-configured actions')}</strong><small>{t('These actions would not change their inspected target. Already configured does not mean NeuroTune applied them or that the PC is optimal.')}</small></span></label>
     </section>}
     {visible.length > 0 ? <div className="action-list">{visible.map(action => {
       const related = diagnosis.conflicts.filter(conflict => conflict.suggestedActionIds.includes(action.id)).map(conflict => conflict.title);
@@ -100,6 +105,10 @@ function sourceGrade(value: string) {
   return ['Official', 'Reproducible', 'Corroborated', 'Anecdotal', 'Unrated', 'Unverified'].includes(value) ? t(value) : value;
 }
 
+function unresolvedExecutor(item: Recommendation) {
+  return Boolean(item.executionIssue || item.reviewWarnings.some(warning => warning.startsWith('No registered executor exists.')));
+}
+
 function PlanItemReview({ recommendations }: { recommendations: Recommendation[] }) {
   const [copiedId, setCopiedId] = useState('');
   const [copyError, setCopyError] = useState('');
@@ -108,7 +117,7 @@ function PlanItemReview({ recommendations }: { recommendations: Recommendation[]
   return <section className="plan-item-section"><div className="section-heading"><div><h3>{t('Risk-ordered personalized plan')}</h3><p className="muted-copy">{t('Manual guidance and scripts stay outside the apply transaction.')}</p></div><span className="status-pill">{t('Nothing auto-applied')}</span></div>
     {copyError && <p role="alert" className="error-text">{t(copyError)}</p>}
     <div className="plan-item-list">{reviewOnly.map(item => <article aria-label={t('{kind}: {title}', { kind: t(planKindLabel(item.kind)), title: item.title })} key={item.id} className={`plan-item ${item.kind}`}>
-      <div className="plan-item-heading"><FileText size={18} aria-hidden="true"/><div><span>{t(planKindLabel(item.kind))}</span><strong>{item.title}</strong></div><span className={`risk ${item.risk}`}>{t(`${item.risk} risk`)}</span></div>
+      <div className="plan-item-heading"><FileText size={18} aria-hidden="true"/><div><span>{t(planKindLabel(item.kind))}</span><strong>{item.title}</strong></div><span className={`risk ${unresolvedExecutor(item) ? 'medium' : item.risk}`}>{unresolvedExecutor(item) ? t('Unverified execution') : t(`${item.risk} risk`)}</span></div>
       <p>{item.reason}</p>
       <dl className="proposal-facts">
         {item.expectedImpact && <div><dt>{t('Expected impact')}</dt><dd>{item.expectedImpact}</dd></div>}

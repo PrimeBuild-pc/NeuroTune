@@ -3,6 +3,7 @@ import { CircleGauge, Timer, X } from 'lucide-react';
 import type { MeasurementSession } from '../types';
 import { formatDate, t } from '../i18n';
 import './MeasurementHistory.css';
+import { analysisPresetsFor } from '../plan';
 
 export function MeasurementHistory({ sessions, focusedId, compareIds, evidenceIds, busy, loading, onFocus, onCompareToggle, onEvidenceToggle, onAnalyze, onDelete, onCompare }: {
   sessions: MeasurementSession[]; focusedId?: string; compareIds: Set<string>; evidenceIds: Set<string>; busy: boolean; loading: boolean;
@@ -14,7 +15,7 @@ export function MeasurementHistory({ sessions, focusedId, compareIds, evidenceId
   const [visibleCount, setVisibleCount] = useState(12);
   const filtered = sessions.filter(session => {
     const matchesFilter = filter === 'all' || session.label === filter || filter === 'needsAnalysis' && ['captured', 'failed'].includes(session.state);
-    return matchesFilter && `${session.processName} ${session.processId} ${session.id}`.toLowerCase().includes(query.trim().toLowerCase());
+    return matchesFilter && `${session.processName} ${session.processId} ${session.id} ${session.conditions ?? ''} ${session.analysisPreset ? analysisPresetsFor(session.analysisPreset).find(item => item.id === session.analysisPreset)?.label : ''}`.toLowerCase().includes(query.trim().toLowerCase());
   });
   const baselines = sessions.filter(item => compareIds.has(item.id) && item.label === 'baseline').length;
   const candidates = sessions.filter(item => compareIds.has(item.id) && item.label === 'candidate').length;
@@ -28,7 +29,7 @@ export function MeasurementHistory({ sessions, focusedId, compareIds, evidenceId
     <p className="history-results" role="status">{t('Showing {shown} of {total} sessions', { shown: Math.min(visibleCount, filtered.length), total: filtered.length })}</p>
     <div className="measurement-history">{filtered.slice(0, visibleCount).map(session => <article key={session.id} className={focusedId === session.id ? 'measurement-row selected' : 'measurement-row'}>
       <label><input aria-label={t('Select {id} for comparison', { id: session.id })} type="checkbox" disabled={busy || loading || session.state !== 'completed'} checked={compareIds.has(session.id)} onChange={() => onCompareToggle(session.id)}/></label>
-      <button className="measurement-select" aria-pressed={focusedId === session.id} onClick={() => onFocus(session.id)}><strong>{session.processName || (session.systemWide ? t('Entire system') : t('Target workload'))}</strong><small>{formatDate(session.createdAtUtc)} · {t('{seconds}s', { seconds: session.durationSeconds })} · {session.systemWide ? t('System-wide') : `PID ${session.processId}`}</small></button>
+      <button className="measurement-select" aria-pressed={focusedId === session.id} onClick={() => onFocus(session.id)}><strong>{session.conditions || session.processName || (session.systemWide ? t('Entire system') : t('Target workload'))}</strong>{session.analysisPreset && <small>{analysisPresetsFor(session.analysisPreset).find(item => item.id === session.analysisPreset)?.label}</small>}<small>{formatDate(session.createdAtUtc)} · {t('{seconds}s', { seconds: session.durationSeconds })} · {session.systemWide ? t('System-wide') : `PID ${session.processId}`}</small></button>
       <div className="measurement-state"><span className={`status-pill ${session.state === 'completed' && session.report?.quality.isValid ? 'good' : ''}`}>{t(session.label)} · {t(session.state)}</span>{session.report && <small className={session.report.quality.isValid ? 'quality-valid' : 'quality-invalid'}>{session.report.quality.isValid ? t('Quality gate passed') : t('Invalid trace')}</small>}</div>
       <div className="button-row measurement-row-actions">{session.state === 'captured' || session.state === 'failed' ? <button className="secondary" disabled={busy || loading} onClick={() => onAnalyze(session.id)}>{t('Analyze')}</button> : null}<button aria-pressed={evidenceIds.has(session.id)} className={evidenceIds.has(session.id) ? 'ghost active' : 'ghost'} disabled={busy || loading || session.state !== 'completed' || session.systemWide} onClick={() => onEvidenceToggle(session.id)}>{evidenceIds.has(session.id) ? t('Included in AI') : t('Use in AI')}</button><button className="ghost" aria-label={t('Delete measurement {id}', { id: session.id })} disabled={session.state === 'recording' || busy || loading} onClick={() => onDelete(session.id)}><X size={14} aria-hidden="true"/></button></div>
       {session.error && <p className="measurement-row-error" role="alert">{session.error}</p>}

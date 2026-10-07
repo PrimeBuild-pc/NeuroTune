@@ -49,6 +49,9 @@ public sealed class MeasurementService
 
     public MeasurementSession Start(MeasurementStartRequest request, string wprProfilePath)
     {
+        if (request.Conditions is null || request.Conditions.Length > 240 || request.Conditions.Any(char.IsControl) ||
+            request.AnalysisPreset is { } preset && !Enum.IsDefined(preset) || !Enum.IsDefined(request.Label))
+            throw new ArgumentException("Measurement conditions, preset or side are invalid.");
         if (request.DurationSeconds is < 30 or > 600) throw new ArgumentOutOfRangeException(nameof(request.DurationSeconds), "Duration must be between 30 and 600 seconds.");
         if (!File.Exists(wprProfilePath)) throw new FileNotFoundException("The embedded NeuroTune WPR profile is missing.", wprProfilePath);
         if (request.SystemWide && request.OptimizationRunId is not null)
@@ -61,7 +64,9 @@ public sealed class MeasurementService
         var environment = CaptureEnvironment();
         var session = new MeasurementSession
         {
-            SchemaVersion = 2,
+            SchemaVersion = 3,
+            Conditions = request.Conditions.Trim(),
+            AnalysisPreset = request.AnalysisPreset,
             SystemWide = request.SystemWide,
             HardFaultsEnabled = true,
             Id = id,
@@ -242,7 +247,13 @@ public sealed class MeasurementService
         if (baseline.Count == 0 || candidate.Count == 0) throw new InvalidOperationException("Select at least one baseline and one candidate session.");
         var all = baseline.Concat(candidate).ToList();
         var reasons = new List<string>();
-        if (all.Any(item => item.SystemWide)) reasons.Add("System-wide captures are diagnostic snapshots, not matched workload benchmarks.");
+        var diagnosticOnly = all.All(item => item.SystemWide);
+        if (all.Any(item => item.SystemWide) && (!diagnosticOnly || request.OptimizationRunId is not null))
+            reasons.Add("System-wide captures cannot be mixed with workload benchmarks or enter an optimization-run decision.");
+        if (diagnosticOnly && all.Any(item => string.IsNullOrWhiteSpace(item.Conditions)))
+            reasons.Add("Diagnostic conditions were not recorded. Recapture the same user-described idle conditions before comparing.");
+        if (all.Select(item => item.Conditions).Distinct(StringComparer.Ordinal).Count() != 1)
+            reasons.Add("User-described measurement conditions do not match. Repeat the same idle state or benchmark scene.");
         if (all.Select(item => item.Report?.SchemaVersion).Distinct().Count() != 1) reasons.Add("Analyzer schema versions differ; recapture matching sessions.");
         if (baseline.Any(item => item.Label != MeasurementLabel.Baseline) || candidate.Any(item => item.Label != MeasurementLabel.Candidate)) reasons.Add("Session labels do not match their comparison side.");
         if (all.Any(item => item.State != MeasurementSessionState.Completed || item.Report is null)) reasons.Add("Every session must have a completed report.");
@@ -267,7 +278,7 @@ public sealed class MeasurementService
         if (!CapturedDurationsMatch(all)) reasons.Add("Actual captured durations are unavailable or differ by more than 10%.");
         if (reasons.Count > 0) return NewComparison(request, ComparisonLevel.Exploratory, [], reasons);
 
-        var level = baseline.Count >= 3 && candidate.Count >= 3 ? ComparisonLevel.Repeated : ComparisonLevel.Exploratory;
+        var level = !diagnosticOnly && baseline.Count >= 3 && candidate.Count >= 3 ? ComparisonLevel.Repeated : ComparisonLevel.Exploratory;
         var baselineFacts = baseline.Select(SessionMetrics).ToList();
         var candidateFacts = candidate.Select(SessionMetrics).ToList();
         var facts = baselineFacts.Concat(candidateFacts).ToList();
@@ -292,12 +303,15 @@ public sealed class MeasurementService
                     after > before == higherIsBetter ? ComparisonOutcome.Improvement : ComparisonOutcome.Regression;
             return new ComparisonMetric($"comparison:{comparisonId}:{key}:median_delta_percent", before, after, delta, outcome);
         }).ToList();
-        var recommendation = Recommend(level, metrics);
+        var recommendation = diagnosticOnly
+            ? (Decision: ComparisonDecision.InsufficientEvidence, Reason: "Diagnostic comparison only: user-described conditions are not independently verified. These numeric differences do not prove FPS/input-latency gains, causality or justify Keep/Apply.")
+            : Recommend(level, metrics);
         if (reasons.Count > 0 && recommendation.Decision != ComparisonDecision.Rollback)
             recommendation = (ComparisonDecision.InsufficientEvidence, "Coverage changed; a favorable Keep recommendation is not justified.");
         return new MeasurementComparison
         {
             Id = comparisonId,
+            DiagnosticOnly = diagnosticOnly,
             Level = level,
             BaselineSessionIds = request.BaselineSessionIds,
             CandidateSessionIds = request.CandidateSessionIds,
@@ -403,8 +417,11 @@ public sealed class MeasurementService
             result["fault:system:worst_process_p99_us"] = report.HardFaults.Select(item => item.Resolution.P99Microseconds).DefaultIfEmpty(0).Max();
         }
         // Redistribution is not an improvement: shares sum to 100% even when total latency grows.
-        result["target:worst_thread_ready_p99_us"] = report.Threads.Count == 0 ? 0 : report.Threads.Max(item => item.ReadyTime.P99Microseconds);
-        result["target:migrations"] = report.Threads.Sum(item => item.Migrations);
+        if (!session.SystemWide)
+        {
+            result["target:worst_thread_ready_p99_us"] = report.Threads.Count == 0 ? 0 : report.Threads.Max(item => item.ReadyTime.P99Microseconds);
+            result["target:migrations"] = report.Threads.Sum(item => item.Migrations);
+        }
         if (report.FrameTimes is { } frames)
         {
             result["frames:average_fps"] = frames.AverageFps;

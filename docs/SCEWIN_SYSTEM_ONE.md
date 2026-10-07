@@ -4,7 +4,14 @@
 
 NeuroTune now exposes three fixed agent commands: `scewin-inspect`, `scewin-export`, and `scewin-import`. They are separate from the normal Windows firmware reader and from AI diagnosis. No scan, diagnosis, model output or startup task invokes SCEWIN automatically.
 
-In **Settings → BIOS / UEFI inspection**:
+In **Advanced tools → BIOS / UEFI inspection** (the current development UI):
+
+**PawnIO is not a prerequisite for the Windows reader or offline export import.**
+Neither path loads a kernel driver. PawnIO does not, by itself, provide a validated
+MSI BIOS setup interface. Sensor clocks or an installed PawnIO service cannot
+confirm PBO, C-state or XMP configuration. The separate SCEWIN export path may
+load its own AMI drivers; its privileged approval and compatibility restrictions
+below remain. No optional-driver installation is made mandatory for NeuroTune.
 
 1. Enable **Allow BIOS reading**.
 2. Supply a legally obtained local folder containing `SCEWIN_64.exe`, `amifldrv64.sys` and `amigendrv64.sys`. Files must be bounded local images, not network/reparse-point paths. **Inspect package hashes** displays their SHA-256 identity; it does **not** establish vendor authenticity, signature validity, redistribution rights or firmware compatibility.
@@ -75,6 +82,20 @@ Historical automated validation on 2026-10-01: **81 .NET, 17 UI and 2 Rust tests
 
 Before expansion, measure held-out classification accuracy, abstention/calibration, p50/p95 latency including cold startup, RAM/VRAM, idle load and actual saved provider turns versus ordinary code. No acceleration guarantee is made. Optional installation is a user decision, not a prerequisite to normal NeuroTune operation.
 
-**Deferred at the user's request:** simplify SCEWIN read-file import/upload into a clearer guided operation (file selection, encoding/provenance feedback, actionable import errors). Current offline import/export and consent boundaries remain unchanged. No automatic AMI download, BIOS writer or security workaround is pending implicitly.
+**Development UI:** offline import is now the first operation. The privileged
+export workflow sits behind a separate disclosure, retaining all approval and
+confirmation gates. The report shows the selected filename, byte size and
+UTF-8/UTF-16 encoding, plus how many questions have a reported current value.
+Missing or conflicting markers remain unknown; defaults are never current values.
+A malformed encoding fails before the Agent call with conversion guidance. File
+reading and parsing share the operation guard, preventing overlapping imports;
+a failed new import does not retain a stale success report.
+
+Synthetic MSI examples exercise Windows-reader rendering and UTF-8/UTF-16 file
+imports in light/dark browser tests; every Agent response there is mocked and
+marked **SIMULATED**, not a physical observation. Separate backend tests use the
+real offline parser. These tests establish no physical MSI compatibility, driver
+admission or BIOS setup access. No automatic AMI download, PawnIO installation,
+BIOS writer or security workaround is added.
 
 See [investigation/execution boundaries](DETERMINISTIC_CONTROLS.md) for technical vetoes, evidence validation and opinionated planning rules. Historical checks above do not validate a current release candidate; see [alpha acceptance requirements](TESTING.md#vm-only-privileged-acceptance).

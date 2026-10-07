@@ -187,12 +187,14 @@ export function FirmwareFacts({ result }: { result: FirmwareResult }) {
   </div>;
 }
 
-export function FirmwarePanel() {
+export function FirmwarePanel({ readConsent, onReadConsent }: { readConsent?: boolean; onReadConsent?: (value: boolean) => void } = {}) {
   const [section, setSection] = useState('reader');
-  const [consent, setConsent] = useState(() => localStorage.getItem('neurotune.firmwareReadConsent') === 'true');
+  const [localConsent, setConsent] = useState(() => localStorage.getItem('neurotune.firmwareReadConsent') === 'true');
+  const consent = readConsent ?? localConsent;
   const [result, setResult] = useState<FirmwareResult>();
   const [busy, setBusy] = useState(false);
   const [scewinBusy, setScewinBusy] = useState(false);
+  useEffect(() => { setResult(undefined); }, [consent]);
   const [error, setError] = useState('');
   async function read() {
     setBusy(true); setError('');
@@ -201,10 +203,11 @@ export function FirmwarePanel() {
     finally { setBusy(false); }
   }
   return <section className="section-card firmware-panel"><h2>{t('BIOS / UEFI inspection')}</h2>
+    <p className="muted-copy">{t('PawnIO is not required for Windows firmware reading or importing an existing export. It does not provide a validated MSI BIOS setup reader. Privileged SCEWIN export may use its own AMI drivers, with separate approval.')}</p>
     <div className="section-switcher" role="group" aria-label={t('Firmware inspection sections')}><button disabled={busy || scewinBusy} aria-pressed={section === 'reader'} onClick={() => setSection('reader')}>{t('Windows firmware reader')}</button><button disabled={busy || scewinBusy} aria-pressed={section === 'export'} onClick={() => setSection('export')}>{t('SCEWIN export')}</button></div>
     <div hidden={section !== 'reader'}>
     <label className="consent-toggle"><input type="checkbox" checked={consent} disabled={busy || scewinBusy} onChange={event => {
-      setConsent(event.target.checked); localStorage.setItem('neurotune.firmwareReadConsent', String(event.target.checked)); setResult(undefined);
+      setConsent(event.target.checked); onReadConsent?.(event.target.checked); localStorage.setItem('neurotune.firmwareReadConsent', String(event.target.checked)); setResult(undefined);
     }}/><span><strong>{t('Allow BIOS reading')}</strong><small>{t('Enables firmware identity and memory details in subsequent scans and this local inspection. Existing reports remain stored.')}</small></span></label>
     <p className="muted-copy">{t('Read board/BIOS identity, Secure Boot, DIMM information and Windows-observed virtualization/TPM state. Exact setup settings are not exposed by this Windows reader. Optional SCEWIN export has a separate section; BIOS writing is not supported.')}</p>
     <button className="secondary" disabled={!consent || busy || scewinBusy} onClick={() => void read()}>{t(busy ? 'Reading firmware…' : 'Read firmware now')}</button>
@@ -212,6 +215,8 @@ export function FirmwarePanel() {
     {error && <p role="alert">{error}</p>}
     {result && <><p className="sr-only" role="status">{t('Windows firmware inspection completed. Exact setup settings remain unavailable to this reader.')}</p><FirmwareFacts result={result}/></>}
     </div>
+    <p className="muted-copy">{t('Need actual setup values? Import an existing SCEWIN export without running drivers, or review the separate privileged export workflow. Compatibility is not guaranteed, especially in a VM.')}</p>
+    <button className="ghost" disabled={busy || scewinBusy || !consent} onClick={() => setSection('export')}>{t('Open setup export / import')}</button>
     <div hidden={section !== 'export'}><ScewinPanel readConsent={consent} onBusyChange={setScewinBusy}/></div>
   </section>;
 }

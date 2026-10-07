@@ -13,6 +13,8 @@ public sealed class MeasurementSession
     public int SchemaVersion { get; init; } = 1;
     public bool SystemWide { get; init; }
     public bool HardFaultsEnabled { get; init; }
+    public string Conditions { get; init; } = ""; // User-described idle state or repeatable scene, not independently verified.
+    public OptimizationPriority? AnalysisPreset { get; init; }
     public Guid Id { get; init; }
     public Guid? OptimizationRunId { get; init; }
     public int ProcessId { get; init; }
@@ -129,6 +131,7 @@ public sealed class MeasurementComparison
 {
     public List<SystemOneAdvisory> SystemOneAdvisories { get; set; } = [];
     public int SchemaVersion { get; init; } = 1;
+    public bool DiagnosticOnly { get; init; }
     public Guid Id { get; init; }
     public ComparisonLevel Level { get; init; }
     public IReadOnlyList<Guid> BaselineSessionIds { get; init; } = [];
@@ -146,7 +149,9 @@ public sealed record MeasurementStartRequest(
     int DurationSeconds = 180,
     bool KeepRawTrace = false,
     Guid? OptimizationRunId = null,
-    bool SystemWide = false);
+    bool SystemWide = false,
+    string Conditions = "",
+    OptimizationPriority? AnalysisPreset = null);
 
 public sealed record MeasurementIdRequest(Guid SessionId, Guid? OptimizationRunId = null);
 public sealed record FrameTimeImportRequest(Guid SessionId, string Csv, Guid? OptimizationRunId = null);

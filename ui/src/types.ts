@@ -129,6 +129,7 @@ export interface Recommendation {
   scriptLanguage: string;
   script: string;
   reviewWarnings: string[];
+  executionIssue?: '' | 'missingActionId' | 'unknownActionId';
 }
 
 export type OptimizationPriority = 'balanced' | 'fps' | 'systemLatency' | 'networkLatency' | 'efficiency' | 'stability' | 'privacySecurity';
@@ -329,6 +330,8 @@ export interface TraceReport {
 }
 
 export interface MeasurementSession {
+  conditions?: string;
+  analysisPreset?: OptimizationPriority;
   hardwareFingerprint?: string;
   configurationFingerprint?: string;
   systemWide?: boolean;
@@ -352,6 +355,7 @@ export interface MeasurementSession {
 }
 
 export interface MeasurementComparison {
+  diagnosticOnly?: boolean;
   systemOneAdvisories?: SystemOneAdvisory[];
   id: string;
   level: 'exploratory' | 'repeated';
