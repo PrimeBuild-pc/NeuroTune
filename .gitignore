@@ -28,6 +28,11 @@ operations/
 /docs/JACKPOT_LATENCY_SUITE_REVIEW.md
 /docs/SECURITY_RELEASE_FIXES.md
 /docs/validation/
+/docs/LOCAL_LATENCY_VALIDATION.md
+/docs/PAWNIO_TRUST_REVIEW.md
+/docs/SECURITY_AUDIT_2026-08-02.md
+/docs/VALIDATION_MATRIX.md
+/docs/TESTING_INTERNAL.md
 
 # OS
 Thumbs.db

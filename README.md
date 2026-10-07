@@ -60,7 +60,7 @@
 <p align="center"><sub>Click any image for full size. Captured from the current frontend with a demo local-model configuration and a mocked Agent: no personal PC data, fabricated benchmark gains, native operations or provider calls.</sub></p>
 
 <blockquote>
-  <p><strong>NeuroTune v0.8.0-alpha.2 is an unsigned alpha for controlled testing, not a stable/general release.</strong> The rebuilt installer and portable package still require fresh exact-candidate Windows 11 VM acceptance. Old installers, historical test results and a green build badge do not certify the current sources. Use a disposable VM for system-changing tests and keep an independent backup.</p>
+  <p><strong>NeuroTune v0.8.0-alpha.3 is an unsigned alpha for controlled testing, not a stable/general release.</strong> The rebuilt installer and portable package still require fresh exact-candidate Windows 11 VM acceptance. Old installers, historical test results and a green build badge do not certify the current sources. Use a disposable VM for system-changing tests and keep an independent backup.</p>
 </blockquote>
 <p><strong>Free software, not a promise of free inference.</strong> NeuroTune is MIT-licensed. Your chosen remote provider may charge for API use or require eligible plan credits; local models need your own hardware. There is no automatic provider or API-billing fallback.</p>
 
@@ -181,14 +181,11 @@ cd ..
 <h2>Documentation and contributing</h2>
 <ul>
   <li><a href="SECURITY.md">Security policy and upgrade safety</a> · <a href="RELEASE_NOTES.md">Alpha release notes</a></li>
-  <li><a href="docs/TESTING.md">Test guide</a> · <a href="docs/VALIDATION_MATRIX.md">Current gates and historical validation matrix</a></li>
+  <li><a href="docs/TESTING.md">Alpha testing and contributor checks</a></li>
   <li><a href="docs/PROVIDERS.md">Provider guide</a> · <a href="docs/DETERMINISTIC_CONTROLS.md">Investigation/execution boundaries</a></li>
   <li><a href="docs/SCEWIN_SYSTEM_ONE.md">Optional SCEWIN / System One</a> · <a href="docs/PRIVACY_SECURITY.md">Privacy and Windows security</a></li>
 </ul>
-<details>
-  <summary><strong>Historical evidence — not current release certifications</strong></summary>
-  <p><a href="docs/LOCAL_LATENCY_VALIDATION.md">Local latency validation</a> · <a href="docs/PAWNIO_TRUST_REVIEW.md">PawnIO trust review</a> · <a href="docs/SECURITY_AUDIT_2026-08-02.md">Repository privacy audit</a>. These are scoped records, not current release certifications.</p>
-</details>
+<p>Internal planning, research notes and historical machine reports are not part of the public user documentation. Source checks and previous tests are not exact-candidate release certification.</p>
 <p>To contribute hardware inventory, use the <a href="tools/hardware-collector/README.md">source-visible hardware collector</a>. It runs offline without administrator rights, traces or settings changes. Review its dated JSON before sharing; inventory is not a performance benchmark.</p>
 <p>NeuroTune is <a href="LICENSE">MIT-licensed</a>. Third-party packages and models retain their own licenses and trust requirements. Report vulnerabilities privately through <a href="SECURITY.md">Security advisories</a>, not public issues containing secrets or full PC profiles.</p>
 <hr>
