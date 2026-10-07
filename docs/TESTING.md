@@ -67,6 +67,29 @@ recovery, compatibility, a clean PC or a performance gain.
    Review privacy and exact model image support before consenting. Scripts and
    downloads in AI proposals remain inert. See [investigation boundaries](DETERMINISTIC_CONTROLS.md).
 
+## Authorized host check: DeepSeek Flash, 2026-10-07
+
+Published alpha.3's failure was reproduced through the real Windows desktop
+UI with the configured `deepseek-flash` connection, not a browser/provider mock.
+Subsequent source corrections produced both a validated explicit UI retry and
+a fresh **Complete diagnosis** from scan through WPR, ETL analysis, provider
+investigation and review. The fresh run completed 12 turns, with 15 findings and
+10 proposals; no local fallback or stored error. These observations apply to
+the **unreleased corrected source**, not the immutable alpha.3 assets.
+
+Testing used an instrumented Release WebView with a private profile and
+loopback-only diagnostics. The one 30-second system-wide capture had valid
+quality and zero lost events; raw ETL was removed after analysis. Capture motion
+was quiet, Windows operation history and inspected action values were unchanged,
+and no approval, Apply, rollback, scanner remediation, provider/model switch or
+budget increase was performed. Runs were explicitly finished without changes.
+Private host profiles, journals and screenshots are not public test fixtures.
+
+This is not a workload Baseline, measured gain, unattended/provider-wide
+reliability guarantee or exact-installer/VM Apply/recovery acceptance. Those
+checks remain separate. Host ChatGPT quota failures from the earlier test do
+not explain the DeepSeek failure.
+
 ## VM-only privileged acceptance
 
 With separate explicit authorization and the exact candidate installer:

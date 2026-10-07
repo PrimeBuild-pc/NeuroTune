@@ -165,6 +165,7 @@ public sealed class OptimizationRunService
         run.PlannerAudit = outcome.Audit.ToList();
         run.PlannerStopReason = outcome.StopReason;
         run.UsedLocalFallback = outcome.UsedLocalFallback;
+        if (!outcome.UsedLocalFallback) run.Error = null;
         run.RequestedProbeIds = outcome.Audit.Where(entry => entry.Accepted && entry.Kind is "requestEvidence" or "requestInvestigation")
             .SelectMany(entry => entry.EvidenceIds).Distinct(StringComparer.Ordinal).ToList();
         Move(run, OptimizationRunState.ProposalReady, "Provider proposal passed local validation");

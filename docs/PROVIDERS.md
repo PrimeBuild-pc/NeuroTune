@@ -27,6 +27,24 @@ permissions. Catalog membership does not establish chat/diagnosis support, image
 support, available inference quota or a successful validated response. OpenAI's
 catalog may also contain non-chat models: select a suitable model explicitly.
 
+## DeepSeek planner reliability (unreleased after alpha.3)
+
+The source changes after alpha.3 enable DeepSeek's documented
+[JSON Output](https://api-docs.deepseek.com/guides/json_mode), with an explicit
+system contract. This setting is not assumed for arbitrary custom/local models.
+
+DeepSeek receives stable, investigation-local short evidence references such as
+`f0001`, with descriptive source labels. These are **evidence references, not
+model IDs**. Requests, findings, recommendations and audit coverage are resolved
+exactly to original IDs before validation and storage. Unknown/unprovided IDs,
+repeated or oversized requests, unsafe tools and fabricated explicit values
+still fail closed; there is no fuzzy matching or automatic inference retry.
+
+Finding values omitted by the model are resolved from the exact provided local
+fact. AI interpretation stays in `assessment`; it is not a measured observation
+or authorization to Apply. Safe failures distinguish validation stages without
+showing raw provider responses or arbitrary exception text.
+
 ## Browser Authorization
 
 NeuroTune exposes separate official browser flows for OpenRouter and ChatGPT. OpenRouter authorization uses:
