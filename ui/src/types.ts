@@ -244,6 +244,8 @@ export interface OptimizationRun {
   requiresRecovery: boolean;
   goals: TuningGoals;
   evidenceFacts: Record<string, string>;
+  usedLocalFallback?: boolean;
+  error?: string | null;
   diagnosis?: Diagnosis;
   baselineSessionIds: string[];
   candidateSessionIds: string[];

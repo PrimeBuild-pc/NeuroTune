@@ -192,9 +192,9 @@ public sealed class LlmClient
             return new()
             {
                 SystemOneAdvisories = localAdvisory is null ? [] : [localAdvisory],
-                Summary = "The provider planner was unavailable or invalid. NeuroTune kept deterministic local findings for review, but this run cannot apply changes until an AI diagnosis succeeds." +
-                    (supporting.Any(item => item.Kind == "image") ? " Screenshots were included: verify that this exact model supports image input. No image was silently dropped and no model/provider fallback occurred. " + audit.LastOrDefault()?.Reason : "") +
-                    (settings.Provider == LlmProvider.ChatGpt && audit.LastOrDefault()?.Reason.StartsWith("ChatGPT", StringComparison.Ordinal) == true ? $" {audit[^1].Reason}" : ""),
+                Summary = (audit.LastOrDefault(entry => !entry.Accepted)?.Reason ?? "The investigation reached its turn limit without a validated diagnosis.") + " " +
+                    "The provider planner was unavailable or invalid. NeuroTune kept deterministic local findings for review, but this run cannot apply changes until an AI diagnosis succeeds." +
+                    (supporting.Any(item => item.Kind == "image") ? " Screenshots were included: verify that this exact model supports image input. No image was silently dropped and no model/provider fallback occurred." : ""),
                 Recommendations = [], // No deterministic tweak plan may masquerade as an AI investigation.
                 Conflicts = conflicts.ToList(),
                 ConsentQuestion = "Review the unavailable investigation and retry or dismiss it without changes?"
@@ -338,7 +338,7 @@ public sealed class LlmClient
             : CreateOpenAiRequest(settings, apiKey, prompt, attachments);
         using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         if (!response.IsSuccessStatusCode)
-            throw new InvalidOperationException($"The provider returned HTTP {(int)response.StatusCode} ({response.ReasonPhrase}).");
+            throw new HttpRequestException($"The provider returned HTTP {(int)response.StatusCode}.", null, response.StatusCode);
         return ExtractContent(settings.Protocol, await ReadLimitedAsync(response, cancellationToken));
     }
 
@@ -380,6 +380,7 @@ public sealed class LlmClient
     {
         InvalidOperationException when exception.Message.StartsWith("ChatGPT", StringComparison.Ordinal) => exception.Message,
         InvalidOperationException => "Planner response or provider request failed local validation.",
+        HttpRequestException { StatusCode: { } status } => $"The provider returned HTTP {(int)status}. Check provider authentication, model availability and usage limits before retrying.",
         HttpRequestException => "Provider transport failed.",
         _ => "Provider planner failed before a validated diagnosis."
     };
@@ -892,7 +893,7 @@ public sealed class LlmClient
         }
         catch (Exception error) when (error is JsonException or InvalidOperationException) { }
         static string Safe(string? value) => string.IsNullOrEmpty(value) ? "unavailable" : new string(value.Where(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '-' or '.').Take(100).ToArray());
-        var recovery = code == "subscription_sharing_usage_limit_exceeded" ? "Manage the app/plan limit in ChatGPT Settings → Usage." : "Check account eligibility, permission and routing; retry only after resolving the error.";
+        var recovery = code == "subscription_sharing_usage_limit_exceeded" ? "The ChatGPT app/plan usage limit has been reached. Review NeuroTune's limit in ChatGPT Settings > Usage before retrying." : "Check account eligibility, permission and routing; retry only after resolving the error.";
         return new InvalidOperationException($"ChatGPT request failed (HTTP {httpStatus?.ToString() ?? "stream"}; code {Safe(code)}; parameter {Safe(parameter)}; request {Safe(requestId)}). {recovery} No API-key billing fallback was used.");
     }
 
