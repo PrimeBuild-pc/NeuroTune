@@ -27,9 +27,9 @@ permissions. Catalog membership does not establish chat/diagnosis support, image
 support, available inference quota or a successful validated response. OpenAI's
 catalog may also contain non-chat models: select a suitable model explicitly.
 
-## DeepSeek planner reliability (unreleased after alpha.3)
+## DeepSeek planner reliability (alpha.4)
 
-The source changes after alpha.3 enable DeepSeek's documented
+Alpha.4 includes the reviewed corrections after alpha.3, enabling DeepSeek's documented
 [JSON Output](https://api-docs.deepseek.com/guides/json_mode), with an explicit
 system contract. This setting is not assumed for arbitrary custom/local models.
 

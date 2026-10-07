@@ -60,7 +60,7 @@
 <p align="center"><sub>Click any image for full size. Captured from the current frontend with a demo local-model configuration and a mocked Agent: no personal PC data, fabricated benchmark gains, native operations or provider calls.</sub></p>
 
 <blockquote>
-  <p><strong>NeuroTune v0.8.0-alpha.3 is an unsigned alpha for controlled testing, not a stable/general release.</strong> The rebuilt installer and portable package still require fresh exact-candidate Windows 11 VM acceptance. Old installers, historical test results and a green build badge do not certify the current sources. Use a disposable VM for system-changing tests and keep an independent backup.</p>
+  <p><strong>NeuroTune v0.8.0-alpha.4 is an unsigned alpha for controlled testing, not a stable/general release.</strong> The rebuilt installer and portable package still require fresh exact-candidate Windows 11 VM acceptance. Old installers, historical test results and a green build badge do not certify the current sources. Use a disposable VM for system-changing tests and keep an independent backup.</p>
 </blockquote>
 <p><strong>Free software, not a promise of free inference.</strong> NeuroTune is MIT-licensed. Your chosen remote provider may charge for API use or require eligible plan credits; local models need your own hardware. There is no automatic provider or API-billing fallback.</p>
 
