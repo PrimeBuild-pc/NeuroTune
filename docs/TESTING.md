@@ -75,7 +75,8 @@ Subsequent source corrections produced both a validated explicit UI retry and
 a fresh **Complete diagnosis** from scan through WPR, ETL analysis, provider
 investigation and review. The fresh run completed 12 turns, with 15 findings and
 10 proposals; no local fallback or stored error. These observations apply to
-the **unreleased corrected source**, not the immutable alpha.3 assets.
+the **reviewed corrections included in alpha.4**, not the immutable alpha.3
+assets or acceptance of the exact alpha.4 installer.
 
 Testing used an instrumented Release WebView with a private profile and
 loopback-only diagnostics. The one 30-second system-wide capture had valid
