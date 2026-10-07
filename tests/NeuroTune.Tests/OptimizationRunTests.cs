@@ -101,10 +101,15 @@ public sealed class OptimizationRunTests
             var service = new OptimizationRunService(directory);
             var run = service.Create(Profile(), new TuningGoals());
             service.BeginDiagnosis(run.Id);
-            run = service.RecordDiagnosisAttemptFailure(run.Id, "temporary provider failure");
+            var fallback = new PlannerDiagnosisOutcome(new DiagnosisResult { Summary = "Quota exhausted; local observations only" }, [], "local-conflict-fallback", true);
+            run = service.RecordDiagnosisAttemptFailure(run.Id, "temporary provider failure", fallback);
 
             Assert.AreEqual(OptimizationRunState.Hypothesizing, run.State);
             Assert.AreEqual("temporary provider failure", run.Error);
+            Assert.AreEqual(fallback.Diagnosis.Summary, service.Load(run.Id).Diagnosis?.Summary);
+            Assert.IsTrue(run.UsedLocalFallback);
+            Assert.HasCount(0, run.ApprovedActionIds);
+            Assert.ThrowsExactly<InvalidOperationException>(() => service.Approve(run.Id, ["gaming.game-mode"], false, new OptimizationCatalog()));
             var retried = service.BeginDiagnosis(run.Id);
             Assert.HasCount(run.Transitions.Count, retried.Transitions);
             Assert.AreEqual(OptimizationRunState.BaselinePending, service.RecordDiagnosis(run.Id, Outcome()).State);
