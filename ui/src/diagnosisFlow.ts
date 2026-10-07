@@ -50,6 +50,9 @@ export class DiagnosisFlow {
     this.progress.mode = mode;
     if (mode !== 'auditOnly' && (input.durationSeconds < 30 || input.durationSeconds > 600 || !Number.isInteger(input.durationSeconds))) throw new Error(t('Capture duration must be 30–600 seconds.'));
     try {
+      this.update('scan', t('Checking local recovery journals before collection…'));
+      const runs = await this.call<OptimizationRun[]>('run-list');
+      if (runs.some(run => !['completed', 'failed'].includes(run.state))) throw new Error(t('Finish the retained diagnosis without changes, or continue its review before starting another.'));
       this.update('scan', t('Checking for an existing NeuroTune capture before local collection…'));
       const existing = await this.call<MeasurementSession[]>('measurement-list');
       if (existing.some(session => session.state === 'recording')) throw new Error(t('Finish the existing capture before starting complete diagnosis. It was not cancelled.'));
