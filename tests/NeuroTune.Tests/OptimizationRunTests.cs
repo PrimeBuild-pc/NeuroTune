@@ -113,6 +113,8 @@ public sealed class OptimizationRunTests
             var retried = service.BeginDiagnosis(run.Id);
             Assert.HasCount(run.Transitions.Count, retried.Transitions);
             Assert.AreEqual(OptimizationRunState.BaselinePending, service.RecordDiagnosis(run.Id, Outcome()).State);
+            Assert.IsNull(service.Load(run.Id).Error);
+            Assert.IsFalse(service.Load(run.Id).UsedLocalFallback);
         }
         finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); }
     }

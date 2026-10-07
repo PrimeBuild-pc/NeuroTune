@@ -52,6 +52,45 @@ public sealed class CoreTests
     }
 
     [TestMethod]
+    public void Finding_values_are_resolved_locally_only_for_provided_ids_and_explicit_fabrications_still_fail()
+    {
+        const string response = """{"summary":"Checked","findings":[{"title":"Pressure","evidenceId":"investigation:memory-pressure:fixture:turn1","assessment":"Metadata, not capture-time causality"}],"recommendations":[],"consentQuestion":"Review?"}""";
+        const string observed = "  {\"data\":{\"available\":1234.56789},\"source\":\"native\"}  ";
+        var facts = new Dictionary<string, string> { ["investigation:memory-pressure:fixture:turn1"] = observed };
+        var result = LlmClient.ParseDiagnosis(response, new OptimizationCatalog(), facts);
+        Assert.AreEqual(observed, result.Findings.Single().CurrentValue);
+        Assert.ThrowsExactly<InvalidOperationException>(() => LlmClient.ParseDiagnosis(response, new OptimizationCatalog(), new Dictionary<string, string>()));
+        Assert.ThrowsExactly<InvalidOperationException>(() => LlmClient.ParseDiagnosis(response, new OptimizationCatalog()));
+        var fabricated = response.Replace("\"assessment\":", "\"currentValue\":\"invented value\",\"assessment\":");
+        Assert.ThrowsExactly<InvalidOperationException>(() => LlmClient.ParseDiagnosis(fabricated, new OptimizationCatalog(), facts));
+    }
+
+    [TestMethod]
+    public void Short_evidence_references_resolve_exactly_without_guessing_or_granting_unprovided_evidence()
+    {
+        const string id = "measurement:12345678-1234-1234-1234-123456789012:scheduling:ready-delay-p99";
+        var facts = new Dictionary<string, string> { [id] = "123.456789" };
+        var aliases = new Dictionary<string, string> { ["f0001"] = id };
+        const string response = """{"summary":"Checked","findings":[{"title":"Delay","evidenceId":"f0001","assessment":"Scheduling, not input latency"}],"recommendations":[{"id":"manual","kind":"manualGuidance","title":"Verify workload","evidenceIds":["f0001"],"reason":"No measured improvement claimed"}],"consentQuestion":"Review?"}""";
+        var result = LlmClient.ParseDiagnosis(response, new OptimizationCatalog(), facts, originalEvidenceIds: aliases);
+        Assert.AreEqual(id, result.Findings.Single().EvidenceId);
+        Assert.AreEqual(facts[id], result.Findings.Single().CurrentValue);
+        Assert.AreEqual(id, result.Recommendations.Single().EvidenceIds.Single());
+        Assert.AreEqual(PlanRecommendationKind.ManualGuidance, result.Recommendations.Single().Kind);
+        Assert.ThrowsExactly<InvalidOperationException>(() => LlmClient.ParseDiagnosis(response.Replace("f0001", "f9999"), new OptimizationCatalog(), facts, originalEvidenceIds: aliases));
+        Assert.ThrowsExactly<InvalidOperationException>(() => LlmClient.ParseDiagnosis(response, new OptimizationCatalog(), new Dictionary<string, string>(), originalEvidenceIds: aliases));
+        var turn = new PlannerTurn(PlannerTurnKind.RequestEvidence, [LlmClient.MapEvidenceId("f0001", aliases)], "");
+        Assert.AreEqual(id, PlannerProtocol.ValidateRequest(turn, facts, new Dictionary<string, string>()).Single());
+        Assert.ThrowsExactly<InvalidOperationException>(() => PlannerProtocol.ValidateRequest(turn, facts, facts));
+        var invented = turn with { EvidenceIds = [LlmClient.MapEvidenceId("f9999", aliases)] };
+        Assert.ThrowsExactly<InvalidOperationException>(() => PlannerProtocol.ValidateRequest(invented, facts, new Dictionary<string, string>()));
+        var longId = "hardware:" + new string('x', 501);
+        var longFacts = new Dictionary<string, string> { [longId] = "Observed" };
+        var oversized = turn with { EvidenceIds = [LlmClient.MapEvidenceId("f0002", new Dictionary<string, string> { ["f0002"] = longId })] };
+        Assert.ThrowsExactly<InvalidOperationException>(() => PlannerProtocol.ValidateRequest(oversized, longFacts, new Dictionary<string, string>()));
+    }
+
+    [TestMethod]
     public void Sanitizer_removes_windows_identity()
     {
         var profile = new SystemProfile
