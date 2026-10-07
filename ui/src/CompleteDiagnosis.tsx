@@ -9,7 +9,7 @@ import type { InvestigationMode, MeasurementWorkload, ScanResult, SupportingAtta
 
 export function CompleteDiagnosis({ goals, onGoals, onStart, progress, onCancel, children, blocked, mode = 'measuredOptimization', onMode, auditPreview, onAuditApprove, blockedReason, onProvider, consentKey, onSecurity }: {
   mode?: InvestigationMode; onMode?: (mode: InvestigationMode) => void; auditPreview?: ScanResult; onAuditApprove?: () => void;
-  goals: TuningGoals; onGoals: (value: TuningGoals) => void; onStart: (workload: MeasurementWorkload | undefined, duration: number, attachments: SupportingAttachment[], imagesConfirmed: boolean) => void;
+  goals: TuningGoals; onGoals: (value: TuningGoals) => void; onStart: (workload: MeasurementWorkload | undefined, duration: number, attachments: SupportingAttachment[], imagesConfirmed: boolean, measurementConditions?: string) => void;
   progress?: DiagnosisProgress; onCancel: () => void; children?: React.ReactNode; blocked: boolean;
   blockedReason?: string; onProvider?: () => void; consentKey?: string; onSecurity?: () => void;
 }) {
@@ -18,6 +18,7 @@ export function CompleteDiagnosis({ goals, onGoals, onStart, progress, onCancel,
   const [workloads, setWorkloads] = useState<MeasurementWorkload[]>([]);
   const [selected, setSelected] = useState('');
   const [duration, setDuration] = useState(60);
+  const [measurementConditions, setMeasurementConditions] = useState('Idle');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [attachments, setAttachments] = useState<SupportingAttachment[]>([]);
@@ -47,7 +48,8 @@ export function CompleteDiagnosis({ goals, onGoals, onStart, progress, onCancel,
         <label className="wide"><span id="diagnosis-priority">{t('Objective')}</span><select aria-labelledby="diagnosis-priority" aria-describedby="diagnosis-focus" value={goals.priority} onChange={event => onGoals({ ...goals, priority: event.target.value as TuningGoals['priority'] })}>{presets.map(item => <option key={item.id} value={item.id}>{t(item.label)}</option>)}</select><small id="diagnosis-focus">{t(presets.find(item => item.id === goals.priority)?.detail ?? '')} {t('The preset specializes the AI prompt: it does not apply tweaks, start scanners or grant permissions. Investigation mode and budget remain separate. Your notes specify what to improve and preserve.')}</small></label>
         <InvestigationModeControl mode={mode} onMode={onMode}/>
         {mode !== 'auditOnly' && <>
-          <label className="wide"><span id="diagnosis-workload">{t('Running game / workload')}</span><select aria-labelledby="diagnosis-workload" value={selected} onChange={event => setSelected(event.target.value)}><option value="">{t('System-wide diagnostic snapshot (not a game benchmark)')}</option>{workloads.map(item => <option key={item.processId} value={item.processId}>{item.name} · {item.processId}</option>)}</select><small>{target ? t('Three automatic scheduling/interrupt traces, not an FPS or end-to-end input-latency measurement. Keep a representative scene running; do not change settings.') : t('One snapshot; game-specific performance and automatic apply remain unavailable. Select a running game for workload baselines.')}</small></label>
+          <label className="wide"><span id="diagnosis-workload">{t('Running game / workload')}</span><select aria-labelledby="diagnosis-workload" value={selected} onChange={event => { setSelected(event.target.value); setMeasurementConditions(event.target.value ? '' : 'Idle'); }}><option value="">{t('System-wide diagnostic snapshot (not a game benchmark)')}</option>{workloads.map(item => <option key={item.processId} value={item.processId}>{item.name} · {item.processId}</option>)}</select><small>{target ? t('Three automatic scheduling/interrupt traces, not an FPS or end-to-end input-latency measurement. Keep a representative scene running; do not change settings.') : t('One snapshot; game-specific performance and automatic apply remain unavailable. Select a running game for workload baselines.')}</small></label>
+          <label className="wide"><span>{t('Repeatable conditions')}</span><input maxLength={240} value={measurementConditions} onChange={event => setMeasurementConditions(event.target.value)} placeholder={t('Idle, or the same game scene and graphics settings')}/><small>{t('For idle captures, close unnecessary activity and wait for background work to settle. In game, use the same repeatable scene, duration and settings before and after.')} {t('The initial latency report is saved locally before AI diagnosis and remains available after restart in Measurements.')}</small></label>
           <fieldset className="duration-control"><legend>{t('Seconds per trace')}</legend><div className="duration-choice">{[30, 60, 180].map(seconds => <label key={seconds}><input type="radio" name={durationId} checked={duration === seconds} onChange={() => setDuration(seconds)}/><span>{seconds} s</span></label>)}</div></fieldset>
           <button className="secondary workload-refresh" onClick={() => void refresh()}>{t('Refresh running workloads')}</button>
         </>}
@@ -70,7 +72,7 @@ export function CompleteDiagnosis({ goals, onGoals, onStart, progress, onCancel,
     <section className="diagnosis-submit" aria-label={t('Transmission consent')}>
       <p>{mode === 'auditOnly' ? t('The first click only collects local evidence; its preview requires a second consent before transmission to the provider.') : t('Clicking consents to sending sanitized scan/measurement evidence and permitted read-only follow-ups to the configured AI provider.')} {t('Provider/optional cloud API usage may consume credits. No firmware tool, model download or system change is started.')}</p>
       {!supportReady && <p role="status">{t('Review supporting files before starting diagnosis.')} <button className="ghost" onClick={() => setSection('files')}>{t('Supporting files')}</button></p>}
-      <button className="primary" disabled={blocked || loading || !supportReady || Boolean(mode !== 'auditOnly' && selected && !target)} onClick={() => onStart(mode === 'auditOnly' ? undefined : target, duration, attachments, imagesConfirmed)}>{mode === 'auditOnly' ? t('Start AI audit · no changes') : t('Complete diagnosis')}</button>
+      <button className="primary" disabled={blocked || loading || !supportReady || Boolean(mode !== 'auditOnly' && (!measurementConditions.trim() || selected && !target))} onClick={() => onStart(mode === 'auditOnly' ? undefined : target, duration, attachments, imagesConfirmed, measurementConditions.trim())}>{mode === 'auditOnly' ? t('Start AI audit · no changes') : t('Complete diagnosis')}</button>
     </section>
     {onSecurity && <div><button className="ghost" onClick={onSecurity}>{t('Windows security tools')}</button></div>}
   </div>;

@@ -16,5 +16,15 @@ describe('SCEWIN read-only observations', () => {
     expect(html).toContain('No setting can be edited or applied here');
     expect(html).not.toContain('Question 50');
     expect(html).toContain('Unknown — no marked current value');
+    expect(html).toContain('Reported current values: 0/51');
+  });
+  it('counts only reported values and labels an explicit simulated fixture, never as native BIOS observations', () => {
+    const html = renderToStaticMarkup(<ScewinSettings report={{ source: 'SIMULATED MSI TEST · not live BIOS data', readAtUtc: '2026-10-07T00:00:00Z', exportSha256: 'b'.repeat(64), sensitiveQuestionsOmitted: 0, toolFiles: [], notes: ['Synthetic test values, no driver executed.'], settings: [
+      { question: 'Precision Boost Overdrive', token: '1', currentValue: '[01]Disabled', status: 'Reported by export' },
+      { question: 'Global C-state Control', token: '2', currentValue: null, status: 'Unknown — no marked current value' },
+    ] }}/>);
+    expect(html).toContain('SIMULATED MSI TEST'); expect(html).toContain('Reported current values: 1/2');
+    expect(html).toContain('Missing or conflicting values remain unknown'); expect(html).toContain('No setting can be edited or applied here');
+    expect(html).not.toContain('BIOS Default'); expect(html).not.toContain('Install PawnIO');
   });
 });

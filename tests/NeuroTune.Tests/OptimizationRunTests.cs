@@ -51,6 +51,14 @@ public sealed class OptimizationRunTests
                 CandidateSessionIds = candidateIds,
                 Metrics = [new("comparison:test", 10, 9, -10, ComparisonOutcome.Improvement)]
             };
+            Assert.ThrowsExactly<InvalidOperationException>(() => service.RecordComparison(run.Id, new MeasurementComparison
+            {
+                DiagnosticOnly = true,
+                Level = ComparisonLevel.Repeated,
+                BaselineSessionIds = baselineIds,
+                CandidateSessionIds = candidateIds,
+                Metrics = comparison.Metrics
+            }), "Diagnostic differences cannot authorize a run decision, even if mislabeled as repeated.");
             service.RecordComparison(run.Id, comparison);
             run = service.Keep(run.Id);
 

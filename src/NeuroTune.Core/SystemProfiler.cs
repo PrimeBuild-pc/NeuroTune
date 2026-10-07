@@ -22,7 +22,7 @@ public sealed class SystemProfiler
             profile.Memory = ReadMemory();
             profile.Disks = ReadDisks();
             profile.HardwareCapabilities = ReadHardwareCapabilities();
-            profile.FirmwareAndMemory = firmwareReadConsent ? ReadFirmwareAndMemory() : new() { ["BIOS reading"] = "Disabled by user preference" };
+            profile.FirmwareAndMemory = firmwareReadConsent ? FirmwareInspection.Read(true).Facts.ToDictionary(item => item.Key, item => item.Value) : new() { ["BIOS reading"] = "Disabled by user preference" };
             profile.ComponentIdentities = ReadComponentIdentities(firmwareReadConsent);
             profile.FactoryBaselines = ComponentBaselineCatalog.Compare(profile.ComponentIdentities);
             profile.TelemetryCapabilities = TelemetryProcessClient.QueryCapabilities(optionalTelemetryConsent);
@@ -293,7 +293,7 @@ public sealed class SystemProfiler
         });
         for (var index = 0; index < modules.Count; index++) facts[$"DIMM {index + 1}"] = modules[index];
         facts["Memory profile assessment"] = AssessMemoryProfile();
-        facts["PBO/CPU overclock assessment"] = "Not exposed reliably by Windows; low-level telemetry required for a supported conclusion";
+        facts["PBO/CPU overclock assessment"] = "Not readable from Windows. Sensor clocks or a PawnIO service do not confirm PBO/overclock settings; verify a compatible BIOS setup export or the physical BIOS.";
         return facts;
 
         string AssessMemoryProfile()
