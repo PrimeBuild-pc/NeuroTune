@@ -110,6 +110,8 @@ public sealed class IntegrationBoundaryTests
         var failed = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => LlmClient.ReadChatGptStreamAsync(new StringReader(delta +
             "data: {\"type\":\"response.failed\",\"response\":{\"error\":{\"code\":\"subscription_sharing_usage_limit_exceeded\"}}}\n\n")));
         StringAssert.Contains(failed.Message, "subscription_sharing_usage_limit_exceeded");
+        StringAssert.Contains(failed.Message, "usage limit has been reached");
+        StringAssert.Contains(failed.Message, "Settings > Usage");
         StringAssert.Contains(failed.Message, "No API-key billing fallback");
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => LlmClient.ReadChatGptStreamAsync(new StringReader(new string('x', 1_000_001))));
     }

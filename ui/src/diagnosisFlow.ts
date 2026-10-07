@@ -112,7 +112,11 @@ export class DiagnosisFlow {
       const diagnosis = await this.call<Diagnosis>('diagnose', { profile: scan.profile, goals: input.goals, language, runId: run.id, attachments: input.attachments ?? [], imagesConfirmed: input.imagesConfirmed ?? false }, true);
       this.check();
       const finalRun = await this.call<OptimizationRun>('run-get', { runId: run.id });
-      if (mode === 'auditOnly' ? finalRun.state !== 'proposalReady' : finalRun.state !== 'baselineReady' && finalRun.state !== 'baselinePending') throw new Error(diagnosis.summary || t('The AI did not complete a validated diagnosis. No deterministic plan was substituted.'));
+      if (mode === 'auditOnly' ? finalRun.state !== 'proposalReady' : finalRun.state !== 'baselineReady' && finalRun.state !== 'baselinePending') {
+        if (finalRun.state !== 'hypothesizing' || !finalRun.usedLocalFallback) throw new Error(diagnosis.summary || t('The AI did not complete a validated diagnosis. No deterministic plan was substituted.'));
+        this.update('result', t('The provider diagnosis failed. Local observations are not a completed AI audit or authorization to apply changes.'));
+        return { scan, diagnosis, run: finalRun, sessions }; // Review the incomplete result; never mark it AI-complete or dismiss it silently.
+      }
       this.update('result', t('AI analysis completed. No changes applied; review and choose your interventions.'));
       return { scan, diagnosis, run: finalRun, sessions };
     } catch (error) {

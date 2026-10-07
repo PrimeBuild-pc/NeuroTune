@@ -2,20 +2,26 @@
 
 ## Current candidate: not release-certified
 
-Source hardening is pushed as `26d24730a3563eae68893a5d4ad3df9991ac8dc1`
-on `fix/local-security-release-blockers`. UI/branding/IPC changes remain local;
-choose a definitive candidate commit before building and certifying assets.
+Published `v0.8.0-alpha.2` is built from
+`8bacbacf8eb652e6522c214b05ac0e460cb91b6b`; merged main
+`e67851b66509c542df86e13909da73ea72de1d8f` has the same source tree.
+Installer/portable assets and checksums were downloaded from GitHub and verified.
+This is artifact/provenance verification, not certification of live recovery.
 
-Latest mixed-tree checks: 115 selected backend, 33 UI and 2 Rust tests passed;
-format/build/typecheck/lint/clippy passed. Backend WindowsIntegration,
-persisted-session Stop and synthetic DPAPI persistence, and Rust subprocess-tree
-cancellation were excluded. VM scripts were updated/parsed, not executed.
-These results do not validate real production ACLs or the final installer.
+Unreleased diagnosis fixes are on `fix/legacy-journal-preflight` (PR #15,
+`2bd939e`) and its dependent `fix/provider-failure-review` branch. They are not
+included in the immutable alpha.2 binaries; a future release needs its own
+version, reviewed commit, build and acceptance hashes.
+
+Latest source checks: 163 backend tests excluding WindowsIntegration and 49 UI
+tests passed, plus format/build/typecheck/lint, release metadata and mocked
+browser regressions. These checks do not validate real production ACL denial,
+installer acceptance or privileged writer recovery.
 
 | Exact-candidate gate | Status |
 |---|---|
-| Verified CI action/auditor pins, fresh CI and dependency/runtime/SAST audits | pending; synthetic NuGet gate checks are not a feed audit |
-| One rebuilt installer/portable ZIP tied to commit, CI and SHA-256 | pending; existing assets predate the source fixes |
+| Verified CI action/auditor pins, fresh CI and dependency/runtime/SAST audits | alpha.2 CI passed; npm/NuGet found no known vulnerabilities, Cargo advisory warnings remain; fresh checks required for each future candidate |
+| One rebuilt installer/portable ZIP tied to commit, CI and SHA-256 | alpha.2 artifact/version/source/hash and GitHub round-trip checks passed; no alpha.3 artifacts yet |
 | Windows 11 install/uninstall, UAC and sidecar integrity | pending; previous v0.8 attempt stopped before installation |
 | Journal owner/ACL creation and medium-integrity read/write/rename/delete denial | pending; current ACL checks are synthetic |
 | Unsafe pre-created root/reparse refusal and legacy upgrade/manual recovery | pending |
@@ -25,6 +31,33 @@ These results do not validate real production ACLs or the final installer.
 Privileged journals now use `%ProgramData%\NeuroTune-journals\<Windows user SID>`.
 See [upgrade safety](../SECURITY.md) and [test procedures](TESTING.md).
 Secret scanning requires separate authorization and redacted output.
+
+## Authorized host diagnosis, 2026-10-07
+
+An isolated diagnostic Release build from PR #15 (`2bd939e`) passed the native
+WebView2 rendering/theme/keyboard/reduced-motion/history smoke. A real 30-second
+system-wide capture completed (30,664 ms, zero lost events, valid quality), and
+its raw ETL was deleted. This is diagnostic evidence, not a workload baseline,
+FPS benchmark, recording-overhead measurement or Apply acceptance.
+
+The configured ChatGPT `gpt-6-astra` catalog test succeeded. A planner-only test
+using real collected host evidence completed a validated diagnosis in 12 turns;
+that probe did not exercise native UI, ETW or run/Apply authorization. A separate
+native Complete diagnosis reached turn 12 but failed with
+`subscription_sharing_usage_limit_exceeded`. Further inference requests stopped;
+no model/provider/billing fallback or account-limit change was attempted. This
+host result does not establish the original VM failure's provider/cause.
+
+The owned prewrite run closed without approval/operation; operation history
+contained zero entries. Provider settings remained byte-identical, WPR reported
+not recording, and the owned UI plus Agent/Telemetry processes were absent.
+Original versus elevated action inspection matched except two BCD entries whose
+read visibility differs by privilege; this is not an exact elevated before/after
+configuration certificate. Completed diagnostic reports remain local. Private,
+ignored evidence is under `artifacts/private-host-diagnosis/`; no raw profile or
+credentials belong in commits. The newer failure-review changes have only
+source/offline-mock verification; no additional live calls were made against the
+exhausted allowance.
 
 ## Historical host and VM coverage
 

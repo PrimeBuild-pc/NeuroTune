@@ -36,7 +36,7 @@ function harness(options: { cancelDuringStart?: boolean; invalidQuality?: boolea
           if (options.activeRun) throw new Error('Finish or recover the active optimization run before creating another one.');
           result = { id: 'run', state: 'scanned' }; break;
         case 'diagnose': result = { summary: options.failedProvider ? 'Provider failed; not an AI diagnosis' : 'AI result', recommendations: [] }; break;
-        case 'run-get': result = { id: 'run', state: options.failedProvider ? 'hypothesizing' : !sessions.length ? 'proposalReady' : sessions[0].systemWide ? 'baselinePending' : 'baselineReady' }; break;
+        case 'run-get': result = { id: 'run', usedLocalFallback: Boolean(options.failedProvider), error: options.failedProvider ? 'ChatGPT app usage limit reached' : null, state: options.failedProvider ? 'hypothesizing' : !sessions.length ? 'proposalReady' : sessions[0].systemWide ? 'baselinePending' : 'baselineReady' }; break;
         case 'measurement-cancel': sessions[0].state = 'cancelled'; break;
         case 'run-dismiss': break;
         default: throw new Error(`Unexpected command ${command}`);
@@ -81,7 +81,11 @@ describe('complete diagnosis lifecycle', () => {
     const invalid = harness({ invalidQuality: true });
     await expect(invalid.flow.execute(input)).rejects.toThrow('quality failed'); expect(invalid.calls).not.toContain('diagnose');
     const failed = harness({ failedProvider: true });
-    await expect(failed.flow.execute(input)).rejects.toThrow('Provider failed'); expect(failed.calls).toContain('run-dismiss');
+    const result = await failed.flow.execute(input);
+    expect(result.run.state).toBe('hypothesizing'); expect(result.run.usedLocalFallback).toBe(true);
+    expect(result.run.error).toContain('usage limit'); expect(result.diagnosis.summary).toContain('Provider failed');
+    expect(result.sessions).toHaveLength(3);
+    expect(failed.calls).not.toContain('run-dismiss'); expect(failed.calls).not.toContain('run-approve'); expect(failed.calls).not.toContain('apply');
   });
   it('prepares optional text locally and rejects unconfirmed image support before measurements/provider requests', async () => {
     const report = { id: 'report', name: 'cpu-z.txt', kind: 'report' as const, contentType: 'text/plain' as const, content: 'Clock: 4200 MHz', sha256: '' };
@@ -127,8 +131,9 @@ describe('complete diagnosis lifecycle', () => {
     await measured.flow.execute({ ...input, goals: { ...goals, priority: 'privacySecurity' } });
     expect(measured.calls.filter(command => command === 'measurement-start')).toHaveLength(3);
     const failed = harness({ failedProvider: true });
-    await expect(failed.flow.execute({ ...input, mode: 'auditOnly' })).rejects.toThrow('Provider failed');
-    expect(failed.calls).toContain('run-dismiss'); expect(failed.calls).not.toContain('apply');
+    const incomplete = await failed.flow.execute({ ...input, mode: 'auditOnly' });
+    expect(incomplete.run.usedLocalFallback).toBe(true); expect(incomplete.run.state).toBe('hypothesizing');
+    expect(failed.calls).not.toContain('run-dismiss'); expect(failed.calls).not.toContain('apply');
     const progress = renderToStaticMarkup(<CompleteDiagnosis mode="auditOnly" goals={goals} onGoals={() => {}} onStart={() => {}} onCancel={() => {}} blocked={false} progress={{ mode: 'auditOnly', stage: 'ai', message: 'Audit', startedAt: Date.now(), log: [] }}/>);
     expect(progress).not.toContain('Prepare workload'); expect(progress).not.toContain('Trace analysis'); expect(progress).toContain('AI investigation');
   });
