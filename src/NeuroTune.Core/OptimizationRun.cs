@@ -298,7 +298,7 @@ public sealed class OptimizationRunService
     {
         ArgumentNullException.ThrowIfNull(comparison);
         var run = LoadExpected(id, OptimizationRunState.CandidatePending);
-        if (comparison.Level != ComparisonLevel.Repeated || comparison.RejectionReasons.Count > 0 || comparison.Metrics.Count == 0 ||
+        if (comparison.DiagnosticOnly || comparison.Level != ComparisonLevel.Repeated || comparison.RejectionReasons.Count > 0 || comparison.Metrics.Count == 0 ||
             !SameIds(comparison.BaselineSessionIds, run.BaselineSessionIds) ||
             !SameIds(comparison.CandidateSessionIds, run.CandidateSessionIds))
             throw new InvalidOperationException("A quality-valid repeated 3+3 comparison matching this optimization run is required.");

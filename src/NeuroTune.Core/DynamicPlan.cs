@@ -41,6 +41,7 @@ public sealed class PlanRecommendation
     public string ScriptLanguage { get; set; } = "";
     public string Script { get; set; } = "";
     public List<string> ReviewWarnings { get; set; } = [];
+    public string ExecutionIssue { get; set; } = ""; // Local validation only; never accepted from model output.
 }
 
 public sealed record ActionPolicyDecision(

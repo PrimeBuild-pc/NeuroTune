@@ -1,5 +1,3 @@
-using System.Management;
-
 namespace NeuroTune;
 
 public sealed record FirmwareReadRequest(bool ReadConsent);
@@ -20,30 +18,29 @@ public static class FirmwareInspection
             "SELECT SpecVersion, ManufacturerVersion, IsEnabled_InitialValue FROM Win32_Tpm",
             row => $"Specification: {row["SpecVersion"]}; firmware: {row["ManufacturerVersion"]}; enabled at initialization: {ObservedBoolean(row["IsEnabled_InitialValue"])}")
             .FirstOrDefault() ?? "Unavailable or not exposed to Windows";
-        var interfaces = new List<string>();
-        var status = "Firmware identity and Windows-observed state are readable, but exact BIOS setup settings are unavailable: this firmware has no validated setup reader.";
+        facts["System model"] = SystemProfiler.Query("SELECT Manufacturer, Model FROM Win32_ComputerSystem",
+            row => $"{row["Manufacturer"]} {row["Model"]}").FirstOrDefault() ?? "Unavailable";
         var board = facts.GetValueOrDefault("Motherboard", "");
-        var url = "";
-        if (board.Contains("Micro-Star", StringComparison.OrdinalIgnoreCase))
-        {
-            url = GuidanceUrl(board);
-            try
-            {
-                using var provider = new ManagementClass(@"\\.\root\wmi:MSI_BiosSetting");
-                provider.Get();
-                if (provider.Methods.Cast<MethodData>().Any(method => method.Name == "GetBiosSetting"))
-                {
-                    interfaces.Add("MSI_BiosSetting.GetBiosSetting");
-                    status = "MSI read interface detected. Its presence does not prove readable setup values; no validated item mapping is available for this BIOS.";
-                }
-            }
-            catch (Exception error) when (error is ManagementException or UnauthorizedAccessException or System.Runtime.InteropServices.COMException)
-            {
-                status = "MSI setup interface unavailable or inaccessible. SMBIOS and Windows-observed firmware facts are shown below.";
-            }
-        }
-        return new(true, false, facts, interfaces, status, url);
+        var status = SetupStatus(board, facts["System model"]);
+        facts["BIOS setup reader status"] = status;
+        facts["BIOS reader driver requirement"] = "No kernel driver is required by this Windows reader. Importing an existing SCEWIN export also needs no driver. PawnIO is not a validated MSI setup reader; privileged SCEWIN export uses its own external-tool path.";
+        // No documented MSI_BiosSetting/GetBiosSetting contract: never invent or invoke a vendor method.
+        return new(true, false, facts, [], status,
+            IsMsiBoard(board) ? GuidanceUrl(board) : "");
     }
+
+    internal static string SetupStatus(string board, string systemModel)
+    {
+        if (new[] { "virtual machine", "vmware", "virtualbox", "qemu", "kvm", "hyper-v" }
+            .Any(marker => systemModel.Contains(marker, StringComparison.OrdinalIgnoreCase)))
+            return "Virtual firmware only: the physical host BIOS and DIMMs are not accessible from this guest. Do not run motherboard export tools here to inspect the host.";
+        return IsMsiBoard(board)
+            ? "MSI board identified. No documented, validated MSI setup API is available. Windows exposes identity and observed state, not PBO/C-states/XMP settings. Use an existing SCEWIN export for compatible AMI/HII firmware, or verify in the physical BIOS. No BIOS writing is supported."
+            : "Firmware identity and Windows-observed state are readable, but exact BIOS setup settings require a compatible external export. No BIOS writing is supported.";
+    }
+
+    private static bool IsMsiBoard(string board) => board.Contains("Micro-Star", StringComparison.OrdinalIgnoreCase) ||
+        board.Trim().Equals("MSI", StringComparison.OrdinalIgnoreCase) || board.Trim().StartsWith("MSI ", StringComparison.OrdinalIgnoreCase);
 
     internal static string ObservedBoolean(object? value) => value is bool enabled ? (enabled ? "Yes" : "No") : "Unknown";
 

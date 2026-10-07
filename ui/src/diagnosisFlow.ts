@@ -8,7 +8,7 @@ export interface DiagnosisProgress {
   stage: DiagnosisStage; message: string; startedAt: number; log: string[]; mode?: InvestigationMode;
   repeat?: number; repeats?: number; recordingStartedAt?: string; durationSeconds?: number; warmupEndsAt?: number;
 }
-interface Input { mode?: InvestigationMode; goals: TuningGoals; workload?: MeasurementWorkload; durationSeconds: number; optionalTelemetryConsent: boolean; firmwareReadConsent: boolean; attachments?: SupportingAttachment[]; imagesConfirmed?: boolean; reviewAudit?: (scan: ScanResult) => Promise<void>; }
+interface Input { mode?: InvestigationMode; goals: TuningGoals; workload?: MeasurementWorkload; durationSeconds: number; measurementConditions?: string; optionalTelemetryConsent: boolean; firmwareReadConsent: boolean; attachments?: SupportingAttachment[]; imagesConfirmed?: boolean; reviewAudit?: (scan: ScanResult) => Promise<void>; }
 interface Dependencies { invoke: typeof agent; cancel: typeof cancelAgent; wait: (milliseconds: number) => Promise<void>; }
 
 // One lifecycle owner: cancellation never kills a capture-start/stop call before its named session is known.
@@ -71,7 +71,7 @@ export class DiagnosisFlow {
       const repeats = input.workload ? 3 : 1;
       const sessions: MeasurementSession[] = [];
       if (mode !== 'auditOnly') {
-        this.update('warmup', input.workload ? t('Return to the selected workload and keep a repeatable scene running. Capture begins in 10 seconds.') : t('Preparing a system-wide diagnostic snapshot; this is not an FPS benchmark.'), { warmupEndsAt: Date.now() + 10_000 });
+        this.update('warmup', input.workload ? t('Return to the selected workload and keep a repeatable scene running. Capture begins in 10 seconds.') : t('Preparing an idle diagnostic snapshot. Let background activity settle; this is not an FPS or input-latency benchmark.'), { warmupEndsAt: Date.now() + 10_000 });
         for (let second = 0; second < 10; second++) { this.check(); await this.deps.wait(1000); }
         for (let repeat = 1; repeat <= repeats; repeat++) {
           this.check();
@@ -79,6 +79,7 @@ export class DiagnosisFlow {
           const session = await this.call<MeasurementSession>('measurement-start', {
             processId: input.workload?.processId ?? 0, processStartTimeUtc: input.workload?.startTimeUtc ?? '0001-01-01T00:00:00Z',
             systemWide: !input.workload, label: 'baseline', durationSeconds: input.durationSeconds, keepRawTrace: false,
+            conditions: input.measurementConditions?.trim() ?? '', analysisPreset: input.goals.priority,
           });
           this.ownedSession = session; this.check();
           if (!session.recordingStartedAtUtc || session.state !== 'recording') throw new Error(t('The recorder did not confirm capture readiness.'));

@@ -29,6 +29,8 @@ import { ReviewPage } from './components/ReviewPage';
 import { DiagnosisView } from './components/DiagnosisView';
 import { EmptyState } from './components/EmptyState';
 import { MeasurementHistory } from './components/MeasurementHistory';
+import { MeasurementCompare } from './components/MeasurementCompare';
+import { SetupGuide, type SetupChoices } from './components/SetupGuide';
 
 const defaults: Record<ProviderKind, ProviderSettings> = {
   chatGpt: { provider: 'chatGpt', providerName: 'ChatGPT plan', baseUrl: 'https://api.openai.com/v1', protocol: 'openAiCompatible', model: '', requiresApiKey: true },
@@ -68,6 +70,9 @@ function App() {
   const [telemetryConsent, setTelemetryConsent] = useState(
     () => localStorage.getItem('neurotune.optionalTelemetryConsent') === 'true',
   );
+  const [firmwareConsent, setFirmwareConsent] = useState(() => localStorage.getItem('neurotune.firmwareReadConsent') === 'true');
+  const [assistantSetupRequested, setAssistantSetupRequested] = useState(false);
+  const [setupRequested, setSetupRequested] = useState(() => localStorage.getItem('neurotune.setupReviewed.v1') !== 'true');
   const [provider, setProvider] = useState<ProviderSettings>(defaults.openRouter);
   const [apiKey, setApiKey] = useState('');
   const [hasCredential, setHasCredential] = useState(false);
@@ -339,6 +344,18 @@ function App() {
     }
   }
 
+  function saveSetup(choices?: SetupChoices) {
+    if (choices) {
+      setTelemetryConsent(choices.telemetry); setFirmwareConsent(choices.firmware);
+      localStorage.setItem('neurotune.optionalTelemetryConsent', String(choices.telemetry));
+      localStorage.setItem('neurotune.firmwareReadConsent', String(choices.firmware));
+    }
+    localStorage.setItem('neurotune.setupReviewed.v1', 'true');
+    setSetupRequested(false);
+    if (choices?.assistant) { setAssistantSetupRequested(true); setToolsOpened(true); setPage('tools'); }
+    else if (!providerConfigured) setPage('provider');
+  }
+
   async function scanSystem() {
     if (activeRun && !['completed', 'failed'].includes(activeRun.state)) {
       setNotice({ tone: 'danger', text: 'Finish or recover the active optimization run before starting a new scan.' });
@@ -351,7 +368,7 @@ function App() {
     setBusy('Deep scan · starting hardware inventory…');
     setNotice(undefined);
     try {
-      const result = await agent<ScanResult>('scan', { optionalTelemetryConsent: telemetryConsent, firmwareReadConsent: localStorage.getItem('neurotune.firmwareReadConsent') === 'true', privacySecurityReadConsent: mode === 'auditOnly' || goals.priority === 'privacySecurity' }, requestId);
+      const result = await agent<ScanResult>('scan', { optionalTelemetryConsent: telemetryConsent, firmwareReadConsent: firmwareConsent, privacySecurityReadConsent: mode === 'auditOnly' || goals.priority === 'privacySecurity' }, requestId);
       setScan(result);
       setActions(result.actions);
       setDiagnosis(undefined);
@@ -385,7 +402,7 @@ function App() {
     void completeFlow.current?.cancel().catch(showError);
   }
 
-  async function completeDiagnosis(workload: MeasurementWorkload | undefined, durationSeconds: number, attachments: SupportingAttachment[] = [], imagesConfirmed = false) {
+  async function completeDiagnosis(workload: MeasurementWorkload | undefined, durationSeconds: number, attachments: SupportingAttachment[] = [], imagesConfirmed = false, measurementConditions = '') {
     if (completeFlow.current || busy || securityBusy || (activeRun && !['completed', 'failed'].includes(activeRun.state))) return;
     if (!provider.model || (!hasCredential && provider.requiresApiKey)) { setPage('provider'); return; }
     const flow = new DiagnosisFlow(setDiagnosisProgress); completeFlow.current = flow;
@@ -393,7 +410,7 @@ function App() {
     try {
       if (!await saveProvider()) return; // The consented UI provider/model must match what the agent will actually use.
       setNotice(undefined);
-      const result = await flow.execute({ goals, mode, workload, durationSeconds, optionalTelemetryConsent: telemetryConsent, firmwareReadConsent: localStorage.getItem('neurotune.firmwareReadConsent') === 'true', attachments, imagesConfirmed,
+      const result = await flow.execute({ goals, mode, workload, durationSeconds, measurementConditions, optionalTelemetryConsent: telemetryConsent, firmwareReadConsent: firmwareConsent, attachments, imagesConfirmed,
         reviewAudit: prepared => new Promise<void>((resolve, reject) => {
           setAuditPreview(prepared);
           auditReview.current = approved => {
@@ -490,9 +507,10 @@ function App() {
       agent<OperationManifest>('apply', { actionIds: [...selected], highRiskConfirmed: highRisk > 0, runId: activeRun.id }));
     if (result) {
       setHistory(current => [result, ...current]);
-      if (activeRun) setActiveRun(await agent<OptimizationRun>('run-get', { runId: activeRun.id }));
+      const updatedRun = await agent<OptimizationRun>('run-get', { runId: activeRun.id });
+      setActiveRun(updatedRun);
       setSelected(new Set());
-      setPage('activity');
+      setPage(['candidatePending', 'restartPending'].includes(updatedRun.state) ? 'measurements' : 'activity');
       setNotice({ tone: 'success', text: 'Operation completed. Restart Windows if a selected action requires it.' });
       const refreshed = await agent<OptimizationAction[]>('actions');
       setActions(refreshed);
@@ -518,6 +536,7 @@ function App() {
         <a href="https://chatgpt.com/settings/usage" target="_blank" rel="noreferrer">{t("Manage usage in ChatGPT")}</a>
         <form method="dialog"><button className="primary">{t("Got it")}</button></form>
       </dialog>
+      {setupRequested && <SetupGuide open={!initializing && !opening && !recording && !runPending && !journalError && !pendingRecovery && !busy && !securityBusy && !diagnosisProgress} initial={{ telemetry: telemetryConsent, firmware: firmwareConsent }} onFinish={saveSetup} onClose={() => setSetupRequested(false)}/>}
       <a className="skip-link" href="#workspace">{t("Skip to workspace")}</a>
       <aside className="sidebar">
         <div className="brand"><img className="brand-mark" src="/logo.svg" width="40" height="40" alt=""/><div><strong>NeuroTune</strong><span>by PrimeBuild</span></div></div>
@@ -547,14 +566,14 @@ function App() {
         <section className="page-content">
           {page === 'overview' && <Overview hasProvider={providerConfigured} nextAction={nextOverviewAction} disabled={Boolean(busy || securityBusy)} scan={scan} history={history} coreState={quietMotion ? 'capture' : scanRequestId ? 'scan' : diagnosis && activeRun && ['baselineReady', 'baselinePending', 'proposalReady'].includes(activeRun.state) ? 'result' : 'idle'} onProvider={() => setPage('provider')} onScan={() => setPage('scan')} onPrivacy={() => setPage('security')}/>}
           {page === 'provider' && <ProviderPage provider={provider} apiKey={apiKey} hasCredential={hasCredential} models={models} modelLabels={modelLabels} chatGptAccounts={chatGptAccounts} authBusy={Boolean(busy)} onSignOut={signOutChatGpt} onChoose={chooseProvider} onChange={value => { setProvider(value); if (value.chatGptAccountId !== provider.chatGptAccountId || value.baseUrl !== provider.baseUrl || value.protocol !== provider.protocol) { setHasCredential(false); setModels([]); setModelLabels({}); } }} onKey={value => { setApiKey(value); setModels([]); setModelLabels({}); }} onSave={saveProvider} onLoadModels={loadModels} onBrowserSignIn={browserSignIn} onModel={selectChatGptModel}/>}
-          {(page === 'scan' || diagnosisOpened) && <div hidden={page !== 'scan'}><CompleteDiagnosis onSecurity={() => setPage('security')} consentKey={`${provider.provider}:${provider.model}:${provider.baseUrl}:${provider.chatGptAccountId ?? ''}`} blockedReason={diagnosisBlockedReason} onProvider={!providerConfigured && !recording && !busy && !securityBusy && !runPending && !pendingRecovery ? () => setPage('provider') : undefined} mode={mode} onMode={setMode} goals={goals} onGoals={setGoals} onStart={(workload, duration, attachments, imagesConfirmed) => { void completeDiagnosis(workload, duration, attachments, imagesConfirmed); }} progress={diagnosisProgress} auditPreview={auditPreview} onAuditApprove={() => auditReview.current?.(true)} onCancel={cancelCompleteDiagnosis} blocked={Boolean(diagnosisBlockedReason)}><GoalContextEditor goals={goals} onGoals={setGoals}/></CompleteDiagnosis></div>}
+          {(page === 'scan' || diagnosisOpened) && <div hidden={page !== 'scan'}><CompleteDiagnosis onSecurity={() => setPage('security')} consentKey={`${provider.provider}:${provider.model}:${provider.baseUrl}:${provider.chatGptAccountId ?? ''}`} blockedReason={diagnosisBlockedReason} onProvider={!providerConfigured && !recording && !busy && !securityBusy && !runPending && !pendingRecovery ? () => setPage('provider') : undefined} mode={mode} onMode={setMode} goals={goals} onGoals={setGoals} onStart={(workload, duration, attachments, imagesConfirmed, conditions) => { void completeDiagnosis(workload, duration, attachments, imagesConfirmed, conditions); }} progress={diagnosisProgress} auditPreview={auditPreview} onAuditApprove={() => auditReview.current?.(true)} onCancel={cancelCompleteDiagnosis} blocked={Boolean(diagnosisBlockedReason)}><GoalContextEditor goals={goals} onGoals={setGoals}/></CompleteDiagnosis></div>}
           {page === 'security' && <div className="security-page"><WindowsSecurityPanel blocked={Boolean(recording || busy || diagnosisProgress || pendingRecovery || activeRun && activeRun.mode !== 'auditOnly' && !['completed', 'failed'].includes(activeRun.state))} onBusy={setSecurityBusy}><section className="section-card"><h2>{t('AI-led investigation')}</h2><p>{t('Review Windows privacy and security evidence, protections and detections. Opening this page does not start collection, a scan, an AI request, a download or a system change.')}</p><p className="muted-copy">{t('The privacy and security objective specializes the investigation; mode, consent, provider, risk profile and approval remain separate. Choose it below, then review the complete diagnosis controls before starting.')}</p><button className="primary" disabled={Boolean(recording || busy || securityBusy || diagnosisProgress || pendingRecovery || activeRun && !['completed', 'failed'].includes(activeRun.state))} onClick={() => { setGoals(current => ({ ...current, priority: 'privacySecurity' })); setPage('scan'); }}><ShieldCheck size={16}/>{t('Choose privacy & security diagnosis')}</button><div className="settings-lines"><div><LockKeyhole size={18}/><span><strong>{t('Credentials')}</strong><small>{t('Encrypted with Windows DPAPI for this user')}</small></span></div><div><TerminalSquare size={18}/><span><strong>{t('Model output')}</strong><small>{t('AI can propose manual guidance and review-only scripts; only registered actions have write authority')}</small></span></div><div><RotateCcw size={18}/><span><strong>{t('Recovery')}</strong><small>{t('Verified restore point, Registry exports, and action journal')}</small></span></div></div></section></WindowsSecurityPanel></div>}
           {page === 'advanced' && <ScanPage mode={mode} onMode={value => { if (!busy && (!activeRun || ['completed', 'failed'].includes(activeRun.state))) setMode(value); }} scan={scan} diagnosis={displayedDiagnosis} goals={goals} scanning={Boolean(scanRequestId)} onGoals={setGoals} onScan={scanSystem} onDiagnose={diagnose}/>}
           {page === 'measurements' && <MeasurementsPage evidenceIds={measurementEvidenceIds} onEvidenceIds={setMeasurementEvidenceIds} optimizationRun={preparingBaseline ? undefined : activeRun} onRun={setActiveRun} preparingBaseline={preparingBaseline} onBaselinePrepared={() => { void diagnose(); }} analysisGoals={goals} onRecording={setRecording}/>}
           {page === 'review' && <ReviewPage onDiagnosis={() => setPage(providerConfigured ? 'scan' : 'provider')} investigationFailed={Boolean(activeRun?.usedLocalFallback || diagnosis && diagnosis === localDiagnosis.current)} applyBlockedReason={applyBlockedReason} auditOnly={activeRun?.mode === 'auditOnly'} auditEvidence={activeRun?.evidenceFacts} diagnosis={displayedDiagnosis} supporting={activeRun?.supportingAttachments} actions={actions} recommendations={recommendations} selected={selected} riskProfile={goals.riskProfile} canApply={activeRun?.mode !== 'auditOnly' && activeRun?.state === 'baselineReady'} onToggle={id => setSelected(current => toggle(current, id))} onPreset={applyPreset} onApply={applyChanges} onDismiss={activeRun && !activeRun.operationId && !activeRun.requiresRecovery && !['completed', 'failed'].includes(activeRun.state) ? () => { void dismissDiagnosis(); } : undefined}/>}
           {page === 'activity' && !journalError && <ActivityPage history={history} onRefresh={() => void refreshJournals()} onRollback={rollback}/>}
-          {page === 'settings' && <SettingsPage theme={theme} onTheme={setTheme}/>}
-          {(page === 'tools' || toolsOpened) && <div hidden={page !== 'tools'}><AdvancedToolsPage telemetryConsent={telemetryConsent} onActions={setActions} onTelemetryConsent={value => {
+          {page === 'settings' && <SettingsPage theme={theme} onTheme={setTheme} setupBlocked={Boolean(recording || runPending || busy || securityBusy || diagnosisProgress || journalError || pendingRecovery)} onSetup={() => setSetupRequested(true)}/>}
+          {(page === 'tools' || toolsOpened) && <div hidden={page !== 'tools'}><AdvancedToolsPage setupAssistant={assistantSetupRequested} onAssistantSetupHandled={() => setAssistantSetupRequested(false)} telemetryConsent={telemetryConsent} firmwareConsent={firmwareConsent} onFirmwareConsent={setFirmwareConsent} onActions={setActions} onTelemetryConsent={value => {
             setTelemetryConsent(value);
             localStorage.setItem('neurotune.optionalTelemetryConsent', String(value));
           }}/></div>}
@@ -604,17 +623,19 @@ function GoalContextEditor({ goals, onGoals }: { goals: TuningGoals; onGoals: (v
   </section>;
 }
 
-function MeasurementsPage({ evidenceIds, onEvidenceIds, optimizationRun, onRun, preparingBaseline, onBaselinePrepared, analysisGoals, onRecording }: { evidenceIds: Set<string>; onEvidenceIds: (value: Set<string>) => void; optimizationRun?: OptimizationRun; onRun: (value: OptimizationRun) => void; preparingBaseline: boolean; onBaselinePrepared: () => void; analysisGoals: TuningGoals; onRecording: (value: boolean) => void }) {
+export function MeasurementsPage({ evidenceIds, onEvidenceIds, optimizationRun, onRun, preparingBaseline, onBaselinePrepared, analysisGoals, onRecording }: { evidenceIds: Set<string>; onEvidenceIds: (value: Set<string>) => void; optimizationRun?: OptimizationRun; onRun: (value: OptimizationRun) => void; preparingBaseline: boolean; onBaselinePrepared: () => void; analysisGoals: TuningGoals; onRecording: (value: boolean) => void }) {
   const [systemWide, setSystemWide] = useState(!optimizationRun && !preparingBaseline);
   const [workloads, setWorkloads] = useState<MeasurementWorkload[]>([]);
   const [sessions, setSessions] = useState<MeasurementSession[]>([]);
   const [selectedProcessId, setSelectedProcessId] = useState('');
   const [label, setLabel] = useState<MeasurementLabel>('baseline');
   const [durationSeconds, setDurationSeconds] = useState(180);
+  const [conditions, setConditions] = useState(!optimizationRun && !preparingBaseline ? 'Idle' : '');
+  const autoAnalyzeSession = useRef<{ id: string; analyze: () => Promise<void> } | undefined>(undefined);
   const [keepRawTrace, setKeepRawTrace] = useState(false);
   const [focusedId, setFocusedId] = useState('');
-  const [compareIds, setCompareIds] = useState<Set<string>>(new Set());
-  const [comparison, setComparison] = useState<MeasurementComparison>();
+  const [compareIds, setCompareIds] = useState<Set<string>>(new Set([...(optimizationRun?.comparison?.baselineSessionIds ?? []), ...(optimizationRun?.comparison?.candidateSessionIds ?? [])]));
+  const [comparison, setComparison] = useState<MeasurementComparison | undefined>(optimizationRun?.comparison);
   const [comparisonExplanation, setComparisonExplanation] = useState<string>();
   const [topology, setTopology] = useState<MachineTopology>();
   const [selectedGpu, setSelectedGpu] = useState('');
@@ -669,6 +690,24 @@ function MeasurementsPage({ evidenceIds, onEvidenceIds, optimizationRun, onRun, 
     if (optimizationRun?.state === 'candidatePending') setLabel('candidate');
   }, [optimizationRun?.state]);
 
+  const runComparison = Boolean(optimizationRun && !['completed', 'failed'].includes(optimizationRun.state));
+  const comparisonInitialized = useRef(compareIds.size > 0);
+  const beforeIds = runComparison ? optimizationRun!.baselineSessionIds : sessions.filter(item => compareIds.has(item.id) && item.label === 'baseline').map(item => item.id);
+  const afterIds = runComparison ? optimizationRun!.candidateSessionIds : sessions.filter(item => compareIds.has(item.id) && item.label === 'candidate').map(item => item.id);
+  useEffect(() => {
+    if (!loading && !comparisonInitialized.current && !compareIds.size && !runComparison) {
+      const baseline = sessions.find(item => item.label === 'baseline' && item.state === 'completed');
+      if (baseline) { comparisonInitialized.current = true; setCompareIds(new Set([baseline.id])); }
+    }
+  }, [loading, sessions, runComparison, compareIds.size]);
+  useEffect(() => {
+    const owned = autoAnalyzeSession.current;
+    if (!owned || busy || loading || operationRequest.current || sessions.some(item => item.state === 'recording')) return;
+    if (sessions.find(item => item.id === owned.id)?.state === 'captured') {
+      autoAnalyzeSession.current = undefined; // One owned request, no automatic retry or extra polling.
+      void owned.analyze();
+    }
+  }, [sessions, busy, loading]);
   const active = sessions.find(item => item.state === 'recording');
   const activeId = active?.id;
   useEffect(() => { if (!loading) onRecording(sessions.some(item => item.state === 'recording')); }, [sessions, loading, onRecording]);
@@ -729,21 +768,31 @@ function MeasurementsPage({ evidenceIds, onEvidenceIds, optimizationRun, onRun, 
       setTopology(machine); setSelectedGpu(machine.gpus[0]?.deviceKey ?? '');
     });
   }
-  async function start() {
-    const workload = workloads.find(item => String(item.processId) === selectedProcessId);
-    const monitorSystem = systemWide;
-    if (!monitorSystem && !workload) return;
+  async function start(reference?: MeasurementSession) {
+    let workload = workloads.find(item => String(item.processId) === selectedProcessId);
+    const monitorSystem = reference?.systemWide ?? systemWide;
+    if (reference && !monitorSystem && workload?.name.toLowerCase() !== reference.processName.toLowerCase()) {
+      const matching = workloads.filter(item => item.name.toLowerCase() === reference.processName.toLowerCase());
+      workload = matching.length === 1 ? matching[0] : undefined;
+    }
+    if (!monitorSystem && !workload) { setMessage(t('Open the same workload and select its running process before recording the after result.')); return; }
+    const captureConditions = reference?.conditions ?? conditions.trim();
+    if (!captureConditions && (!reference || monitorSystem)) { setMessage(t('Describe the idle conditions or repeatable benchmark scene first.')); return; }
     await execute('Preparing the local capture…', async requestId => {
       onRecording(true); // Freeze before WPR startup; an error stays quiet until the next authoritative session refresh.
-      const session = await agent<MeasurementSession>('measurement-start', { processId: monitorSystem ? 0 : workload!.processId, processStartTimeUtc: monitorSystem ? '0001-01-01T00:00:00Z' : workload!.startTimeUtc, systemWide: monitorSystem, label, durationSeconds, keepRawTrace, optimizationRunId: monitorSystem ? undefined : optimizationRun?.id }, requestId);
-      updateSession(session); setFocusedId(session.id);
+      const session = await agent<MeasurementSession>('measurement-start', { processId: monitorSystem ? 0 : workload!.processId, processStartTimeUtc: monitorSystem ? '0001-01-01T00:00:00Z' : workload!.startTimeUtc, systemWide: monitorSystem, label: reference ? 'candidate' : label, durationSeconds: reference?.durationSeconds ?? durationSeconds, conditions: captureConditions, analysisPreset: runComparison ? optimizationRun!.goals.priority : analysisGoals.priority, keepRawTrace, optimizationRunId: monitorSystem || !runComparison ? undefined : optimizationRun?.id }, requestId);
+      updateSession(session); setFocusedId(session.id); setComparison(undefined); setComparisonExplanation(undefined);
+      if (reference) {
+        autoAnalyzeSession.current = { id: session.id, analyze: () => analyze(session.id, session.optimizationRunId) };
+        if (!runComparison) setCompareIds(current => new Set([...current, reference.id, session.id]));
+      }
     });
   }
-  async function analyze(id: string) {
+  async function analyze(id: string, runId?: string) {
     await execute('Analyzing the ETL locally…', async requestId => {
       analysisRequest.current = requestId;
       try {
-        const session = await agent<MeasurementSession>('measurement-analyze', { sessionId: id, optimizationRunId: sessions.find(item => item.id === id)?.optimizationRunId }, requestId);
+        const session = await agent<MeasurementSession>('measurement-analyze', { sessionId: id, optimizationRunId: runId ?? sessions.find(item => item.id === id)?.optimizationRunId }, requestId);
         updateSession(session);
         if (preparingBaseline && !session.systemWide && session.label === 'baseline' && session.report?.quality.isValid) onEvidenceIds(new Set([...evidenceIds, session.id]));
         if (session.optimizationRunId) onRun(await agent<OptimizationRun>('run-get', { runId: session.optimizationRunId }));
@@ -806,6 +855,9 @@ function MeasurementsPage({ evidenceIds, onEvidenceIds, optimizationRun, onRun, 
     {(busy || loading) && <MeasurementFeedback key={startedAt} message={t(busy || 'Loading running workloads and local history…')} startedAt={startedAt} log={operationLog.map(item => item.raw ? item.text : t(item.text))}>
       {analysisRequest.current && <button className="secondary" onClick={() => void cancelAgent(analysisRequest.current!).catch(error => setMessage(String(error)))}><X size={14}/>{t("Cancel analysis")}</button>}
     </MeasurementFeedback>}
+    <MeasurementCompare sessions={sessions} baselineIds={beforeIds.length ? beforeIds : runComparison ? optimizationRun?.diagnosticSessionIds ?? [] : []} candidateIds={afterIds} comparison={comparison} busy={Boolean(busy) || loading} locked={runComparison} captureBlocked={runComparison && optimizationRun?.state !== 'candidatePending'} restartPending={optimizationRun?.state === 'restartPending'}
+      onSelect={(side, id) => { setCompareIds(current => new Set([...current].filter(selected => sessions.find(item => item.id === selected)?.label !== side).concat(id ? [id] : []))); setComparison(undefined); setComparisonExplanation(undefined); }}
+      onCapture={reference => { setComparison(undefined); void start(reference); }} onCompare={() => void compare()} onAnalyze={id => void analyze(id)}/>
     {optimizationRun?.state === 'restartPending' && <section className="section-card"><div className="section-heading"><div><span className="eyebrow">{t("Restart gate")}</span><h3>{t("Verify the required Windows restart")}</h3></div></div><p className="muted-copy">{t("Candidate measurement stays blocked until NeuroTune detects a different Windows boot.")}</p><button className="primary" onClick={() => void resumeAfterRestart()}><RefreshCw size={16}/>{t("Verify restart")}</button></section>}
     <section className="section-card measurement-setup">
       <div className="section-heading"><div><span className="eyebrow">{t("1 · Prerequisites and workload")}</span><h3>{t("Monitor the system or a running workload")}</h3></div><span className="status-pill good">{t("WPR · local only")}</span></div>
@@ -813,22 +865,23 @@ function MeasurementsPage({ evidenceIds, onEvidenceIds, optimizationRun, onRun, 
       <fieldset className="form-grid" disabled={Boolean(active) || Boolean(busy) || loading}>
         <label className="wide consent-toggle"><input type="checkbox" checked={systemWide} disabled={Boolean(active)} onChange={event => setSystemWide(event.target.checked)}/><span><strong>{t("Monitor the entire system")}</strong><small>{t("Diagnostics without a selected process. Optimization runs require a repeatable target workload.")}</small></span></label>
         {!systemWide && <label className="wide"><span>{t("Active process")}</span><select value={selectedProcessId} disabled={Boolean(active)} onChange={event => setSelectedProcessId(event.target.value)}>{workloads.map(item => <option key={`${item.processId}-${item.startTimeUtc}`} value={item.processId}>{item.name} · {item.description} · PID {item.processId}</option>)}</select></label>}
-        <label><span>{t("Side")}</span><select value={label} disabled={Boolean(active)} onChange={event => setLabel(event.target.value as MeasurementLabel)}><option value="baseline">{t("Baseline")}</option><option value="candidate">{t("Candidate")}</option></select></label>
+        <label><span>{t("Side")}</span><select value={label} disabled={Boolean(active) || runComparison} onChange={event => setLabel(event.target.value as MeasurementLabel)}><option value="baseline">{t("Baseline")}</option><option value="candidate">{t("Candidate")}</option></select></label>
         <label><span>{t("Duration (seconds)")}</span><input type="number" min="30" max="600" value={durationSeconds} disabled={Boolean(active)} onChange={event => setDurationSeconds(Math.max(30, Math.min(600, Number(event.target.value))))}/><small>{t("Default 180; maximum 600.")}</small></label>
+        <label className="wide"><span>{t('Repeatable conditions')}</span><input maxLength={240} value={conditions} onChange={event => setConditions(event.target.value)} placeholder={t('Idle, or the same game scene and graphics settings')}/><small>{t('For idle captures, close unnecessary activity and wait for background work to settle. In game, use the same repeatable scene, duration and settings before and after.')}</small></label>
         <label className="wide consent-toggle"><input type="checkbox" checked={keepRawTrace} disabled={Boolean(active)} onChange={event => setKeepRawTrace(event.target.checked)}/><span><strong>{t("Keep the raw ETL after successful analysis")}</strong><small>{t("Off by default. Failed analyses remain retryable for at most 24 hours.")}</small></span></label>
       </fieldset>
-      <div className="button-row">{active ? <><button className="primary" disabled={Boolean(busy)} onClick={() => void stopCapture()}><Timer size={16}/>{t("Stop")}</button><button className="secondary" disabled={Boolean(busy)} onClick={() => void cancelCapture()}><X size={16}/>{t("Cancel & delete")}</button><CaptureCountdown startedAt={active.recordingStartedAtUtc} durationSeconds={active.durationSeconds}/></> : <button className="primary" disabled={(!systemWide && !selectedProcessId) || Boolean(busy) || loading} onClick={() => void start()}>{busy ? <LoaderCircle size={16} className="spin"/> : <Timer size={16}/>} {busy ? t("Operation in progress…") : t("Start measurement")}</button>}</div>
+      <div className="button-row">{active ? <><button className="primary" disabled={Boolean(busy)} onClick={() => void stopCapture()}><Timer size={16}/>{t("Stop")}</button><button className="secondary" disabled={Boolean(busy)} onClick={() => void cancelCapture()}><X size={16}/>{t("Cancel & delete")}</button><CaptureCountdown startedAt={active.recordingStartedAtUtc} durationSeconds={active.durationSeconds}/></> : <button className="primary" disabled={(!systemWide && !selectedProcessId) || !conditions.trim() || Boolean(busy) || loading || runComparison && !['baselinePending', 'baselineReady', 'candidatePending'].includes(optimizationRun!.state)} onClick={() => void start()}>{busy ? <LoaderCircle size={16} className="spin"/> : <Timer size={16}/>} {busy ? t("Operation in progress…") : t("Start measurement")}</button>}</div>
     </section>
     <LiveProcessorTimes recording={Boolean(active)}/>
 
     <MeasurementHistory sessions={sessions} focusedId={focused?.id} compareIds={compareIds} evidenceIds={evidenceIds} busy={Boolean(busy)} loading={loading}
-      onFocus={id => { setFocusedId(id); if (sessions.find(item => item.id === id)?.report) requestAnimationFrame(() => document.getElementById('measurement-report')?.focus()); }} onCompareToggle={id => setCompareIds(toggle(compareIds, id))} onEvidenceToggle={id => onEvidenceIds(toggle(evidenceIds, id))}
+      onFocus={id => { setFocusedId(id); if (sessions.find(item => item.id === id)?.report) requestAnimationFrame(() => document.getElementById('measurement-report')?.focus()); }} onCompareToggle={id => { setCompareIds(toggle(compareIds, id)); setComparison(undefined); setComparisonExplanation(undefined); }} onEvidenceToggle={id => onEvidenceIds(toggle(evidenceIds, id))}
       onAnalyze={id => void analyze(id)} onDelete={id => { if (window.confirm(t('Delete this measurement session and its local data?'))) void execute('Deleting measurement…', () => agent('measurement-delete', { sessionId: id })); }} onCompare={() => void compare()}/>
 
     {focused?.report && <>{!focused.systemWide && <section className="section-card"><div className="section-heading"><div><span className="eyebrow">{t("Optional frame evidence")}</span><h3>{t("Attach the matching PresentMon CSV")}</h3></div><span className="status-pill">{t("local only")}</span></div><p className="muted-copy">{t("The CSV must cover the same executable and duration. NeuroTune stores only aggregate FPS, 1% low, frame-time tails, stutter count, and present modes.")}</p><input type="file" accept=".csv,text/csv" disabled={Boolean(busy)} aria-label={t("Import matching PresentMon CSV")} onChange={event => { const file = event.currentTarget.files?.[0]; if (file) void importFrameTimes(file); event.currentTarget.value = ''; }}/></section>}<MeasurementReportView session={focused}/></>}
-    {comparison && <section className="section-card"><div className="section-heading"><div><span className="eyebrow">{t("Comparison")}</span><h3>{t('{level} result', { level: statusLabel(comparison.level) })}</h3></div><span className={`status-pill ${comparison.rejectionReasons.length ? '' : 'good'}`}>{comparison.rejectionReasons.length ? t("Rejected") : t('{count} metrics', { count: comparison.metrics.length })}</span></div>{comparison.rejectionReasons.length ? <ul className="muted-copy">{comparison.rejectionReasons.map(reason => <li key={reason}>{reason}</li>)}</ul> : <><div className="consent-card"><Bot size={20}/><div><span className="eyebrow">{t("Automatic measured recommendation")}</span><strong>{statusLabel(comparison.recommendation)}</strong><small>{comparison.recommendationReason}</small></div></div><div className="measurement-table">{comparison.metrics.slice(0, 20).map(metric => <article key={metric.evidenceId}><code>{metric.evidenceId}</code><span>{metric.baselineMedian.toFixed(2)} → {metric.candidateMedian.toFixed(2)}</span><strong className={metric.outcome}>{metric.deltaPercent.toFixed(1)}% · {statusLabel(metric.outcome)}</strong></article>)}</div>{optimizationRun?.state === 'decisionPending' && <div className="button-row"><button className="primary" onClick={() => void keepCandidate()}><Check size={16}/>{t("Keep candidate")}</button><small>{t('Use Activity & restore to choose Rollback.')}</small></div>}</>}</section>}
+    {comparison && !comparison.diagnosticOnly && !comparison.rejectionReasons.length && optimizationRun?.state === 'decisionPending' && <section className="section-card"><div className="consent-card"><Bot size={20}/><div><span className="eyebrow">{t('Automatic measured recommendation')}</span><strong>{statusLabel(comparison.recommendation)}</strong><small>{comparison.recommendationReason}</small></div></div><div className="button-row"><button className="primary" disabled={Boolean(busy) || Boolean(active)} onClick={() => void keepCandidate()}><Check size={16}/>{t('Keep candidate')}</button><small>{t('Use Activity & restore to choose Rollback.')}</small></div></section>}
     {!topology && <section className="section-card"><h3>{t("Optional GPU IRQ diagnostics")}</h3><p className="muted-copy">{t("GPU candidate diagnostics are read-only and are not required for a latency capture. Load hardware topology only when needed.")}</p><button className="secondary" disabled={Boolean(busy) || loading} onClick={() => void loadTopology()}><Cpu size={16}/>{t("Load GPU topology")}</button></section>}
-    {comparison && comparison.rejectionReasons.length === 0 && <section className="section-card"><SystemOneNotes items={comparison.systemOneAdvisories}/><h3>{t("Selected AI · read-only interpretation")}</h3><p>{t("Send only this comparison's aggregates and your tuning goals to the selected provider. It may disagree with the numerical recommendation; it cannot replace metrics, authorize changes or apply anything.")}</p><button className="secondary" disabled={Boolean(busy) || Boolean(active)} onClick={() => void execute('Explaining original comparison metrics with the selected AI…', async () => setComparisonExplanation(await agent<string>('measurement-explain', { comparison: { baselineSessionIds: comparison.baselineSessionIds, candidateSessionIds: comparison.candidateSessionIds, optimizationRunId: optimizationRun?.id }, goals: analysisGoals, language: getLanguage() })))}>{t("Ask selected AI to explain")}</button>{comparisonExplanation && <p className="muted-copy" role="status">{comparisonExplanation}</p>}</section>}
+    {comparison && comparison.rejectionReasons.length === 0 && <section className="section-card"><SystemOneNotes items={comparison.systemOneAdvisories}/><h3>{t("Selected AI · read-only interpretation")}</h3><p>{t("Send only this comparison's aggregates and your tuning goals to the selected provider. It may disagree with the numerical recommendation; it cannot replace metrics, authorize changes or apply anything.")}</p><button className="secondary" disabled={Boolean(busy) || Boolean(active)} onClick={() => void execute('Explaining original comparison metrics with the selected AI…', async () => setComparisonExplanation(await agent<string>('measurement-explain', { comparison: { baselineSessionIds: comparison.baselineSessionIds, candidateSessionIds: comparison.candidateSessionIds, optimizationRunId: comparison.diagnosticOnly ? undefined : optimizationRun?.id }, goals: analysisGoals, language: getLanguage() })))}>{t("Ask selected AI to explain")}</button>{comparisonExplanation && <p className="muted-copy" role="status">{comparisonExplanation}</p>}</section>}
     {topology && <section className="section-card"><div className="section-heading"><div><span className="eyebrow">{t("Next closed-loop tranche")}</span><h3>{t("GPU IRQ candidate preview")}</h3></div><span className="status-pill">{t("Read-only")}</span></div><p className="muted-copy">{t('Windows reports {processors} logical processors, {cores} physical cores, and {clusters} cache clusters. Cache clusters are not labelled as CCDs.', { processors: topology.processors.length, cores: new Set(topology.processors.map(item => `${item.processorGroup}:${item.physicalCore}`)).size, clusters: new Set(topology.processors.map(item => `${item.processorGroup}:${item.cacheCluster}`)).size })}</p><div className="form-grid"><label className="wide"><span>{t("Physical AMD/NVIDIA GPU")}</span><select value={selectedGpu} onChange={event => { setSelectedGpu(event.target.value); setGpuPolicy(undefined); setGpuCandidates(undefined); }}>{topology.gpus.map(gpu => <option key={gpu.deviceKey} value={gpu.deviceKey}>{t('{vendor} · {name} · driver {version}', { vendor: gpu.vendor, name: gpu.name, version: gpu.driverVersion })}</option>)}</select></label></div><div className="button-row"><button className="secondary" disabled={!selectedGpu || Boolean(busy)} onClick={() => void inspectGpuPolicy()}><ScanLine size={16}/>{t("Inspect current policy")}</button><button className="secondary" disabled={Boolean(busy) || !selectedGpu || sessions.filter(item => compareIds.has(item.id) && item.label === 'baseline' && item.state === 'completed').length < 3} onClick={() => void generateGpuCandidates()}><Cpu size={16}/>{t("Generate from 3+ selected baselines")}</button></div>{gpuPolicy && <div className="measurement-table"><article><strong>{gpuPolicy.deviceName} · {statusLabel(gpuPolicy.state)}</strong><span>AssignmentSetOverride: {gpuPolicy.assignmentSetOverride.exists ? `${gpuPolicy.assignmentSetOverride.kind} · ${gpuPolicy.assignmentSetOverride.hexValue}` : t("not set")}</span><code>DevicePolicy: {gpuPolicy.devicePolicy.exists ? `${gpuPolicy.devicePolicy.kind} · ${gpuPolicy.devicePolicy.hexValue}` : t('not set')} · {t('Exact restore: {status}', { status: gpuPolicy.restorable ? t('possible') : t('blocked') })}</code><small>{gpuPolicy.gateReason}</small></article></div>}{gpuCandidates && <div className="measurement-table">{gpuCandidates.candidates.map(candidate => <article key={candidate.candidateId}><strong>{t('Group {group} · LP {processor} · core {core} · SMT {smt}', { group: candidate.processorGroup, processor: candidate.logicalProcessor, core: candidate.physicalCore, smt: candidate.smtIndex })}</strong><span>{t('IRQ {irq}% · target {target} ms · overlap {overlap} µs', { irq: candidate.interruptSharePercent.toFixed(2), target: candidate.targetRunningMilliseconds.toFixed(1), overlap: candidate.readyOverlapMicroseconds.toFixed(1) })}</span><code>{t('{id} · cache cluster {cluster} · efficiency {efficiency}', { id: candidate.candidateId, cluster: candidate.cacheCluster, efficiency: candidate.efficiencyClass })}</code><small>{candidate.gateReason}</small></article>)}</div>}<p className="muted-copy">{t("No Registry value is written and no candidate is executable. The provider AI does not receive device IDs, Registry paths, masks, policy snapshots, or processor numbers.")}</p></section>}
   </div>;
 }
@@ -851,11 +904,12 @@ function ActivityPage({ history, onRefresh, onRollback }: { history: OperationMa
   return <div className="stack-lg"><div className="page-actions"><div><span className="eyebrow">{t("Operation journal")}</span><h2>{t("Every attempted change remains traceable")}</h2></div><button className="secondary" onClick={onRefresh}><RefreshCw size={16}/>{t("Refresh")}</button></div>{history.length ? <div className="history-list">{history.map(item => <article className="history-card" key={item.id}><div className="history-icon"><Activity size={19}/></div><div className="history-main"><div><strong>{item.status}</strong><span>{formatDate(item.createdAt)}</span></div><p>{t('{count} journaled actions · {id}', { count: item.actions.length, id: item.id })}</p><small className="history-recovery-state">{item.actions.some(action => (action.applied || action.attempted) && !action.rolledBack) ? t('Restore available · confirmation required') : t('No changes to restore')}</small><SystemOneNotes items={item.systemOneAdvisories}/>{item.error && <small className="error-text">{item.error}</small>}</div><button className="secondary" disabled={!item.actions.some(action => (action.applied || action.attempted) && !action.rolledBack)} onClick={() => onRollback(item.id)}><RotateCcw size={15}/>{t("Restore")}</button></article>)}</div> : <EmptyState icon={Activity} title={t("No operations yet")} text={t("Completed and interrupted operations will appear here with their rollback state.")}/>}</div>;
 }
 
-function AdvancedToolsPage({ telemetryConsent, onTelemetryConsent, onActions }: { telemetryConsent: boolean; onTelemetryConsent: (value: boolean) => void; onActions: (value: OptimizationAction[]) => void }) {
+function AdvancedToolsPage({ telemetryConsent, onTelemetryConsent, firmwareConsent, onFirmwareConsent, onActions, setupAssistant, onAssistantSetupHandled }: { setupAssistant: boolean; onAssistantSetupHandled: () => void; firmwareConsent: boolean; onFirmwareConsent: (value: boolean) => void; telemetryConsent: boolean; onTelemetryConsent: (value: boolean) => void; onActions: (value: OptimizationAction[]) => void }) {
   const [section, setSection] = useState('firmware');
   const [directory, setDirectory] = useState('');
   const [plans, setPlans] = useState<CustomPowerPlanFile[]>([]);
   const [selectedPath, setSelectedPath] = useState('');
+  useEffect(() => { if (setupAssistant) { setSection('assistant'); onAssistantSetupHandled(); } }, [setupAssistant, onAssistantSetupHandled]);
   const [message, setMessage] = useState('');
   const [messageValues, setMessageValues] = useState<Record<string, string | number>>({});
   const [messageRaw, setMessageRaw] = useState(false);
@@ -887,7 +941,7 @@ function AdvancedToolsPage({ telemetryConsent, onTelemetryConsent, onActions }: 
       <button aria-pressed={section === 'power'} onClick={() => setSection('power')}>{t('Custom power plans')}</button>
       <button aria-pressed={section === 'telemetry'} onClick={() => setSection('telemetry')}>{t('Optional low-level telemetry')}</button>
     </div>
-    <div hidden={section !== 'firmware'}><FirmwarePanel/></div>
+    <div hidden={section !== 'firmware'}><FirmwarePanel readConsent={firmwareConsent} onReadConsent={onFirmwareConsent}/></div>
     <div hidden={section !== 'assistant'}><SystemOnePanel/></div>
     <section className="section-card" hidden={section !== 'power'}>
       <div className="section-heading"><h2>{t('Stage a .pow file')}</h2><HardDrive size={22}/></div>
@@ -901,8 +955,9 @@ function AdvancedToolsPage({ telemetryConsent, onTelemetryConsent, onActions }: 
   </div>;
 }
 
-function SettingsPage({ theme, onTheme }: { theme: ThemePreference; onTheme: (value: ThemePreference) => void }) {
+function SettingsPage({ theme, onTheme, onSetup, setupBlocked }: { theme: ThemePreference; onTheme: (value: ThemePreference) => void; onSetup: () => void; setupBlocked: boolean }) {
   return <div className="settings-grid">
+    <section className="section-card language-settings"><h2>{t('Guided setup')}</h2><p>{t('Review what NeuroTune can do and choose optional local reads. Drivers, model downloads, AI transmission and changes require their own consent.')}</p><button className="secondary" disabled={setupBlocked} onClick={onSetup}>{t('Open guided setup')}</button></section>
     <section className="section-card language-settings"><div className="section-heading"><h2>{t('Language')}</h2></div><p className="muted-copy">{t('Choose the interface and AI response language. Changes are immediate and saved locally; provider settings and consent are unchanged.')}</p><div className="form-grid"><label className="wide"><span>{t('Application language')}</span><select value={getLanguage()} onChange={event => setLanguage(event.target.value as Language)}>{languages.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label></div></section>
     <section className="section-card appearance-settings"><div className="section-heading"><h2>{t('Theme')}</h2><Palette size={22}/></div><p className="muted-copy">{t('Follow the Windows appearance automatically, or keep a manual override.')}</p><div className="theme-options"><ThemeOption active={theme === 'system'} icon={MonitorCog} title={t('Use Windows setting')} text={t('Switch automatically with the operating system')} onClick={() => onTheme('system')}/><ThemeOption active={theme === 'light'} icon={Sun} title={t('Light')} text={t('High-contrast light surfaces')} onClick={() => onTheme('light')}/><ThemeOption active={theme === 'dark'} icon={Moon} title={t('Dark')} text={t('Low-glare dark surfaces')} onClick={() => onTheme('dark')}/></div></section>
   </div>;
