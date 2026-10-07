@@ -23,4 +23,4 @@ checksums from the repository root:
 ./scripts/package-release.ps1
 ```
 
-See [`../docs/DESIGN_SYSTEM.md`](../docs/DESIGN_SYSTEM.md) for theme and contrast requirements.
+See the [public testing guide](../docs/TESTING.md) for verification and acceptance limits. Themes and contrast tokens live in `src/index.css`; preserve keyboard access, reduced motion and the capture quiet-motion boundary.

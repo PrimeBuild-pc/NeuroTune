@@ -77,4 +77,4 @@ Before expansion, measure held-out classification accuracy, abstention/calibrati
 
 **Deferred at the user's request:** simplify SCEWIN read-file import/upload into a clearer guided operation (file selection, encoding/provenance feedback, actionable import errors). Current offline import/export and consent boundaries remain unchanged. No automatic AMI download, BIOS writer or security workaround is pending implicitly.
 
-See [investigation/execution boundaries](DETERMINISTIC_CONTROLS.md) for technical vetoes, evidence validation and opinionated planning rules. Historical checks above do not validate a current release candidate; see [current gates](VALIDATION_MATRIX.md#current-candidate-not-release-certified).
+See [investigation/execution boundaries](DETERMINISTIC_CONTROLS.md) for technical vetoes, evidence validation and opinionated planning rules. Historical checks above do not validate a current release candidate; see [alpha acceptance requirements](TESTING.md#vm-only-privileged-acceptance).

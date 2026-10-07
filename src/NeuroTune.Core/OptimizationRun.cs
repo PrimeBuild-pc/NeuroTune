@@ -186,6 +186,7 @@ public sealed class OptimizationRunService
         if (outcome is not null)
         {
             run.EvidenceFacts = LlmClient.AppendInvestigationEvidence(run.EvidenceFacts, outcome.AdditionalEvidence).ToDictionary(fact => fact.Key, fact => fact.Value, StringComparer.Ordinal);
+            run.Diagnosis = outcome.Diagnosis; // Retained local findings are not a validated AI result or write authority.
             run.PlannerAudit = outcome.Audit.ToList();
             run.PlannerStopReason = outcome.StopReason;
             run.UsedLocalFallback = true;

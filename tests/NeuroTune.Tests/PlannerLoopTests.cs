@@ -52,6 +52,23 @@ public sealed class PlannerLoopTests
     }
 
     [TestMethod]
+    public async Task Provider_http_failure_is_visible_without_response_secrets_or_an_automatic_retry()
+    {
+        var (listener, server, settings) = StartServer(new Func<string, string>[] { _ => "secret-response-body" }, 429);
+        using (listener)
+        {
+            var outcome = await new LlmClient(new OptimizationCatalog()).PlanAsync(new SystemProfile { Cpu = "CPU" }, new TuningGoals(), settings, null);
+            await server;
+            Assert.IsTrue(outcome.UsedLocalFallback);
+            Assert.HasCount(1, outcome.Audit);
+            Assert.Contains("HTTP 429", outcome.Audit.Single().Reason);
+            Assert.StartsWith("The provider returned HTTP 429", outcome.Diagnosis.Summary);
+            Assert.DoesNotContain("secret-response", JsonSerializer.Serialize(outcome));
+            Assert.HasCount(0, outcome.Diagnosis.Recommendations);
+        }
+    }
+
+    [TestMethod]
     public void Conflict_references_cannot_bypass_initial_evidence_privacy()
     {
         var facts = new Dictionary<string, string>
@@ -273,7 +290,7 @@ public sealed class PlannerLoopTests
     private static (TcpListener Listener, Task Server, UserSettings Settings) StartServer(IReadOnlyList<string> responses) =>
         StartServer(responses.Select<string, Func<string, string>>(response => _ => response).ToList());
 
-    private static (TcpListener Listener, Task Server, UserSettings Settings) StartServer(IReadOnlyList<Func<string, string>> responses)
+    private static (TcpListener Listener, Task Server, UserSettings Settings) StartServer(IReadOnlyList<Func<string, string>> responses, int statusCode = 200)
     {
         var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
@@ -285,7 +302,7 @@ public sealed class PlannerLoopTests
                 var request = await ReadRequest(client.GetStream());
                 var body = JsonSerializer.Serialize(new { choices = new[] { new { message = new { content = content(request) } } } });
                 var bytes = Encoding.UTF8.GetBytes(body);
-                var header = Encoding.ASCII.GetBytes($"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {bytes.Length}\r\nConnection: close\r\n\r\n");
+                var header = Encoding.ASCII.GetBytes($"HTTP/1.1 {statusCode} secret-response-reason\r\nContent-Type: application/json\r\nContent-Length: {bytes.Length}\r\nConnection: close\r\n\r\n");
                 await client.GetStream().WriteAsync(header);
                 await client.GetStream().WriteAsync(bytes);
             }

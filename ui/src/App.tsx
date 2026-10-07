@@ -208,7 +208,8 @@ function App() {
     : scanRequestId ? { label: 'Local evidence', onClick: () => setPage('advanced') }
     : runPending && activeRun ? { label: ['applying', 'rollingBack'].includes(activeRun.state) ? 'Activity & restore' : ['baselinePending', 'restartPending', 'candidatePending', 'evaluating', 'decisionPending'].includes(activeRun.state) ? 'Measurements' : diagnosis ? 'Review changes' : 'Complete diagnosis', onClick: () => setPage(['applying', 'rollingBack'].includes(activeRun.state) ? 'activity' : ['baselinePending', 'restartPending', 'candidatePending', 'evaluating', 'decisionPending'].includes(activeRun.state) ? 'measurements' : diagnosis ? 'review' : 'scan') }
     : undefined;
-  const applyBlockedReason = activeRun?.mode === 'auditOnly' ? 'Advisory audit · Apply is unavailable.'
+  const applyBlockedReason = activeRun?.usedLocalFallback ? 'The provider diagnosis failed. Local observations are not a completed AI audit or authorization to apply changes.'
+    : activeRun?.mode === 'auditOnly' ? 'Advisory audit · Apply is unavailable.'
     : !activeRun || ['completed', 'failed'].includes(activeRun.state) ? 'This report has no active optimization run. Start a new diagnosis to propose changes.'
     : activeRun.requiresRecovery ? 'Review recovery before starting another diagnosis.'
     : ['scanned', 'hypothesizing', 'proposalReady', 'baselinePending', 'baselineReady'].includes(activeRun.state) ? 'Apply requires three matching quality-valid workload baselines in this run.'
@@ -245,6 +246,7 @@ function App() {
     setSelected(new Set(run.approvedActionIds));
     setMeasurementEvidenceIds(new Set([...run.baselineSessionIds, ...run.candidateSessionIds]));
     if (['applying', 'rollingBack', 'recoveryRequired'].includes(run.state)) setPage('activity');
+    else if (run.usedLocalFallback && run.diagnosis) setPage('review');
     else if (['baselinePending', 'restartPending', 'candidatePending', 'evaluating', 'decisionPending'].includes(run.state)) setPage('measurements');
     else if (['baselineReady', 'approved', 'proposalReady'].includes(run.state)) setPage('review');
     else setPage('scan');
@@ -298,7 +300,7 @@ function App() {
     });
     if (!result) return;
     setModels(result.models); setModelLabels(result.modelLabels ?? {});
-    if (!result.models.includes(settings.model)) {
+    if (settings.provider === 'chatGpt' && !result.models.includes(settings.model)) {
       const next = { ...settings, model: result.models[0] ?? '' };
       const saved = await run('Saving the account model selection…', () => agent('save-provider', { settings: next }));
       if (!saved) return;
@@ -402,6 +404,7 @@ function App() {
       });
       setScan(result.scan); setActions(result.scan.actions); setDiagnosis(result.diagnosis); setActiveRun(result.run);
       setMeasurementEvidenceIds(new Set(result.sessions.map(item => item.id))); setPreparingBaseline(false); setPage('review');
+      if (result.run.usedLocalFallback) showError(result.run.error ?? result.diagnosis.summary);
     } catch (error) {
       showError(error);
       try { const runs = await agent<OptimizationRun[]>('run-list'); hydrateRun(runs.find(item => !['completed', 'failed'].includes(item.state))); }
@@ -517,11 +520,11 @@ function App() {
       </dialog>
       <a className="skip-link" href="#workspace">{t("Skip to workspace")}</a>
       <aside className="sidebar">
-        <div className="brand"><img className="brand-mark" src="/logo.svg" width="40" height="40" alt=""/><div><strong>NeuroTune</strong><span>{t("Windows intelligence")}</span></div></div>
+        <div className="brand"><img className="brand-mark" src="/logo.svg" width="40" height="40" alt=""/><div><strong>NeuroTune</strong><span>by PrimeBuild</span></div></div>
         <Navigation items={navigation.map(item => ({ ...item, label: t(item.label) }))} page={page} onPage={setPage} disabled={Boolean(diagnosisProgress) || securityBusy} quiet={quietMotion}/>
         <div className="sidebar-foot">
           <div className="security-chip"><ShieldCheck size={16}/><span>{t("Allowlisted actions")}</span></div>
-          <small>v0.8.0-alpha.2</small>
+          <small>v0.8.0-alpha.3</small><span className="compact-attribution">by PrimeBuild</span>
         </div>
       </aside>
 
@@ -543,12 +546,12 @@ function App() {
         {activeRun && !activeRun.operationId && !activeRun.requiresRecovery && !['completed', 'failed'].includes(activeRun.state) && !diagnosisProgress && <div className="notice info"><span>{t("A proposal or interrupted diagnosis is retained. No new diagnosis can replace it until you finish or decline it.")}</span><button className="secondary" disabled={Boolean(busy)} onClick={() => { void dismissDiagnosis(); }}>{t("Finish without changes")}</button></div>}
         <section className="page-content">
           {page === 'overview' && <Overview hasProvider={providerConfigured} nextAction={nextOverviewAction} disabled={Boolean(busy || securityBusy)} scan={scan} history={history} coreState={quietMotion ? 'capture' : scanRequestId ? 'scan' : diagnosis && activeRun && ['baselineReady', 'baselinePending', 'proposalReady'].includes(activeRun.state) ? 'result' : 'idle'} onProvider={() => setPage('provider')} onScan={() => setPage('scan')} onPrivacy={() => setPage('security')}/>}
-          {page === 'provider' && <ProviderPage provider={provider} apiKey={apiKey} hasCredential={hasCredential} models={models} modelLabels={modelLabels} chatGptAccounts={chatGptAccounts} authBusy={Boolean(busy)} onSignOut={signOutChatGpt} onChoose={chooseProvider} onChange={value => { setProvider(value); if (value.chatGptAccountId !== provider.chatGptAccountId) { setHasCredential(false); setModels([]); } }} onKey={setApiKey} onSave={saveProvider} onLoadModels={loadModels} onBrowserSignIn={browserSignIn} onModel={selectChatGptModel}/>}
+          {page === 'provider' && <ProviderPage provider={provider} apiKey={apiKey} hasCredential={hasCredential} models={models} modelLabels={modelLabels} chatGptAccounts={chatGptAccounts} authBusy={Boolean(busy)} onSignOut={signOutChatGpt} onChoose={chooseProvider} onChange={value => { setProvider(value); if (value.chatGptAccountId !== provider.chatGptAccountId || value.baseUrl !== provider.baseUrl || value.protocol !== provider.protocol) { setHasCredential(false); setModels([]); setModelLabels({}); } }} onKey={value => { setApiKey(value); setModels([]); setModelLabels({}); }} onSave={saveProvider} onLoadModels={loadModels} onBrowserSignIn={browserSignIn} onModel={selectChatGptModel}/>}
           {(page === 'scan' || diagnosisOpened) && <div hidden={page !== 'scan'}><CompleteDiagnosis onSecurity={() => setPage('security')} consentKey={`${provider.provider}:${provider.model}:${provider.baseUrl}:${provider.chatGptAccountId ?? ''}`} blockedReason={diagnosisBlockedReason} onProvider={!providerConfigured && !recording && !busy && !securityBusy && !runPending && !pendingRecovery ? () => setPage('provider') : undefined} mode={mode} onMode={setMode} goals={goals} onGoals={setGoals} onStart={(workload, duration, attachments, imagesConfirmed) => { void completeDiagnosis(workload, duration, attachments, imagesConfirmed); }} progress={diagnosisProgress} auditPreview={auditPreview} onAuditApprove={() => auditReview.current?.(true)} onCancel={cancelCompleteDiagnosis} blocked={Boolean(diagnosisBlockedReason)}><GoalContextEditor goals={goals} onGoals={setGoals}/></CompleteDiagnosis></div>}
           {page === 'security' && <div className="security-page"><WindowsSecurityPanel blocked={Boolean(recording || busy || diagnosisProgress || pendingRecovery || activeRun && activeRun.mode !== 'auditOnly' && !['completed', 'failed'].includes(activeRun.state))} onBusy={setSecurityBusy}><section className="section-card"><h2>{t('AI-led investigation')}</h2><p>{t('Review Windows privacy and security evidence, protections and detections. Opening this page does not start collection, a scan, an AI request, a download or a system change.')}</p><p className="muted-copy">{t('The privacy and security objective specializes the investigation; mode, consent, provider, risk profile and approval remain separate. Choose it below, then review the complete diagnosis controls before starting.')}</p><button className="primary" disabled={Boolean(recording || busy || securityBusy || diagnosisProgress || pendingRecovery || activeRun && !['completed', 'failed'].includes(activeRun.state))} onClick={() => { setGoals(current => ({ ...current, priority: 'privacySecurity' })); setPage('scan'); }}><ShieldCheck size={16}/>{t('Choose privacy & security diagnosis')}</button><div className="settings-lines"><div><LockKeyhole size={18}/><span><strong>{t('Credentials')}</strong><small>{t('Encrypted with Windows DPAPI for this user')}</small></span></div><div><TerminalSquare size={18}/><span><strong>{t('Model output')}</strong><small>{t('AI can propose manual guidance and review-only scripts; only registered actions have write authority')}</small></span></div><div><RotateCcw size={18}/><span><strong>{t('Recovery')}</strong><small>{t('Verified restore point, Registry exports, and action journal')}</small></span></div></div></section></WindowsSecurityPanel></div>}
           {page === 'advanced' && <ScanPage mode={mode} onMode={value => { if (!busy && (!activeRun || ['completed', 'failed'].includes(activeRun.state))) setMode(value); }} scan={scan} diagnosis={displayedDiagnosis} goals={goals} scanning={Boolean(scanRequestId)} onGoals={setGoals} onScan={scanSystem} onDiagnose={diagnose}/>}
           {page === 'measurements' && <MeasurementsPage evidenceIds={measurementEvidenceIds} onEvidenceIds={setMeasurementEvidenceIds} optimizationRun={preparingBaseline ? undefined : activeRun} onRun={setActiveRun} preparingBaseline={preparingBaseline} onBaselinePrepared={() => { void diagnose(); }} analysisGoals={goals} onRecording={setRecording}/>}
-          {page === 'review' && <ReviewPage onDiagnosis={() => setPage(providerConfigured ? 'scan' : 'provider')} investigationFailed={Boolean(diagnosis && diagnosis === localDiagnosis.current)} applyBlockedReason={applyBlockedReason} auditOnly={activeRun?.mode === 'auditOnly'} auditEvidence={activeRun?.evidenceFacts} diagnosis={displayedDiagnosis} supporting={activeRun?.supportingAttachments} actions={actions} recommendations={recommendations} selected={selected} riskProfile={goals.riskProfile} canApply={activeRun?.mode !== 'auditOnly' && activeRun?.state === 'baselineReady'} onToggle={id => setSelected(current => toggle(current, id))} onPreset={applyPreset} onApply={applyChanges} onDismiss={activeRun && !activeRun.operationId && !activeRun.requiresRecovery && !['completed', 'failed'].includes(activeRun.state) ? () => { void dismissDiagnosis(); } : undefined}/>}
+          {page === 'review' && <ReviewPage onDiagnosis={() => setPage(providerConfigured ? 'scan' : 'provider')} investigationFailed={Boolean(activeRun?.usedLocalFallback || diagnosis && diagnosis === localDiagnosis.current)} applyBlockedReason={applyBlockedReason} auditOnly={activeRun?.mode === 'auditOnly'} auditEvidence={activeRun?.evidenceFacts} diagnosis={displayedDiagnosis} supporting={activeRun?.supportingAttachments} actions={actions} recommendations={recommendations} selected={selected} riskProfile={goals.riskProfile} canApply={activeRun?.mode !== 'auditOnly' && activeRun?.state === 'baselineReady'} onToggle={id => setSelected(current => toggle(current, id))} onPreset={applyPreset} onApply={applyChanges} onDismiss={activeRun && !activeRun.operationId && !activeRun.requiresRecovery && !['completed', 'failed'].includes(activeRun.state) ? () => { void dismissDiagnosis(); } : undefined}/>}
           {page === 'activity' && !journalError && <ActivityPage history={history} onRefresh={() => void refreshJournals()} onRollback={rollback}/>}
           {page === 'settings' && <SettingsPage theme={theme} onTheme={setTheme}/>}
           {(page === 'tools' || toolsOpened) && <div hidden={page !== 'tools'}><AdvancedToolsPage telemetryConsent={telemetryConsent} onActions={setActions} onTelemetryConsent={value => {

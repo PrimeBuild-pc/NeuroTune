@@ -2,6 +2,8 @@ import type { Messages } from '../i18n';
 
 // Simplified Chinese, Japanese, Spanish, Russian; English is the source text.
 export const appMessages: Messages = {
+  'Available models': ['可用模型', '利用可能なモデル', 'Modelos disponibles', 'Доступные модели'],
+  'Choose from the provider catalog, or enter an exact model ID below. Discovery does not verify diagnosis or image support.': ['从提供商目录中选择，或在下方输入准确的模型 ID。发现模型不代表已验证诊断或图像支持。', 'プロバイダーの一覧から選択するか、下に正確なモデル ID を入力してください。一覧の取得は診断や画像対応の検証ではありません。', 'Elige del catálogo del proveedor o introduce el ID exacto abajo. El descubrimiento no verifica diagnóstico ni soporte de imágenes.', 'Выберите из каталога провайдера или введите точный ID ниже. Получение списка не подтверждает диагностику или поддержку изображений.'],
   'Workspace': ['工作区', 'ワークスペース', 'Área de trabajo', 'Рабочая область'],
   'Diagnostics': ['诊断工具', '診断ツール', 'Diagnósticos', 'Диагностика'],
   'Preferences': ['偏好设置', '環境設定', 'Preferencias', 'Настройки'],
