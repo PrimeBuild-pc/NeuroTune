@@ -524,7 +524,7 @@ function App() {
         <Navigation items={navigation.map(item => ({ ...item, label: t(item.label) }))} page={page} onPage={setPage} disabled={Boolean(diagnosisProgress) || securityBusy} quiet={quietMotion}/>
         <div className="sidebar-foot">
           <div className="security-chip"><ShieldCheck size={16}/><span>{t("Allowlisted actions")}</span></div>
-          <small>v0.8.0-alpha.3</small><span className="compact-attribution">by PrimeBuild</span>
+          <small>v0.8.0-alpha.4</small><span className="compact-attribution">by PrimeBuild</span>
         </div>
       </aside>
 

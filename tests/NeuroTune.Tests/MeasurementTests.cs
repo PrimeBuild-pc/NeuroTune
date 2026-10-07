@@ -4,6 +4,7 @@ namespace NeuroTune.Tests;
 public sealed class MeasurementTests
 {
     [TestMethod]
+    [DoNotParallelize] // This fixture shares the recording store inspected by planner tests.
     public void Repeated_stop_of_a_finalized_session_does_not_restart_Wpr_or_corrupt_the_report()
     {
         var id = Guid.NewGuid();
