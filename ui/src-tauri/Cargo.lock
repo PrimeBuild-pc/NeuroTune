@@ -1804,7 +1804,7 @@ dependencies = [
 
 [[package]]
 name = "neurotune"
-version = "0.8.0-alpha.3"
+version = "0.8.0-alpha.4"
 dependencies = [
  "log",
  "serde",
