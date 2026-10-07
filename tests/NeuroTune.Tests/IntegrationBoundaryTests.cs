@@ -153,6 +153,41 @@ public sealed class IntegrationBoundaryTests
     }
 
     [TestMethod]
+    public void Simulated_MSI_setup_is_parsed_offline_without_promoting_defaults_or_executing_drivers()
+    {
+        var report = ScewinService.Import(new("""
+            // SIMULATED MSI export for tests, not physical-machine observations.
+            Setup Question = Precision Boost Overdrive
+            BIOS Default = [00]Auto
+            Options = [00]Auto
+                      *[01]Disabled
+            Setup Question = Global C-state Control
+            BIOS Default = [00]Enabled
+            Options = [00]Enabled
+            Setup Question = A-XMP
+            Options = *[01]Profile 1
+            Setup Question = CPU voltage offset
+            Value = <0x0064>
+            Setup Question = Ambiguous current state
+            Options = *[00]Enabled
+                      *[01]Disabled
+            Setup Question = Admin Password
+            Value = <abcd>
+            """, true));
+        Assert.HasCount(5, report.Settings);
+        Assert.AreEqual("[01]Disabled", report.Settings[0].CurrentValue);
+        Assert.IsNull(report.Settings[1].CurrentValue, "A BIOS default is not a current observation.");
+        Assert.AreEqual("[01]Profile 1", report.Settings[2].CurrentValue);
+        Assert.AreEqual("<0x0064>", report.Settings[3].CurrentValue);
+        Assert.IsNull(report.Settings[4].CurrentValue);
+        Assert.AreEqual(1, report.SensitiveQuestionsOmitted);
+        Assert.IsEmpty(report.ToolFiles, "Offline parsing must not depend on a privileged package or PawnIO.");
+        StringAssert.Contains(report.Source, "not verified");
+        Assert.IsTrue(report.Notes.Any(note => note.Contains("No tool or driver was executed", StringComparison.Ordinal)));
+        Assert.DoesNotContain("abcd", JsonSerializer.Serialize(report));
+    }
+
+    [TestMethod]
     public async Task Scewin_export_requires_fresh_hash_approval_and_has_no_write_or_force_argument()
     {
         CollectionAssert.AreEqual(new[] { "/o", "/s", "C:\\temporary\\nvram.txt" }, ScewinService.ExportArguments("C:\\temporary\\nvram.txt"));

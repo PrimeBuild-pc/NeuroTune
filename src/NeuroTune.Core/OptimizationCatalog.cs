@@ -99,10 +99,10 @@ public sealed class OptimizationCatalog
                 "Removes the explicit per-user Game Mode override and lets Windows manage its default.", "Gaming", RiskLevel.Low, false,
                 RegistryHive.CurrentUser, @"Software\Microsoft\GameBar", "AutoGameModeEnabled"),
             RegistryDword("gaming.hags", "Enable hardware GPU scheduling",
-                "Moves supported GPU scheduling work to dedicated hardware.", "Gaming", RiskLevel.Medium, true,
+                "Changes the HAGS preference only; actual support and activation depend on the physical GPU and driver.", "Gaming", RiskLevel.Medium, true,
                 RegistryHive.LocalMachine, @"SYSTEM\CurrentControlSet\Control\GraphicsDrivers", "HwSchMode", 2,
-                () => OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000) ? null : "Requires Windows 11",
-                stateLabel: value => value switch { 2 => "Enabled", 1 => "Disabled", _ => "Not configured" }),
+                InspectHagsCompatibility,
+                stateLabel: value => value switch { 2 => "Enabled preference (effective support unverified)", 1 => "Disabled preference", _ => "Not configured" }),
             RegistryDword("gaming.hags-off", "Disable hardware GPU scheduling",
                 "Explicitly disables hardware GPU scheduling for compatibility diagnosis.", "Gaming", RiskLevel.Medium, true,
                 RegistryHive.LocalMachine, @"SYSTEM\CurrentControlSet\Control\GraphicsDrivers", "HwSchMode", 1,
@@ -188,6 +188,18 @@ public sealed class OptimizationCatalog
         foreach (var action in actions) action.Definition.Validate();
         _actions = actions.ToDictionary(x => x.Id, StringComparer.OrdinalIgnoreCase);
     }
+
+    private static string? InspectHagsCompatibility()
+    {
+        if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000)) return "Requires Windows 11";
+        return HasPhysicalGraphicsAdapter(SystemProfiler.Query("SELECT PNPDeviceID FROM Win32_VideoController",
+            row => row["PNPDeviceID"]?.ToString() ?? "")) ? null
+            : "No physical PCI graphics adapter was observed. HAGS support is unavailable or unverified on this display stack.";
+    }
+
+    internal static bool HasPhysicalGraphicsAdapter(IEnumerable<string> deviceIds) => deviceIds.Any(id =>
+        id.StartsWith(@"PCI\", StringComparison.OrdinalIgnoreCase) &&
+        new[] { "VEN_10DE&", "VEN_1002&", "VEN_8086&" }.Any(vendor => id[4..].StartsWith(vendor, StringComparison.OrdinalIgnoreCase)));
 
     public IReadOnlyCollection<OptimizationAction> All => _actions.Values;
     public IReadOnlyCollection<ActionDefinition> Definitions => _actions.Values.Select(action => action.Definition).ToList();

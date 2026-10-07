@@ -17,6 +17,7 @@ const url = process.env.UI_PREVIEW_URL || 'http://127.0.0.1:4173/';
       // Test the glass path independently of the host's Windows transparency preference.
       await media.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-transparency', value: 'no-preference' }, { name: 'prefers-reduced-motion', value: startup === 'reduced' ? 'reduce' : 'no-preference' }] });
       await page.addInitScript(startup => {
+        localStorage.setItem('neurotune.setupReviewed.v1', 'true'); // Existing configured session; onboarding has its own check.
         const recording = startup === 'recording';
         const stateGate = new Promise(resolve => { window.releaseStartupState = resolve; });
         const bootGate = new Promise(resolve => { window.releaseStartupBoot = resolve; });
@@ -114,8 +115,8 @@ const url = process.env.UI_PREVIEW_URL || 'http://127.0.0.1:4173/';
         }
         // Advance JS frames deterministically: real CPU contention may skip a whole 220 ms animation.
         // Observe the first actual transform and freeze in that task to prove in-flight cancellation.
-        await page.clock.install();
-        await page.clock.pauseAt(new Date());
+        await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
+        await page.clock.pauseAt(new Date('2026-01-01T00:01:00Z')); // Future in the installed clock, even under CPU contention.
         await page.evaluate(() => {
           window.navigationMoved = false;
           const observer = new MutationObserver(() => {
