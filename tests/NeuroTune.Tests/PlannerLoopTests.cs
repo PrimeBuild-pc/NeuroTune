@@ -69,6 +69,106 @@ public sealed class PlannerLoopTests
     }
 
     [TestMethod]
+    [DataRow("{\"kind\":\"requestEvidence\",\"evidenceIds\":[\"unknown:fact\"]}", "The planner requested unknown or repeated evidence.", "evidence request")]
+    [DataRow("not-json-secret-response", "The planner envelope contains invalid JSON syntax.", "planner envelope")]
+    [DataRow("{\"kind\":\"secret-unknown-kind\"}", "The planner returned an unknown turn kind.", "planner envelope")]
+    [DataRow("{\"kind\":\"requestEvidence\"}", "The planner envelope is missing a required field.", "planner envelope")]
+    [DataRow("{\"kind\":\"requestInvestigation\",\"toolId\":\"memory-pressure\",\"question\":\"Check pressure\",\"module\":\"secret-module\"}", "This investigation tool does not accept a module parameter.", "planner envelope")]
+    [DataRow("{\"kind\":\"diagnosis\",\"diagnosis\":{\"summary\":\"Report\",\"findings\":[{\"title\":\"CPU\",\"evidenceId\":\"system:cpu\",\"currentValue\":\"secret-invented-value\",\"assessment\":\"Observed\"}],\"recommendations\":[],\"consentQuestion\":\"Review?\"}}", "The model cited evidence that was not present in the local scan.", "diagnosis validation")]
+    public async Task Local_validation_retains_only_known_safe_reasons_and_the_failed_stage(string response, string reason, string stage)
+    {
+        var (listener, server, settings) = StartServer([response]);
+        settings.Model = "deepseek-v4-flash"; // Mock compatible endpoint, never a real provider call.
+        using (listener)
+        {
+            var outcome = await new LlmClient(new OptimizationCatalog()).PlanAsync(new SystemProfile { Cpu = "CPU" }, new TuningGoals(), settings, null);
+            await server;
+            Assert.IsTrue(outcome.UsedLocalFallback);
+            Assert.HasCount(1, outcome.Audit);
+            Assert.Contains(reason, outcome.Audit.Single().Reason);
+            Assert.Contains(stage, outcome.Audit.Single().Reason);
+            Assert.Contains(reason, outcome.Diagnosis.Summary);
+            Assert.DoesNotContain("secret-", JsonSerializer.Serialize(outcome));
+            Assert.HasCount(0, outcome.Diagnosis.Recommendations);
+        }
+    }
+
+    [TestMethod]
+    [DataRow(0, "The planner requested no usable evidence facts.")]
+    [DataRow(41, "The planner exceeded the 40-fact evidence request limit.")]
+    public async Task Evidence_request_limits_have_specific_safe_reasons_without_accepting_partial_requests(int count, string reason)
+    {
+        var response = JsonSerializer.Serialize(new { kind = "requestEvidence", evidenceIds = Enumerable.Range(0, count).Select(i => $"gaming:fact-{i}").ToArray() });
+        var (listener, server, settings) = StartServer([response]);
+        using (listener)
+        {
+            var outcome = await new LlmClient(new OptimizationCatalog()).PlanAsync(new SystemProfile { Cpu = "CPU" }, new TuningGoals(), settings, null);
+            await server;
+            Assert.IsTrue(outcome.UsedLocalFallback);
+            Assert.HasCount(1, outcome.Audit);
+            Assert.Contains(reason, outcome.Audit.Single().Reason);
+            Assert.HasCount(0, outcome.Diagnosis.Recommendations);
+        }
+    }
+
+    [TestMethod]
+    [DataRow(LlmProvider.DeepSeek, true)]
+    [DataRow(LlmProvider.OpenAI, false)]
+    [DataRow(LlmProvider.OpenRouter, false)]
+    [DataRow(LlmProvider.Local, false)]
+    public async Task Only_DeepSeek_requests_its_documented_JSON_output_mode(LlmProvider provider, bool enabled)
+    {
+        var settings = LlmClient.Defaults(provider); settings.Model = "selected-model";
+        using var request = LlmClient.CreateOpenAiRequest(settings, "mock-key", "Return JSON only");
+        using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync());
+        Assert.AreEqual(enabled, body.RootElement.TryGetProperty("response_format", out var format));
+        if (enabled)
+        {
+            Assert.AreEqual("json_object", format.GetProperty("type").GetString());
+            Assert.AreEqual("system", body.RootElement.GetProperty("messages")[0].GetProperty("role").GetString());
+            Assert.Contains("evidenceIds", body.RootElement.GetProperty("messages")[0].GetProperty("content").GetString()!);
+        }
+        Assert.AreEqual("Return JSON only", body.RootElement.GetProperty("messages")[enabled ? 1 : 0].GetProperty("content").GetString());
+        Assert.AreEqual("selected-model", body.RootElement.GetProperty("model").GetString());
+    }
+
+    [TestMethod]
+    public async Task Unexpected_local_errors_remain_private_and_do_not_trigger_another_request()
+    {
+        var (listener, server, settings) = StartServer(["""{"kind":"requestInvestigation","toolId":"memory-pressure","question":"Check pressure"}"""]);
+        using (listener)
+        {
+            var outcome = await new LlmClient(new OptimizationCatalog()).PlanAsync(new SystemProfile { Cpu = "CPU" }, new TuningGoals(), settings, null,
+                investigate: (_, _) => throw new InvalidOperationException("secret-token-and-host-path"));
+            await server;
+            Assert.IsTrue(outcome.UsedLocalFallback);
+            Assert.HasCount(1, outcome.Audit);
+            Assert.Contains("failed local validation", outcome.Audit.Single().Reason);
+            Assert.Contains("read-only follow-up", outcome.Audit.Single().Reason);
+            Assert.DoesNotContain("secret-token", JsonSerializer.Serialize(outcome));
+        }
+    }
+
+    [TestMethod]
+    public void Planner_request_catalog_excludes_delivered_facts_but_keeps_them_citable()
+    {
+        var available = new Dictionary<string, string> { ["system:cpu"] = "CPU", ["gaming:Game Mode"] = "1" };
+        var provided = new Dictionary<string, string> { ["system:cpu"] = "CPU" };
+        Check(["gaming:Game Mode"]);
+        provided["gaming:Game Mode"] = "1";
+        Check([]);
+        void Check(string[] expected)
+        {
+            var prompt = LlmClient.BuildPlannerPrompt(new TuningGoals(), available, provided, [], "[]", [], [], 1, 12, 10, [], null, InvestigationMode.MeasuredOptimization);
+            var section = prompt.Split("AVAILABLE EVIDENCE IDS AND PRIVACY CLASSES:", StringSplitOptions.None)[1].Split("PROVIDED EVIDENCE:", StringSplitOptions.None)[0].Trim();
+            using var catalog = JsonDocument.Parse(section);
+            CollectionAssert.AreEqual(expected, catalog.RootElement.EnumerateArray().Select(x => x.GetProperty("id").GetString()!).ToArray());
+            Assert.Contains(JsonSerializer.Serialize(provided), prompt);
+            Assert.Contains("OMIT module entirely", prompt);
+        }
+    }
+
+    [TestMethod]
     public void Conflict_references_cannot_bypass_initial_evidence_privacy()
     {
         var facts = new Dictionary<string, string>
