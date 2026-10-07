@@ -32,7 +32,9 @@ Include the affected version, reproduction steps, expected impact, and a contact
 
 NeuroTune currently runs with administrator privileges because it changes system settings. A compromised Windows account or tampered executable can bypass application-level controls. Alpha builds are unsigned and must be checked against the SHA-256 value produced by the build pipeline.
 
-Legacy `%LocalAppData%\NeuroTune\operations` and `runs` journals are not automatically imported or trusted. Before upgrading, finish/review recovery with the previous build and archive these directories only after preserving independent backups and resolving old writes. The new build blocks journal operations while legacy entries remain. Do not copy legacy JSON into the protected store or delete pending recovery data to bypass this gate.
+Legacy `%LocalAppData%\NeuroTune\operations` and `runs` journals are not automatically imported or trusted. Before upgrading, finish/review recovery with the previous build and archive these directories only after preserving independent backups and resolving old writes. The new build blocks journal operations while legacy entries remain, including manifests that claim a completed rollback: those unprotected fields are not proof of current Windows state. Do not copy legacy JSON into the protected store or delete pending recovery data to bypass this gate.
+
+Complete diagnosis checks journal access before collection, WPR or AI. A journal access failure does not discard the configured provider; the interface displays the native error with all blocking legacy paths for the Windows account running the agent. After external manual review and archiving, use **Refresh** to recheck. Moving only `operations` does not unblock a nonempty `runs`; copying a backup without moving the reviewed originals or reinstalling does not clear the gate. Empty ordinary legacy directories are allowed. This behavior is independent of virtualization.
 
 PresentMon imports require process attribution but remain user-supplied data with unverified session provenance. Missing metric coverage or hard-fault collection cannot justify a favorable Keep recommendation.
 

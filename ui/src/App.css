@@ -69,6 +69,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .notice.danger { color: var(--danger-text); border-color: var(--danger-border); background: var(--danger-soft); }
 .notice.info { color: var(--accent-text); border-color: var(--accent-border); background: var(--accent-soft); }
 .notice > button:not(.secondary) { flex-shrink: 0; width: 32px; height: 32px; border: 0; border-radius: 6px; background: transparent; cursor: pointer; font-size: 20px; }
+.notice > button.secondary { flex-shrink: 0; white-space: nowrap; }
 .notice > button:hover { background: color-mix(in srgb, currentColor 8%, transparent); }
 .busy-bar { display: flex; align-items: center; gap: 8px; margin: 12px 34px 0; color: var(--accent-text); font-size: 12px; font-weight: 650; }
 .busy-bar button { min-height: 32px; margin-left: auto; padding-block: 5px; }

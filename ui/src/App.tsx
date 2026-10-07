@@ -89,6 +89,7 @@ function App() {
   const [actions, setActions] = useState<OptimizationAction[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [history, setHistory] = useState<OperationManifest[]>([]);
+  const [journalError, setJournalError] = useState<string>();
   const [measurementEvidenceIds, setMeasurementEvidenceIds] = useState<Set<string>>(new Set());
   const [activeRun, setActiveRun] = useState<OptimizationRun>();
   const [preparingBaseline, setPreparingBaseline] = useState(false);
@@ -165,9 +166,8 @@ function App() {
         return state;
       }),
       agent<OptimizationAction[]>('actions'),
-      agent<OperationManifest[]>('history'),
-      agent<OptimizationRun[]>('run-list'),
-    ]).then(async ([state, availableActions, operations, runs]) => {
+      loadJournals().catch(() => ({ operations: [], runs: [] })),
+    ]).then(async ([state, availableActions, { operations, runs }]) => {
       setProvider(state.settings);
       setHasCredential(state.hasCredential);
       setChatGptAccounts(state.chatGptAccounts ?? []);
@@ -197,12 +197,12 @@ function App() {
 
   const providerConfigured = Boolean(provider.model.trim() && (hasCredential || !provider.requiresApiKey));
   const runPending = Boolean(activeRun && !['completed', 'failed'].includes(activeRun.state));
-  const diagnosisBlockedReason = pendingRecovery || activeRun?.requiresRecovery ? 'Review recovery before starting another diagnosis.'
+  const diagnosisBlockedReason = journalError || pendingRecovery || activeRun?.requiresRecovery ? 'Review recovery before starting another diagnosis.'
     : recording ? 'A capture is active. Stop or finish it in Measurements before starting another diagnosis.'
     : runPending ? 'Finish the retained diagnosis without changes, or continue its review before starting another.'
     : busy || securityBusy ? 'Wait for the current operation to finish.'
     : !providerConfigured ? 'Select a model and configure its provider before starting diagnosis.' : undefined;
-  const nextOverviewAction = pendingRecovery || activeRun?.requiresRecovery
+  const nextOverviewAction = journalError || pendingRecovery || activeRun?.requiresRecovery
     ? { label: 'Review recovery', onClick: () => setPage('activity') }
     : recording ? { label: 'Measurements', onClick: () => setPage('measurements') }
     : scanRequestId ? { label: 'Local evidence', onClick: () => setPage('advanced') }
@@ -213,6 +213,24 @@ function App() {
     : activeRun.requiresRecovery ? 'Review recovery before starting another diagnosis.'
     : ['scanned', 'hypothesizing', 'proposalReady', 'baselinePending', 'baselineReady'].includes(activeRun.state) ? 'Apply requires three matching quality-valid workload baselines in this run.'
     : 'Continue this run in Measurements or Activity & restore; action approval is closed.';
+
+  async function loadJournals() {
+    try {
+      const [operations, runs] = await Promise.all([
+        agent<OperationManifest[]>('history'), agent<OptimizationRun[]>('run-list'),
+      ]);
+      setJournalError(undefined);
+      return { operations, runs };
+    } catch (error) { setJournalError(String(error)); throw error; }
+  }
+
+  async function refreshJournals() {
+    const result = await run('Refreshing local session history…', loadJournals);
+    if (result) {
+      setHistory(result.operations);
+      hydrateRun(result.runs.find(item => !['completed', 'failed'].includes(item.state)));
+    }
+  }
 
   function showError(error: unknown) {
     setNotice({ tone: 'danger', text: error instanceof Error ? error.message : String(error), raw: true });
@@ -387,7 +405,7 @@ function App() {
     } catch (error) {
       showError(error);
       try { const runs = await agent<OptimizationRun[]>('run-list'); hydrateRun(runs.find(item => !['completed', 'failed'].includes(item.state))); }
-      catch (reason) { showError(reason); }
+      catch (reason) { setJournalError(String(reason)); showError(reason); }
     } finally { auditReview.current = undefined; setAuditPreview(undefined); completeFlow.current = undefined; setDiagnosisProgress(undefined); }
   }
 
@@ -396,6 +414,7 @@ function App() {
     if (diagnosisRequest.current) return;
     const requestId = newRequestId(); diagnosisRequest.current = requestId;
     try {
+    if (!await run('Checking local recovery journals before collection…', loadJournals)) return;
     let baselineIds = [...measurementEvidenceIds];
     const runMode = activeRun && !['completed', 'failed'].includes(activeRun.state) ? activeRun.mode ?? 'measuredOptimization' : mode;
     if (runMode === 'auditOnly') {
@@ -518,6 +537,7 @@ function App() {
 
         {notice && <div className={`notice ${notice.tone}`} role="status"><span>{notice.raw ? notice.text : t(notice.text, notice.values)}</span><button aria-label={t("Dismiss message")} onClick={() => setNotice(undefined)}>×</button></div>}
         {busy && <div className="busy-bar" role="status"><LoaderCircle size={16} className="spin"/><span>{t(busy, busyValues)}</span>{scanRequestId && <button className="ghost" onClick={cancelScan}><X size={14}/>{t("Cancel scan")}</button>}</div>}
+        {journalError && <div className="notice danger" role="alert"><div><strong>{t('Review recovery')}</strong><p>{journalError}</p></div><button className="secondary" disabled={Boolean(recording || busy || securityBusy || diagnosisProgress)} onClick={() => void refreshJournals()}>{t('Refresh')}</button></div>}
         {pendingRecovery && <div className="recovery-banner" role="alert"><div><RotateCcw size={18}/><span><strong>{t("An interrupted operation needs attention.")}</strong><small>{pendingRecovery.id}</small></span></div><button className="secondary" onClick={() => setPage('activity')}>{t("Review recovery")}</button></div>}
 
         {activeRun && !activeRun.operationId && !activeRun.requiresRecovery && !['completed', 'failed'].includes(activeRun.state) && !diagnosisProgress && <div className="notice info"><span>{t("A proposal or interrupted diagnosis is retained. No new diagnosis can replace it until you finish or decline it.")}</span><button className="secondary" disabled={Boolean(busy)} onClick={() => { void dismissDiagnosis(); }}>{t("Finish without changes")}</button></div>}
@@ -529,7 +549,7 @@ function App() {
           {page === 'advanced' && <ScanPage mode={mode} onMode={value => { if (!busy && (!activeRun || ['completed', 'failed'].includes(activeRun.state))) setMode(value); }} scan={scan} diagnosis={displayedDiagnosis} goals={goals} scanning={Boolean(scanRequestId)} onGoals={setGoals} onScan={scanSystem} onDiagnose={diagnose}/>}
           {page === 'measurements' && <MeasurementsPage evidenceIds={measurementEvidenceIds} onEvidenceIds={setMeasurementEvidenceIds} optimizationRun={preparingBaseline ? undefined : activeRun} onRun={setActiveRun} preparingBaseline={preparingBaseline} onBaselinePrepared={() => { void diagnose(); }} analysisGoals={goals} onRecording={setRecording}/>}
           {page === 'review' && <ReviewPage onDiagnosis={() => setPage(providerConfigured ? 'scan' : 'provider')} investigationFailed={Boolean(diagnosis && diagnosis === localDiagnosis.current)} applyBlockedReason={applyBlockedReason} auditOnly={activeRun?.mode === 'auditOnly'} auditEvidence={activeRun?.evidenceFacts} diagnosis={displayedDiagnosis} supporting={activeRun?.supportingAttachments} actions={actions} recommendations={recommendations} selected={selected} riskProfile={goals.riskProfile} canApply={activeRun?.mode !== 'auditOnly' && activeRun?.state === 'baselineReady'} onToggle={id => setSelected(current => toggle(current, id))} onPreset={applyPreset} onApply={applyChanges} onDismiss={activeRun && !activeRun.operationId && !activeRun.requiresRecovery && !['completed', 'failed'].includes(activeRun.state) ? () => { void dismissDiagnosis(); } : undefined}/>}
-          {page === 'activity' && <ActivityPage history={history} onRefresh={async () => setHistory(await agent<OperationManifest[]>('history'))} onRollback={rollback}/>}
+          {page === 'activity' && !journalError && <ActivityPage history={history} onRefresh={() => void refreshJournals()} onRollback={rollback}/>}
           {page === 'settings' && <SettingsPage theme={theme} onTheme={setTheme}/>}
           {(page === 'tools' || toolsOpened) && <div hidden={page !== 'tools'}><AdvancedToolsPage telemetryConsent={telemetryConsent} onActions={setActions} onTelemetryConsent={value => {
             setTelemetryConsent(value);

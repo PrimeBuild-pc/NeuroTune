@@ -202,6 +202,7 @@ export const appMessages: Messages = {
   'Network latency (ms)': ['网络延迟（毫秒）', 'ネットワーク遅延（ms）', 'Latencia de red (ms)', 'Задержка сети (мс)'],
   'Packet loss (%)': ['丢包率（%）', 'パケット損失（%）', 'Pérdida de paquetes (%)', 'Потеря пакетов (%)'],
   'Measurement notes': ['测量备注', '測定のメモ', 'Notas de medición', 'Примечания к измерениям'],
+  'Checking local recovery journals before collection…': ['收集前检查本地恢复日志…', '収集前にローカルの復旧記録を確認中…', 'Comprobando los registros locales de recuperación antes de recopilar…', 'Проверка локальных журналов восстановления перед сбором…'],
   'Refreshing local session history…': ['正在刷新本地会话历史…', 'ローカルのセッション履歴を更新中…', 'Actualizando el historial local de sesiones…', 'Обновление локальной истории сеансов…'],
   'Stopping and saving the trace…': ['正在停止并保存跟踪…', 'トレースを停止し保存中…', 'Deteniendo y guardando la traza…', 'Остановка и сохранение трассировки…'],
   'Cancelling and deleting incomplete data…': ['正在取消并删除不完整数据…', 'キャンセルし、不完全なデータを削除中…', 'Cancelando y eliminando datos incompletos…', 'Отмена и удаление неполных данных…'],

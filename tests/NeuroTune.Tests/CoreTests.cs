@@ -769,9 +769,27 @@ public sealed class CoreTests
             var store = new JournalStorage(root);
             Assert.ThrowsExactly<InvalidOperationException>(() => store.CheckPath(Path.Combine(root, "..", "outside.json")));
             JournalStorage.RequireNoLegacyJournals(root);
-            Directory.CreateDirectory(Path.Combine(root, "operations", "old-operation"));
-            Assert.ThrowsExactly<InvalidOperationException>(() => JournalStorage.RequireNoLegacyJournals(root));
-            Assert.IsEmpty(Directory.GetFiles(root, "*", SearchOption.AllDirectories));
+            var operations = Path.Combine(root, "operations");
+            var runs = Path.Combine(root, "runs");
+            Directory.CreateDirectory(operations);
+            JournalStorage.RequireNoLegacyJournals(root); // Empty legacy directories do not block.
+            var oldOperation = Path.Combine(operations, "old-operation");
+            Directory.CreateDirectory(oldOperation);
+            var manifestPath = Path.Combine(oldOperation, "manifest.json");
+            const string legacyManifest = """{"Status":"Rollback completed","Actions":[{"Applied":true,"RolledBack":true}]}""";
+            File.WriteAllText(manifestPath, legacyManifest);
+            Directory.CreateDirectory(Path.Combine(runs, "old-run"));
+            var error = Assert.ThrowsExactly<InvalidOperationException>(() => JournalStorage.RequireNoLegacyJournals(root));
+            StringAssert.Contains(error.Message, operations);
+            StringAssert.Contains(error.Message, runs);
+            Assert.AreEqual(legacyManifest, File.ReadAllText(manifestPath)); // Unprotected rollback claims are never trusted or rewritten.
+            Assert.HasCount(1, Directory.GetFiles(root, "*", SearchOption.AllDirectories));
+            Directory.Move(operations, Path.Combine(root, "operations-reviewed-backup"));
+            error = Assert.ThrowsExactly<InvalidOperationException>(() => JournalStorage.RequireNoLegacyJournals(root));
+            StringAssert.Contains(error.Message, runs);
+            Assert.IsFalse(error.Message.Contains(operations, StringComparison.Ordinal));
+            Directory.Move(runs, Path.Combine(root, "runs-reviewed-backup"));
+            JournalStorage.RequireNoLegacyJournals(root);
         }
         finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
     }
