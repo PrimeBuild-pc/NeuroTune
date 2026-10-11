@@ -178,6 +178,7 @@ public sealed class OptimizationCatalog
         };
         actions.Add(PageFileManagedSizes());
         actions.Add(CoreParkingOff());
+        actions.AddRange(DeviceControl.Actions(DeviceControl.Machine));
         if (includeDynamic)
         {
             foreach (var target in GameGpuTargetStore.Load()) actions.AddRange(PerAppGpuPreferences(target));

@@ -8,7 +8,7 @@ internal static class WindowsCommand
     internal static string PathFor(string name)
     {
         if (name is not ("powercfg.exe" or "bcdedit.exe" or "reg.exe" or "powershell.exe" or
-            "fsutil.exe" or "fltmc.exe" or "netsh.exe" or "netcfg.exe" or "wpr.exe"))
+            "fsutil.exe" or "fltmc.exe" or "netsh.exe" or "netcfg.exe" or "wpr.exe" or "pnputil.exe"))
             throw new InvalidOperationException("The Windows executable is not allowlisted.");
         var system = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows),
             Environment.Is64BitOperatingSystem && !Environment.Is64BitProcess ? "Sysnative" : "System32");
