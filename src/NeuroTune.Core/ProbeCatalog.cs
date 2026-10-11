@@ -142,6 +142,23 @@ public static class ProbeCatalog
         AuditProbe(RegistryProbeHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU", "NoAutoUpdate", "Automatic-update policy snapshot; do not disable security updates for privacy."),
     ];
 
+    // Hardening/exposure readers for the compromise-review preset. Snapshots only; no associated write capability.
+    public static IReadOnlyList<ProbeDefinition> HardeningRegistry { get; } =
+    [
+        AuditProbe(RegistryProbeHive.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Terminal Server", "fDenyTSConnections", "Remote Desktop switch; 0 means connections are allowed, not that the port is reachable."),
+        AuditProbe(RegistryProbeHive.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp", "UserAuthentication", "Remote Desktop Network Level Authentication requirement snapshot."),
+        AuditProbe(RegistryProbeHive.LocalMachine, @"SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters", "SMB1", "SMBv1 server switch; not configured follows the Windows build default."),
+        AuditProbe(RegistryProbeHive.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Lsa", "RunAsPPL", "LSA protected-process setting; absence is edition/build dependent, not proof of exposure."),
+        AuditProbe(RegistryProbeHive.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Lsa", "RestrictAnonymous", "Anonymous enumeration restriction snapshot."),
+        AuditProbe(RegistryProbeHive.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Lsa", "LmCompatibilityLevel", "LAN Manager authentication level; legacy values weaken network authentication."),
+        AuditProbe(RegistryProbeHive.LocalMachine, @"SYSTEM\CurrentControlSet\Control\SecurityProviders\WDigest", "UseLogonCredential", "WDigest cleartext-credential caching switch; 1 is a known hardening gap."),
+        AuditProbe(RegistryProbeHive.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System", "EnableLUA", "UAC enablement snapshot."),
+        AuditProbe(RegistryProbeHive.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System", "ConsentPromptBehaviorAdmin", "UAC elevation prompt behavior for administrators; 0 elevates without prompting."),
+        AuditProbe(RegistryProbeHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging", "EnableScriptBlockLogging", "PowerShell script-block logging policy; affects forensic visibility, not exposure."),
+        AuditProbe(RegistryProbeHive.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer", "NoDriveTypeAutoRun", "AutoRun/AutoPlay drive-type mask snapshot."),
+        AuditProbe(RegistryProbeHive.LocalMachine, @"SOFTWARE\Policies\Microsoft\Windows NT\DNSClient", "EnableMulticast", "LLMNR policy; 0 disables it, not configured follows the Windows default."),
+    ];
+
     private static ProbeDefinition AuditProbe(RegistryProbeHive hive, string path, string name, string interpretation,
         RegistryValueType type = RegistryValueType.DWord) => new($"registry:{(hive == RegistryProbeHive.CurrentUser ? "HKCU" : "HKLM")}\\{path}\\{name}", "Privacy/security audit", hive, path, name, type, interpretation);
 }

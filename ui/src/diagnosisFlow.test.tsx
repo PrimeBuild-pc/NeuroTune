@@ -131,6 +131,9 @@ describe('complete diagnosis lifecycle', () => {
     const measured = harness();
     await measured.flow.execute({ ...input, goals: { ...goals, priority: 'privacySecurity' } });
     expect(measured.calls.filter(command => command === 'measurement-start')).toHaveLength(3);
+    const review = harness();
+    await review.flow.execute({ ...input, goals: { ...goals, priority: 'compromiseReview' } });
+    expect((review.requests.find(item => item.command === 'scan')?.payload as { privacySecurityReadConsent: boolean } | undefined)?.privacySecurityReadConsent).toBe(true);
     const failed = harness({ failedProvider: true });
     const incomplete = await failed.flow.execute({ ...input, mode: 'auditOnly' });
     expect(incomplete.run.usedLocalFallback).toBe(true); expect(incomplete.run.state).toBe('hypothesizing');

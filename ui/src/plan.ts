@@ -7,6 +7,7 @@ const analysisPresets: Array<{ id: OptimizationPriority; label: string; detail: 
   { id: 'networkLatency', label: 'Network optimization', detail: 'Investigate latency, jitter, loss, disconnections or throughput, distinguishing the PC, local network and external path.' },
   { id: 'stability', label: 'System stability', detail: 'Investigate crashes, freezes, resets and recurring errors, distinguishing symptoms, hypotheses and causes to verify.' },
   { id: 'privacySecurity', label: 'Windows privacy & security', detail: 'Investigate data collection, protections and detections. The preset starts no tweak, scanner or removal.' },
+  { id: 'compromiseReview', label: 'Vulnerability & compromise review', detail: 'Look for exposure and compromise indicators as hypotheses, never as a verdict. The preset starts no scanner, removal or process kill.' },
   { id: 'fps', label: 'Frame rate (legacy)', detail: 'Keep the saved run’s FPS focus; it is not converted to another objective.', legacy: true },
   { id: 'efficiency', label: 'Efficiency (legacy)', detail: 'Keep the saved run’s energy focus; it is not converted to another objective.', legacy: true },
 ];
