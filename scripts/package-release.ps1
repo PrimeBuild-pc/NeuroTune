@@ -15,6 +15,8 @@ $version = [string]$config.version
 $releaseDirectory = Join-Path $root 'ui/src-tauri/target/release'
 $mainExecutable = Join-Path $releaseDirectory 'neurotune.exe'
 $agentDirectory = Join-Path $releaseDirectory 'agent'
+$piDirectory = Join-Path $agentDirectory 'pi'
+$piFiles = @('node.exe', 'agent.mjs', 'LICENSE-node.txt', 'LICENSE-pi.txt', 'agent.mjs.LEGAL.txt')
 $installer = Get-ChildItem -LiteralPath (Join-Path $releaseDirectory 'bundle/nsis') -Filter "NeuroTune_${version}_*-setup.exe" | Select-Object -First 1
 
 $required = @(
@@ -25,9 +27,12 @@ $required = @(
     (Join-Path $root 'LICENSE'),
     (Join-Path $root 'README.md'),
     (Join-Path $root 'RELEASE_NOTES.md')
-)
+) + @($piFiles | ForEach-Object { Join-Path $piDirectory $_ })
 foreach ($path in $required) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Required release file is missing: $path" }
+}
+foreach ($file in $piFiles) {
+    if ((Get-Item -LiteralPath (Join-Path $piDirectory $file)).Length -eq 0) { throw "Pi release file is empty: $file" }
 }
 if (-not $installer) { throw "NSIS installer for v$version was not found." }
 
@@ -43,6 +48,7 @@ Copy-Item -LiteralPath $mainExecutable -Destination (Join-Path $portableRoot 'Ne
 Copy-Item -LiteralPath (Join-Path $agentDirectory 'NeuroTune.Agent.exe') -Destination (Join-Path $portableRoot 'agent/NeuroTune.Agent.exe')
 Copy-Item -LiteralPath (Join-Path $agentDirectory 'NeuroTune.Telemetry.exe') -Destination (Join-Path $portableRoot 'agent/NeuroTune.Telemetry.exe')
 Copy-Item -LiteralPath (Join-Path $agentDirectory 'NeuroTuneLatency.wprp') -Destination (Join-Path $portableRoot 'agent/NeuroTuneLatency.wprp')
+Copy-Item -LiteralPath $piDirectory -Destination (Join-Path $portableRoot 'agent/pi') -Recurse
 Copy-Item -LiteralPath (Join-Path $root 'LICENSE') -Destination $portableRoot
 Copy-Item -LiteralPath (Join-Path $root 'README.md') -Destination $portableRoot
 Copy-Item -LiteralPath (Join-Path $root 'RELEASE_NOTES.md') -Destination $portableRoot
@@ -58,7 +64,8 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 $archive = [System.IO.Compression.ZipFile]::OpenRead($zip)
 try {
     $entries = $archive.Entries.FullName -replace '\\', '/'
-    foreach ($relative in @('NeuroTune.exe', 'agent/NeuroTune.Agent.exe', 'agent/NeuroTune.Telemetry.exe', 'agent/NeuroTuneLatency.wprp', 'LICENSE')) {
+    $requiredEntries = @('NeuroTune.exe', 'agent/NeuroTune.Agent.exe', 'agent/NeuroTune.Telemetry.exe', 'agent/NeuroTuneLatency.wprp', 'LICENSE') + @($piFiles | ForEach-Object { "agent/pi/$_" })
+    foreach ($relative in $requiredEntries) {
         $expected = "$portableName/$relative"
         if ($entries -notcontains $expected) { throw "Portable archive is incomplete: $expected is missing." }
     }

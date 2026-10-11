@@ -36,7 +36,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
       };
     });
     await page.goto(process.env.UI_PREVIEW_URL || 'http://127.0.0.1:4173/');
-    await page.locator('#startup').waitFor({ state: 'detached' });
+    await page.locator('#startup').waitFor({ state: 'detached' }); await page.getByRole('button', { name: 'Skip without changing permissions', exact: true }).click({ timeout: 3000 }).catch(() => {});
     await page.getByRole('navigation').getByRole('button', { name: 'Complete diagnosis', exact: true }).click();
     await page.getByRole('radio', { name: /^Advisory audit/ }).check();
     await page.getByRole('button', { name: 'Start AI audit · no changes', exact: true }).click();
@@ -57,7 +57,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
       fs.mkdirSync('artifacts', { recursive: true });
       await page.screenshot({ path: `artifacts/provider-failure-${theme}.png`, fullPage: true });
     }
-    await page.reload(); await page.locator('#startup').waitFor({ state: 'detached' });
+    await page.reload(); await page.locator('#startup').waitFor({ state: 'detached' }); await page.getByRole('button', { name: 'Skip without changing permissions', exact: true }).click({ timeout: 3000 }).catch(() => {});
     await page.getByRole('heading', { name: 'AI investigation unavailable', exact: true }).waitFor();
     assert.equal(await page.evaluate(() => window.requests.includes('diagnose')), false, 'Restart must not retry inference');
     await page.getByLabel('Review decision', { exact: true }).getByRole('button', { name: 'Finish without changes', exact: true }).click();

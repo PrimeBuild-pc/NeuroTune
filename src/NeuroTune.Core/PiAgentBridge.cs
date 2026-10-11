@@ -1,0 +1,83 @@
+using System.Text;
+using System.Text.Json;
+
+namespace NeuroTune;
+
+// Pi is a short-lived non-admin child; credentials and provider requests stay in the host.
+internal static class PiAgentBridge
+{
+    internal static async Task RunAsync(int maxTurns, Func<int, Task<string>> generate,
+        Func<int, string, Task<bool>> handle, CancellationToken cancellationToken)
+    {
+        var directory = Path.Combine(AppContext.BaseDirectory, "pi");
+        var executable = Path.Combine(directory, "node.exe");
+        var script = Path.Combine(directory, "agent.mjs");
+        SystemOneService.CheckDirectory(directory);
+        if (!File.Exists(executable) || !File.Exists(script))
+            throw new InvalidOperationException("The bundled Pi agent runtime is missing. Rebuild/reinstall NeuroTune; no alternate agent was used.");
+        foreach (var path in new[] { executable, script })
+            if (File.GetAttributes(path).HasFlag(FileAttributes.ReparsePoint)) throw new IOException("Linked Pi runtime files are not accepted.");
+        var environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in new[] { "SystemRoot", "WINDIR", "TEMP", "TMP" })
+            if (Environment.GetEnvironmentVariable(name) is { } value) environment[name] = value;
+        await OptionalWorkerProcess.RunAsync(executable, [script], directory, "", environment,
+            TimeSpan.FromMinutes(31), null, cancellationToken,
+            (reader, writer, token) => ExchangeAsync(reader, writer, maxTurns, generate, handle, token));
+    }
+
+    internal static async Task<string> ExchangeAsync(StreamReader reader, StreamWriter writer, int maxTurns,
+        Func<int, Task<string>> generate, Func<int, string, Task<bool>> handle, CancellationToken cancellationToken)
+    {
+        await WriteAsync(new { maxTurns });
+        var turn = 0; var expectedId = 1; var awaitingHandle = false; var finished = false;
+        string? pendingResponse = null;
+        while (true)
+        {
+            var line = await ReadFrameAsync(reader, cancellationToken);
+            using var frame = JsonDocument.Parse(line);
+            var root = frame.RootElement;
+            var type = root.GetProperty("type").GetString();
+            if (type == "done")
+            {
+                if (awaitingHandle || (!finished && turn != maxTurns)) throw new InvalidOperationException("Pi exited before completing the investigation.");
+                writer.Close();
+                return "";
+            }
+            if (finished || root.GetProperty("id").GetInt32() != expectedId++) throw new InvalidOperationException("Invalid Pi request correlation.");
+            var requestedTurn = root.GetProperty("turn").GetInt32();
+            if (type == "generate" && !awaitingHandle && requestedTurn == turn + 1 && requestedTurn <= maxTurns)
+            {
+                turn = requestedTurn; awaitingHandle = true;
+                pendingResponse = await generate(turn);
+                await WriteAsync(new { id = expectedId - 1, response = pendingResponse });
+            }
+            else if (type == "handle" && awaitingHandle && requestedTurn == turn)
+            {
+                var response = root.GetProperty("response").GetString() ?? throw new InvalidOperationException("Missing Pi envelope.");
+                if (response != pendingResponse) throw new InvalidOperationException("Pi changed the provider envelope.");
+                finished = await handle(turn, response); awaitingHandle = false; pendingResponse = null;
+                await WriteAsync(new { id = expectedId - 1, finished });
+            }
+            else throw new InvalidOperationException("Invalid Pi turn sequence or investigation budget.");
+        }
+        async Task WriteAsync(object value)
+        {
+            await writer.WriteLineAsync(JsonSerializer.Serialize(value).AsMemory(), cancellationToken);
+            await writer.FlushAsync(cancellationToken);
+        }
+    }
+
+    private static async Task<string> ReadFrameAsync(StreamReader reader, CancellationToken cancellationToken)
+    {
+        var text = new StringBuilder(); var buffer = new char[1];
+        while (await reader.ReadAsync(buffer.AsMemory(), cancellationToken) != 0)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (buffer[0] == '\n') return text.ToString();
+            if (text.Length >= 2_000_000) throw new InvalidOperationException("Pi frame exceeds its safety limit.");
+            text.Append(buffer[0]);
+        }
+        cancellationToken.ThrowIfCancellationRequested();
+        throw new InvalidOperationException("Pi closed its protocol before completion.");
+    }
+}

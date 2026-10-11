@@ -35,7 +35,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
       };
     });
     await page.goto(process.env.UI_PREVIEW_URL || 'http://127.0.0.1:4173/');
-    await page.locator('#startup').waitFor({ state: 'detached' });
+    await page.locator('#startup').waitFor({ state: 'detached' }); await page.getByRole('button', { name: 'Skip without changing permissions', exact: true }).click({ timeout: 3000 }).catch(() => {});
     assert.equal(await page.locator('html').getAttribute('lang'), 'en');
     const navSecurity = page.getByRole('navigation').getByRole('button', { name: 'Privacy & security', exact: true });
     assert.equal(await navSecurity.isVisible(), true); await navSecurity.click();
@@ -65,7 +65,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
         await page.screenshot({ path: `artifacts/language-settings-${lang}-${theme}.png`, fullPage: true });
       }
       assert.equal(await page.evaluate(() => window.requests.length), before, 'Language/theme changes cannot call Agent or reset consent');
-      await page.reload(); await page.locator('#startup').waitFor({ state: 'detached' });
+      await page.reload(); await page.locator('#startup').waitFor({ state: 'detached' }); await page.getByRole('button', { name: 'Skip without changing permissions', exact: true }).click({ timeout: 3000 }).catch(() => {});
       assert.equal(await page.locator('html').getAttribute('lang'), lang, 'Reload preserves locale');
       const body = await page.locator('body').innerText(); assert.doesNotMatch(body, /Diagnosi completa|sicurezza Windows|Annulla diagnosi/);
       if (lang !== 'en') assert.doesNotMatch(body, /Understand the machine\.|Change only what is safe\.|Advanced tools/);

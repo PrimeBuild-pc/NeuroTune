@@ -11,7 +11,11 @@ describe('optional local assistant and measure-first preparation', () => {
     const consents = panel.match(/<input[^>]+type="checkbox"[^>]*>/g) ?? [];
     expect(consents).toHaveLength(1);
     expect(consents[0]).not.toContain('checked=""');
-    expect(panel.match(/type="radio"/g)).toHaveLength(6);
+    expect(panel.match(/type="radio"/g)).toHaveLength(7);
+    expect(panel).toContain('OpenRouter Free · no local install');
+    expect(panel).toContain('OpenRouter API · cloud classifier');
+    expect(panel).not.toContain('value="openrouter/free"');
+    expect(panel).not.toContain('type="password"');
     expect(panel).toContain('No resident server or automatic startup download');
     const note = renderToStaticMarkup(<SystemOneNotes items={[{ phase: 'analysis', domain: 'drivers', status: 'ok', score: 0.8, seconds: 2.1,
       detail: '<script>not executable</script>', evidenceIds: [] }]}/>);
