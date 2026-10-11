@@ -41,6 +41,67 @@ public sealed class SystemOneTests
         Assert.ThrowsExactly<ArgumentException>(() => SystemOneService.ValidateOptions(new(false, Source: "https://fake.example")));
     }
     [TestMethod]
+    public async Task Free_cloud_mode_locks_the_router_and_caps_all_provider_prices_at_zero()
+    {
+        var options = new SystemOneOptions(true, Source: "openRouterFree", Model: SystemOneService.FreeRouterModel, CloudConsent: true);
+        SystemOneService.ValidateOptions(options);
+        Assert.IsFalse(new SystemOneOptions(false).Enabled);
+        Assert.IsFalse(new SystemOneOptions(false).CloudConsent);
+        foreach (var model in new[] { "", "openrouter/auto", "openai/gpt-4o-mini", "vendor/model:free", "openrouter/free " })
+        {
+            Assert.ThrowsExactly<ArgumentException>(() => SystemOneService.ValidateOptions(options with { Model = model }));
+            Assert.ThrowsExactly<ArgumentException>(() => LlmClient.CreateTopicClassificationRequest(model, "separate-key", "sample", freeOnly: true));
+        }
+        using var request = LlmClient.CreateTopicClassificationRequest(options.Model, "separate-key", "sample", freeOnly: true);
+        Assert.AreEqual("https://openrouter.ai/api/v1/chat/completions", request.RequestUri!.AbsoluteUri);
+        Assert.AreEqual("separate-key", request.Headers.Authorization!.Parameter);
+        using var body = System.Text.Json.JsonDocument.Parse(await request.Content!.ReadAsStringAsync());
+        Assert.AreEqual("openrouter/free", body.RootElement.GetProperty("model").GetString());
+        Assert.IsFalse(body.RootElement.TryGetProperty("models", out _));
+        Assert.IsFalse(body.RootElement.TryGetProperty("route", out _));
+        var provider = body.RootElement.GetProperty("provider");
+        Assert.IsFalse(provider.GetProperty("allow_fallbacks").GetBoolean());
+        Assert.IsTrue(provider.GetProperty("require_parameters").GetBoolean());
+        foreach (var price in new[] { "prompt", "completion", "request", "image" })
+            Assert.AreEqual(0, provider.GetProperty("max_price").GetProperty(price).GetInt32());
+        Assert.AreEqual(256, body.RootElement.GetProperty("max_tokens").GetInt32());
+        var advisory = SystemOneService.ParseCloudAdvisory("""{"domain":"memory"}""", "analysis", ["memory:pressure"], 0.5, options.Model);
+        Assert.IsNull(advisory.Score);
+        StringAssert.Contains(advisory.Detail, "zero-price free router");
+    }
+    [TestMethod]
+    public void Stored_cloud_settings_without_separate_consent_stay_disabled_and_preserve_the_draft()
+    {
+        var legacy = SystemOneService.ParseOptions("""{"Enabled":true,"Source":"openRouter","Model":"vendor/paid-model"}""");
+        Assert.IsFalse(legacy.Enabled);
+        Assert.IsFalse(legacy.CloudConsent);
+        Assert.AreEqual("openRouter", legacy.Source);
+        Assert.AreEqual("vendor/paid-model", legacy.Model);
+        Assert.IsTrue(SystemOneService.ParseOptions("""{"Enabled":true,"Source":"local"}""").Enabled);
+        var free = SystemOneService.ParseOptions("""{"Enabled":true,"Source":"openRouterFree","Model":"openrouter/free","CloudConsent":true}""");
+        Assert.IsTrue(free.Enabled);
+        Assert.ThrowsExactly<ArgumentException>(() => SystemOneService.ParseOptions("""{"Enabled":false,"Source":"openRouterFree","Model":"vendor/paid-model"}"""));
+        Assert.IsFalse(SystemOneService.ParseOptions("{}").Enabled);
+    }
+    [TestMethod]
+    public async Task Both_cloud_sources_require_separate_consent_and_cannot_install_a_local_runtime()
+    {
+        foreach (var source in new[] { "openRouter", "openRouterFree" })
+        {
+            var options = new SystemOneOptions(true, Source: source, Model: source == "openRouterFree" ? SystemOneService.FreeRouterModel : "vendor/model");
+            Assert.ThrowsExactly<ArgumentException>(() => SystemOneService.ValidateOptions(options));
+            // Validation must reject before saving credentials/configuration or making a network request.
+            Assert.ThrowsExactly<ArgumentException>(() => SystemOneService.Configure(new SystemOneConfigureRequest(options, "not-a-real-key")));
+            SystemOneService.ValidateOptions(options with { Enabled = false });
+            SystemOneService.ValidateOptions(options with { CloudConsent = true });
+            await Assert.ThrowsAsync<InvalidOperationException>(() => SystemOneService.InstallAsync(options with { CloudConsent = true }));
+        }
+        SystemOneService.ValidateOptions(new(false, Source: "openRouter", Model: "vendor/paid-model"));
+        using var paid = LlmClient.CreateTopicClassificationRequest("vendor/paid-model", "separate-key", "sample");
+        using var body = System.Text.Json.JsonDocument.Parse(await paid.Content!.ReadAsStringAsync());
+        Assert.IsFalse(body.RootElement.GetProperty("provider").TryGetProperty("max_price", out _));
+    }
+    [TestMethod]
     public void Auxiliary_credentials_are_encrypted_and_have_a_distinct_key_identity()
     {
         Assert.AreNotEqual(SystemOneService.OpenRouterCredentialId, new UserSettings { Provider = LlmProvider.OpenRouter }.CredentialId);

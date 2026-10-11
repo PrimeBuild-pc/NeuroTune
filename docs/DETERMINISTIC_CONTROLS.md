@@ -2,6 +2,33 @@
 
 The main provider conducts the investigation and proposes improvements. NeuroTune supplies local observations, measurements, safe follow-up readers and recoverable execution. Optional System One is contestable topic advice, never an authority. Neither the model nor the application establishes universal optimality.
 
+## Default agent: Pi CORE, host-owned authority
+
+The main investigation uses `@earendil-works/pi-agent-core`, not the entire
+Pi coding CLI/TUI. CORE schedules sequential bounded turns and tools in memory;
+NeuroTune owns the selected provider transport/OAuth, prompt/evidence preparation,
+fixed read-only readers and all response, citation, approval and execution
+validation. Model envelopes cross a bounded correlated host protocol and cannot
+be rewritten by the bridge. There is no shell/file tool, arbitrary command
+execution, built-in coding-tool set or additional provider credential store.
+
+The packaged Node/CORE process is short-lived, non-admin and cancelled with its
+owner, not a filesystem/network sandbox. It does not require user npm, global
+Pi or a local model, and never substitutes another agent/provider if startup,
+protocol, budget or inference fails. Local observations may remain available
+but are explicitly incomplete, not a successful agent diagnosis or Apply authority.
+Builds bundle pinned dependencies/runtime/license notices before .NET tests;
+see [contributor checks](TESTING.md#contributor-checks-no-live-provider-or-system-writers).
+
+Optional System One remains separate. OpenRouter Free uses `openrouter/free`
+with bounded zero `max_price` provider routing, randomly choosing an available
+compatible free model subject to rate/availability limits. It requires a separate
+API key and cloud consent, not installation; no paid/local fallback exists.
+Old cloud configurations lacking separate consent require reconsent. A draft
+source selection cannot disable or conceal the actual persisted paid source;
+its enabled state/model/detail and costs remain authoritative until explicitly
+saved/changed. Neither this classifier nor CORE expands write authority.
+
 ## Complete diagnosis
 
 `ui/src/diagnosisFlow.ts` owns one cancellable lifecycle: local scan → workload preparation → automatic named WPR captures → local ETL quality checks → model investigation → final proposal. A selected running workload produces three matching baselines; without one, a single system-wide diagnostic is collected instead. Scan, traces and numerical analysis do not invoke either AI. The selected provider and optional assistant run only after these stages finish. During each measured interval, the workflow uses cheap UI timers and the existing recorder watchdog rather than repeatedly spawning native agents; state retrieval occurs after the capture deadline.
@@ -33,6 +60,7 @@ Persisted `fps`/`efficiency` goals remain valid with their previous enum values 
 - The default budget is **12 turns / 10 minutes after measurements**, configurable in provider settings within **2–32 turns / 1–30 minutes**. Existing-evidence requests remain bounded to 40 facts per turn. Evidence/output size limits and exact citations remain in force. The final turn is reserved by prompt for a diagnosis; exhaustion/failure is reported rather than inventing completion.
 - `ConflictAnalyzer` still produces goal-conditioned, opinionated hypotheses. The main prompt explicitly permits challenging/dismissing them; there is no prescribed preferred MemoryCompression/PageCombining state. Local hypotheses are collapsed and labelled separately from AI conclusions.
 - Useful outside-catalog proposals remain manual guidance or review-only script artifacts. Unknown executable/resource/update identifiers cannot gain write authority; they are downgraded to unverified manual proposals rather than rejecting an otherwise cited analysis.
+- Optional service, startup and installed-app proposals are evidence-cited manual review only: no commands, removal/debloater scope inference, authorization or auto-execution; uncertain roles/dependencies require verification rather than disablement or uninstall.
 - The final view orders proposals by risk and shows evidence, expected impact, trade-offs, prerequisites, uncertainty and reversibility. Missing model explanations remain explicitly unspecified. Users can select some, all executable recommendations, or none; nothing is auto-applied.
 
 ## Optional user-supplied reports and screenshots

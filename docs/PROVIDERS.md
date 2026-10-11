@@ -12,6 +12,28 @@
 | Custom | Optional API key | OpenAI-compatible or Anthropic Messages | User supplied |
 | Local | None by default | OpenAI-compatible | Loopback only |
 
+## Default investigation agent and initial setup
+
+Pi CORE (`@earendil-works/pi-agent-core`) is the default investigation scheduler,
+not the full coding CLI/TUI and not a model/provider. NeuroTune still owns
+transport, OAuth/DPAPI credentials, fixed read-only readers, bounded evidence
+and response validation. No shell/file tool is available. Its short-lived
+non-admin subprocess keeps agent state in memory; this is not a filesystem or
+network sandbox. Node and CORE are bundled: users need no npm, global Pi or
+local model installation. The selected provider remains responsible for
+inference and its costs. Missing/failed Pi does not trigger another agent or
+provider/billing fallback; local findings remain explicitly incomplete advice.
+
+First-launch Guided setup offers **ChatGPT**, **OpenRouter** and **Other**.
+Other opens API-key/local provider settings. Signing in saves the main connection
+without saving optional sensor, firmware or System One choices or transmitting
+diagnosis evidence. The guide distinguishes a signed-in connection from these
+optional permissions and offers **Load available models** when authenticated.
+That control saves/reuses the current provider and retries discovery, not OAuth.
+Identity-only ChatGPT retries reuse the saved account registration but still need
+plan-use authorization. Only **Save choices and continue** saves optional
+permissions; Skip leaves existing permissions unchanged.
+
 ## Discover and select models
 
 For API and local connections, **Test & discover models** fetches the connected
@@ -75,9 +97,30 @@ On 2026-10-01 the rebuilt packaged agent successfully loaded **six selectable mo
 
 ## Optional assistant via OpenRouter
 
-In Advanced tools → System One assistant choose **OpenRouter API**, enter a separate API key, load/select its classifier model, and explicitly enable cloud usage. The key is DPAPI-encrypted separately (`system-one-openrouter.key`) and never changes the main provider, model, subscription or key. Deleting the classifier key leaves main credentials intact.
+In Advanced tools → System One assistant choose **OpenRouter Free** or
+**OpenRouter API**. Both require a separate API key and explicit cloud consent;
+neither installs a local model/runtime. The key is DPAPI-encrypted separately
+(`system-one-openrouter.key`) and never changes the main provider, model,
+subscription or credentials. Saving the key alone does not enable transmission.
+Deleting it leaves main credentials intact. Existing cloud configurations that
+lack the separate cloud-consent flag require renewed consent, not inferred consent
+from an old enabled setting.
 
-This is a **token-generating cloud topic classifier**, not the local Rizzo probability engine or a guaranteed System One model hosted by OpenRouter. Calls consume API credits, send sampled context through OpenRouter to the selected provider, have a 30-second deadline/256-token output cap, reject unsupported/incomplete outputs and do not use an automatic local/provider fallback. Returned probability/action fields are ignored; no calibrated score is fabricated. Common local identity/drive-path redaction is not guaranteed anonymization: do not put secrets into goal/error context. Ordinary System scan and recording do not invoke it; it is advisory during subsequent analysis/application phases.
+**OpenRouter Free** fixes the model to `openrouter/free`: OpenRouter randomly
+selects an available compatible free model. Requests are bounded to 30 seconds /
+256 output tokens, require supported parameters and set provider routing
+`max_price` to zero for prompt, completion, request and image, with
+`allow_fallbacks:false`. Rate limits, quota, availability and latency vary; there
+is no paid/local/provider fallback. A free response is not Rizzo probability
+scoring or a speed/accuracy guarantee.
+
+**OpenRouter API** loads/selects a classifier model and may consume credits.
+Source/model radios remain unsaved drafts with no implicit settings write. The
+panel always shows the actual saved enabled source/model and detail, even while
+Free is selected as a draft over an enabled paid model. Saved configuration, not
+a radio selection, determines actual transmission/cost until explicitly changed.
+
+This is a **token-generating cloud topic classifier**, not the local Rizzo probability engine or a guaranteed System One model hosted by OpenRouter. Paid API calls consume credits; both cloud modes send sampled context through OpenRouter to the selected/routed provider, have a 30-second deadline/256-token output cap, reject unsupported/incomplete outputs and do not use an automatic local/provider fallback. Returned probability/action fields are ignored; no calibrated score is fabricated. Common local identity/drive-path redaction is not guaranteed anonymization: do not put secrets into goal/error context. Ordinary System scan and recording do not invoke it; it is advisory during subsequent analysis/application phases.
 
 ## Custom Providers
 

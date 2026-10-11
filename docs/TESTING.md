@@ -70,11 +70,28 @@ recovery, compatibility, a clean PC or a performance gain.
 ## Development branch: setup and before/after measurements
 
 These additions are source changes, not replacements for the published alpha.4
-packages. First-launch **Guided setup** stages optional sensor/firmware choices;
+packages. First-launch **Guided setup** offers **ChatGPT**, **OpenRouter** and
+**Other** (API-key/local settings) for the main connection. Signing in saves
+only that connection, not optional permissions or diagnosis-transmission consent.
+Verify identity-only ChatGPT retries preserve the account registration, catalog
+failures retain the saved login, and **Load available models** retries the
+current authenticated provider without another OAuth flow. Authentication/model
+operations must freeze guide controls, including optional choices and dismissal.
+
+The guide stages optional sensor/firmware choices;
 only **Save choices and continue** persists them. Skip preserves existing
 permissions. PawnIO and BIOS writing remain unavailable. Configuring System One
 is not installing or enabling it: its separate consent/download controls remain.
 The guide is postponed during recording, active runs and journal/recovery errors.
+
+System One **OpenRouter Free** uses fixed `openrouter/free`, bounded zero
+`max_price` provider routing and a randomly selected available compatible free
+model. Rate/availability limits remain; no paid/local fallback or install is
+allowed. Both cloud modes require a separate API key and explicit cloud consent;
+old cloud configurations without that flag require reconsent. Verify changing
+a paid-enabled source to a Free/local draft makes no settings write and still
+shows the actual persisted enabled source/model/detail and cost boundary. Saving
+a key alone must not enable cloud usage or alter main credentials.
 
 Record the same user-described idle conditions or repeatable workload scene.
 Complete diagnosis saves its initial report before contacting AI. Reports retain
@@ -150,7 +167,21 @@ With separate explicit authorization and the exact candidate installer:
 
 ## Contributor checks (no live provider or system writers)
 
+The default investigator uses Pi CORE (`@earendil-works/pi-agent-core`), not
+the full Pi coding CLI/TUI. Host transport/OAuth, fixed readers and validations
+remain authoritative; there is no shell/file tool, persisted Pi session or agent
+fallback. A short-lived non-admin subprocess is not a filesystem/network sandbox.
+Release packages bundle Node/CORE and notices: end users need no npm, global Pi
+or local model installation.
+
+On Windows x64 with a complete official Node distribution, build the bridge
+before .NET tests so the copied test runtime matches the source:
+
 ```sh
+cd ui
+npm ci --ignore-scripts
+npm run pi:build
+cd ..
 dotnet test tests/NeuroTune.Tests -c Release --filter 'TestCategory!=WindowsIntegration'
 dotnet format NeuroTune.sln --verify-no-changes
 cd ui
@@ -160,10 +191,26 @@ npm run lint
 npm run build
 ```
 
+`pi:build` copies the build machine's Node runtime, bundles pinned CORE/Pi AI
+and dependency notices, and checks runtime version/syntax without starting a
+provider. If the official Node license is already beside `node.exe`, no override
+is needed. **Only when it is missing**, obtain the official license matching the
+exact Node version/distribution (official distribution or its matching
+[nodejs/node](https://github.com/nodejs/node) release tag), review it, and set
+`NEUROTUNE_NODE_LICENSE` to that file before `npm run pi:build`. Do not use an
+arbitrary license or a different release's notices. The build downloads neither
+runtime nor license and refuses a missing license. Developer npm/dependency
+installation is a build prerequisite, not an end-user requirement.
+
+`npm test` includes UI callback regressions and the mocked Pi CORE protocol/turn
+checks in `scripts/pi-agent.test.mjs`. No live auth/inference or system writer
+belongs in these contributor checks.
+
 For browser regressions, start `npm run preview -- --host 127.0.0.1` in `ui/`
 and run `node scripts/check-ui-polish.cjs`,
 `node scripts/check-review-measurements.cjs`,
-`node scripts/check-provider-models.cjs` and
+`node scripts/check-provider-models.cjs`,
+`node scripts/check-system-one-free.cjs` and
 `node scripts/check-provider-failure.cjs` from the repository root. Set
 `PLAYWRIGHT_PATH`, optional `CHROME_PATH` and `UI_PREVIEW_URL` for local tools.
 Every Agent/provider call in those browser scripts is mocked. These checks

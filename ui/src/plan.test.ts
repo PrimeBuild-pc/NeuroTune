@@ -47,6 +47,12 @@ describe('dynamic plan helpers', () => {
     expect(selectActionIdsForProfile(unavailable, recommendations.slice(0, 2), 'aggressive')).toEqual(['action.medium']);
   });
 
+  it('excludes manual guidance even when it carries an artificial valid action reference', () => {
+    const manual = { ...recommendations[0], kind: 'manualGuidance' as const, actionId: 'action.low' };
+    for (const profile of ['safe', 'balanced', 'aggressive'] as const)
+      expect(selectActionIdsForProfile(actions, [manual], profile)).toEqual([]);
+  });
+
   it('labels every item kind and creates inert text filenames', () => {
     expect(planKindLabel('executableAction')).toBe('NeuroTune action');
     expect(planKindLabel('manualGuidance')).toBe('Manual guidance');
