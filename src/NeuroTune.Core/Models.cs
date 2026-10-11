@@ -58,6 +58,7 @@ public sealed class SystemProfile
     public List<string> InstalledSoftware { get; set; } = [];
     public List<string> RelevantDrivers { get; set; } = [];
     public List<string> DeviceIssues { get; set; } = [];
+    public List<string> DeviceCandidates { get; set; } = [];
     public List<string> SoftwareSignals { get; set; } = [];
     public List<string> DetectedLaunchers { get; set; } = [];
     public List<string> DetectedGames { get; set; } = [];
