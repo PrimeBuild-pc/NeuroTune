@@ -11,7 +11,8 @@ describe('optional local assistant and measure-first preparation', () => {
     const consents = panel.match(/<input[^>]+type="checkbox"[^>]*>/g) ?? [];
     expect(consents).toHaveLength(1);
     expect(consents[0]).not.toContain('checked=""');
-    expect(panel.match(/type="radio"/g)).toHaveLength(7);
+    expect(panel.match(/type="radio"/g)).toHaveLength(8);
+    expect(panel).toContain('CLM · local contrastive model');
     expect(panel).toContain('OpenRouter Free · no local install');
     expect(panel).toContain('OpenRouter API · cloud classifier');
     expect(panel).not.toContain('value="openrouter/free"');
