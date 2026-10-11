@@ -12,6 +12,7 @@ const url = process.env.UI_PREVIEW_URL || 'http://127.0.0.1:4173/';
       const page = await browser.newPage({ viewport: { width: 907, height: 573 }, reducedMotion: 'reduce', colorScheme: 'dark' });
       const errors = []; page.on('pageerror', error => errors.push(error.message));
       await page.addInitScript(scenario => {
+        localStorage.setItem('neurotune.setupReviewed.v1', 'true'); // First-launch setup guide is covered by check-contextual-workflow.
         let next = 0;
         window.requests = [];
         const goals = { priority: 'balanced', riskProfile: 'safe', games: [], notes: '', gameContext: { game: '', version: '', launcher: '', graphicsApi: '', displayMode: '', vrr: '', vSync: '', symptoms: [], preserve: '' }, performanceInput: { userProvided: true, notes: '' } };
@@ -80,7 +81,7 @@ const url = process.env.UI_PREVIEW_URL || 'http://127.0.0.1:4173/';
           return active.top >= bounds.top && active.bottom <= bounds.bottom;
         }), true, 'Direct Settings navigation scrolls only the sidebar to expose its active item');
         const appearance = page.getByRole('button', { name: /Use Windows setting/ });
-        const languageBox = await page.locator('.language-settings').boundingBox();
+        const languageBox = await page.locator('.language-settings').filter({ has: page.getByRole('heading', { name: 'Language', exact: true }) }).boundingBox();
         const appearanceBox = await appearance.boundingBox();
         assert.ok(languageBox.y < appearanceBox.y);
         await appearance.click();
