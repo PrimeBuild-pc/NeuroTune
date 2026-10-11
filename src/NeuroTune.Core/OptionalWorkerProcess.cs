@@ -11,7 +11,8 @@ namespace NeuroTune;
 internal static class OptionalWorkerProcess
 {
     internal static async Task<string> RunAsync(string executable, IReadOnlyList<string> arguments, string directory,
-        string input, IReadOnlyDictionary<string, string> environment, TimeSpan timeout, Action<string>? progress, CancellationToken cancellationToken)
+        string input, IReadOnlyDictionary<string, string> environment, TimeSpan timeout, Action<string>? progress, CancellationToken cancellationToken,
+        Func<StreamReader, StreamWriter, CancellationToken, Task<string>>? interact = null)
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(timeout);
@@ -71,13 +72,21 @@ internal static class OptionalWorkerProcess
                     using var writer = new StreamWriter(new FileStream(stdinWrite, FileAccess.Write), new UTF8Encoding(false));
                     using var stdout = new StreamReader(new FileStream(stdoutRead, FileAccess.Read), Encoding.UTF8);
                     using var stderr = new StreamReader(new FileStream(stderrRead, FileAccess.Read), Encoding.UTF8);
-                    var output = Drain(stdout, null, deadline.Token);
                     var errors = Drain(stderr, progress, deadline.Token);
-                    await writer.WriteAsync(input.AsMemory(), deadline.Token); writer.Close();
-                    await Task.WhenAll(process.WaitForExitAsync(deadline.Token), output, errors);
+                    var output = interact is null ? Drain(stdout, null, deadline.Token) : InteractAsync();
+                    if (interact is null) { await writer.WriteAsync(input.AsMemory(), deadline.Token); writer.Close(); }
+                    try { await Task.WhenAll(process.WaitForExitAsync(deadline.Token), output, errors); }
+                    catch (Exception) when (deadline.IsCancellationRequested) { throw new OperationCanceledException(deadline.Token); }
                     deadline.Token.ThrowIfCancellationRequested();
                     if (process.ExitCode != 0) throw new InvalidOperationException($"Optional worker failed (exit {process.ExitCode}). {(await errors)[..Math.Min(2000, (await errors).Length)]}");
                     return await output;
+
+                    async Task<string> InteractAsync()
+                    {
+                        try { return await interact!(stdout, writer, deadline.Token); }
+                        catch { job.Dispose(); throw; }
+                        finally { writer.Close(); }
+                    }
                 }
             }
         }

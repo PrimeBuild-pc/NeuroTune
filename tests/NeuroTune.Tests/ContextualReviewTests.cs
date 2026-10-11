@@ -27,6 +27,34 @@ public sealed class ContextualReviewTests
     }
 
     [TestMethod]
+    public void Background_software_review_proposals_preserve_context_and_remain_manual_for_every_profile()
+    {
+        const string response = """
+            {"summary":"Optional review only","findings":[],"recommendations":[
+              {"id":"service","kind":"manualGuidance","title":"Review background service","evidenceIds":["service:0"],"reason":"A service-setting change may affect the observed helper.","expectedImpact":"Not measured","uncertainty":"Dependencies are unknown","reversibility":"Record the current service setting first","tradeoffs":["May lose background functionality"],"prerequisites":["Verify role and dependencies"]},
+              {"id":"startup","kind":"manualGuidance","title":"Review startup entry","evidenceIds":["startup:0"],"reason":"An optional startup-disable review needs user verification.","expectedImpact":"Not measured","uncertainty":"Use is unknown","reversibility":"Re-enable the entry manually","tradeoffs":["May lose automatic launch"],"prerequisites":["Verify the entry is not required"]},
+              {"id":"uninstall","kind":"manualGuidance","title":"Review installed app","evidenceIds":["software:0"],"reason":"An uninstall is optional and may affect user data or licenses.","expectedImpact":"Free volume is not app size or reclaimable storage","uncertainty":"Reclaimable space is not measured","reversibility":"Back up data and reinstall if needed","tradeoffs":["May lose app functionality"],"prerequisites":["Back up data/configuration and confirm license/reinstall access"]}],"consentQuestion":"Review without changes?"}
+            """;
+        var evidence = new Dictionary<string, string> { ["service:0"] = "Example service", ["startup:0"] = "Example helper", ["software:0"] = "Example app" };
+        var result = LlmClient.ParseDiagnosis(response, new OptimizationCatalog(), evidence);
+
+        CollectionAssert.AreEqual(new[] { "service", "startup", "uninstall" }, result.Recommendations.Select(item => item.Id).ToArray());
+        Assert.AreEqual("Dependencies are unknown", result.Recommendations[0].Uncertainty);
+        Assert.AreEqual("Re-enable the entry manually", result.Recommendations[1].Reversibility);
+        Assert.Contains("license/reinstall", result.Recommendations[2].Prerequisites.Single());
+        foreach (var profile in Enum.GetValues<RiskProfile>())
+            foreach (var recommendation in result.Recommendations)
+            {
+                Assert.AreEqual(PlanRecommendationKind.ManualGuidance, recommendation.Kind);
+                Assert.IsEmpty(recommendation.ActionId);
+                Assert.AreEqual(PolicyDisposition.ManualOnly, PlanSelectionPolicy.Evaluate(recommendation, profile, new OptimizationCatalog()).Disposition);
+            }
+        Assert.ThrowsExactly<InvalidOperationException>(() => LlmClient.ParseDiagnosis(
+            response.Replace("\"kind\":\"manualGuidance\",\"title\":\"Review background service\"", "\"kind\":\"manualGuidance\",\"actionId\":\"gaming.game-mode\",\"title\":\"Review background service\""),
+            new OptimizationCatalog(), evidence));
+    }
+
+    [TestMethod]
     public void Virtual_display_adapters_do_not_certify_Hags_and_firmware_status_never_claims_host_setup_access()
     {
         Assert.IsFalse(OptimizationCatalog.HasPhysicalGraphicsAdapter([@"VMBUS\123", @"ROOT\RDPIDD"]));

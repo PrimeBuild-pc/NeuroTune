@@ -8,6 +8,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
     const page = await browser.newPage({ viewport: { width: 907, height: 573 }, reducedMotion: 'reduce' });
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     await page.addInitScript(() => {
+      localStorage.setItem('neurotune.setupReviewed.v1', 'true'); // First-launch setup guide is covered by check-contextual-workflow.
       let next = 0; window.requests = []; window.legacyReviewPending = true;
       window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener() {} };
       window.__TAURI_INTERNALS__ = {

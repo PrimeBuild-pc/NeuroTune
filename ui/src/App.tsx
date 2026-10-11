@@ -81,7 +81,7 @@ function App() {
   const [chatGptAccounts, setChatGptAccounts] = useState<ChatGptAccountInfo[]>([]);
   const [chatGptWelcome, setChatGptWelcome] = useState(false);
   const welcomeDialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => { if (chatGptWelcome && !welcomeDialog.current?.open) welcomeDialog.current?.showModal(); }, [chatGptWelcome]);
+  useEffect(() => { if (chatGptWelcome && !setupRequested && !welcomeDialog.current?.open) welcomeDialog.current?.showModal(); }, [chatGptWelcome, setupRequested]);
   const [scan, setScan] = useState<ScanResult>();
   const [diagnosis, setDiagnosis] = useState<Diagnosis>();
   const localDiagnosis = useRef<Diagnosis | undefined>(undefined);
@@ -99,6 +99,7 @@ function App() {
   const [activeRun, setActiveRun] = useState<OptimizationRun>();
   const [preparingBaseline, setPreparingBaseline] = useState(false);
   const [busy, setBusy] = useState('');
+  const [authenticating, setAuthenticating] = useState(false);
   const [busyValues, setBusyValues] = useState<Record<string, string | number>>({});
   const [securityBusy, setSecurityBusy] = useState(false);
   const [initializing, setInitializing] = useState(true);
@@ -295,6 +296,7 @@ function App() {
   }
 
   async function loadModels() {
+    if (busy || authenticating) return;
     if (await saveProvider()) await discoverModels(provider);
   }
 
@@ -314,22 +316,26 @@ function App() {
     setNotice({ tone: 'success', text: '{count} models available from {provider}.', values: { count: result.models.length, provider: settings.providerName } });
   }
 
-  async function browserSignIn(addAccount = false) {
-    const chatGpt = provider.provider === 'chatGpt';
-    const result = await run('Waiting for {provider} browser authorization…', () =>
-      agent<{ settings: ProviderSettings; hasCredential: boolean; chatGptAccounts?: ChatGptAccountInfo[] }>(chatGpt ? 'oauth-chatgpt' : 'oauth-openrouter',
-        chatGpt ? { accountId: addAccount ? null : provider.chatGptAccountId ?? null } : undefined), { provider: chatGpt ? 'ChatGPT' : 'OpenRouter' });
-    if (!result) return;
-    setProvider(result.settings); setHasCredential(result.hasCredential); setApiKey(''); setModels([]);
-    if (result.chatGptAccounts) setChatGptAccounts(result.chatGptAccounts);
-    if (!result.hasCredential) {
-      setNotice({ tone: 'info', text: 'ChatGPT identity is saved, but plan usage was not granted. Continue with ChatGPT to enable it, or explicitly choose API-key billing.' });
-      return;
-    }
-    await discoverModels(result.settings);
-    if (chatGpt && !localStorage.getItem(`neurotune.chatgptWelcome.${result.settings.chatGptAccountId}`)) {
-      localStorage.setItem(`neurotune.chatgptWelcome.${result.settings.chatGptAccountId}`, 'true'); setChatGptWelcome(true);
-    }
+  async function browserSignIn(addAccount = false, settings = provider) {
+    if (busy || authenticating) return;
+    setAuthenticating(true);
+    try {
+      const chatGpt = settings.provider === 'chatGpt';
+      const result = await run('Waiting for {provider} browser authorization…', () =>
+        agent<{ settings: ProviderSettings; hasCredential: boolean; chatGptAccounts?: ChatGptAccountInfo[] }>(chatGpt ? 'oauth-chatgpt' : 'oauth-openrouter',
+          chatGpt ? { accountId: addAccount ? null : settings.chatGptAccountId ?? null } : undefined), { provider: chatGpt ? 'ChatGPT' : 'OpenRouter' });
+      if (!result) return;
+      setProvider(result.settings); setHasCredential(result.hasCredential); setApiKey(''); setModels([]);
+      if (result.chatGptAccounts) setChatGptAccounts(result.chatGptAccounts);
+      if (!result.hasCredential) {
+        setNotice({ tone: 'info', text: 'ChatGPT identity is saved, but plan usage was not granted. Continue with ChatGPT to enable it, or explicitly choose API-key billing.' });
+        return;
+      }
+      await discoverModels(result.settings);
+      if (chatGpt && !localStorage.getItem(`neurotune.chatgptWelcome.${result.settings.chatGptAccountId}`)) {
+        localStorage.setItem(`neurotune.chatgptWelcome.${result.settings.chatGptAccountId}`, 'true'); setChatGptWelcome(true);
+      }
+    } finally { setAuthenticating(false); }
   }
 
   async function signOutChatGpt() {
@@ -536,7 +542,7 @@ function App() {
         <a href="https://chatgpt.com/settings/usage" target="_blank" rel="noreferrer">{t("Manage usage in ChatGPT")}</a>
         <form method="dialog"><button className="primary">{t("Got it")}</button></form>
       </dialog>
-      {setupRequested && <SetupGuide open={!initializing && !opening && !recording && !runPending && !journalError && !pendingRecovery && !busy && !securityBusy && !diagnosisProgress} initial={{ telemetry: telemetryConsent, firmware: firmwareConsent }} onFinish={saveSetup} onClose={() => setSetupRequested(false)}/>}
+      {setupRequested && <SetupGuide open={!initializing && !opening && !recording && !runPending && !journalError && !pendingRecovery && !diagnosisProgress} initial={{ telemetry: telemetryConsent, firmware: firmwareConsent }} busy={busy ? t(busy, busyValues) : authenticating || securityBusy ? t('Provider operation in progress…') : ''} message={notice && (notice.raw ? notice.text : t(notice.text, notice.values))} error={notice?.tone === 'danger'} connectedProvider={hasCredential ? provider.providerName : undefined} onSignIn={kind => { void browserSignIn(false, provider.provider === kind ? provider : defaults[kind]); }} onLoadModels={() => { void loadModels(); }} onOther={() => { setSetupRequested(false); setPage('provider'); }} onFinish={saveSetup} onClose={() => setSetupRequested(false)}/>}
       <a className="skip-link" href="#workspace">{t("Skip to workspace")}</a>
       <aside className="sidebar">
         <div className="brand"><img className="brand-mark" src="/logo.svg" width="40" height="40" alt=""/><div><strong>NeuroTune</strong><span>by PrimeBuild</span></div></div>
@@ -565,7 +571,7 @@ function App() {
         {activeRun && !activeRun.operationId && !activeRun.requiresRecovery && !['completed', 'failed'].includes(activeRun.state) && !diagnosisProgress && <div className="notice info"><span>{t("A proposal or interrupted diagnosis is retained. No new diagnosis can replace it until you finish or decline it.")}</span><button className="secondary" disabled={Boolean(busy)} onClick={() => { void dismissDiagnosis(); }}>{t("Finish without changes")}</button></div>}
         <section className="page-content">
           {page === 'overview' && <Overview hasProvider={providerConfigured} nextAction={nextOverviewAction} disabled={Boolean(busy || securityBusy)} scan={scan} history={history} coreState={quietMotion ? 'capture' : scanRequestId ? 'scan' : diagnosis && activeRun && ['baselineReady', 'baselinePending', 'proposalReady'].includes(activeRun.state) ? 'result' : 'idle'} onProvider={() => setPage('provider')} onScan={() => setPage('scan')} onPrivacy={() => setPage('security')}/>}
-          {page === 'provider' && <ProviderPage provider={provider} apiKey={apiKey} hasCredential={hasCredential} models={models} modelLabels={modelLabels} chatGptAccounts={chatGptAccounts} authBusy={Boolean(busy)} onSignOut={signOutChatGpt} onChoose={chooseProvider} onChange={value => { setProvider(value); if (value.chatGptAccountId !== provider.chatGptAccountId || value.baseUrl !== provider.baseUrl || value.protocol !== provider.protocol) { setHasCredential(false); setModels([]); setModelLabels({}); } }} onKey={value => { setApiKey(value); setModels([]); setModelLabels({}); }} onSave={saveProvider} onLoadModels={loadModels} onBrowserSignIn={browserSignIn} onModel={selectChatGptModel}/>}
+          {page === 'provider' && <ProviderPage provider={provider} apiKey={apiKey} hasCredential={hasCredential} models={models} modelLabels={modelLabels} chatGptAccounts={chatGptAccounts} authBusy={Boolean(busy) || authenticating} onSignOut={signOutChatGpt} onChoose={chooseProvider} onChange={value => { setProvider(value); if (value.chatGptAccountId !== provider.chatGptAccountId || value.baseUrl !== provider.baseUrl || value.protocol !== provider.protocol) { setHasCredential(false); setModels([]); setModelLabels({}); } }} onKey={value => { setApiKey(value); setModels([]); setModelLabels({}); }} onSave={saveProvider} onLoadModels={loadModels} onBrowserSignIn={browserSignIn} onModel={selectChatGptModel}/>}
           {(page === 'scan' || diagnosisOpened) && <div hidden={page !== 'scan'}><CompleteDiagnosis onSecurity={() => setPage('security')} consentKey={`${provider.provider}:${provider.model}:${provider.baseUrl}:${provider.chatGptAccountId ?? ''}`} blockedReason={diagnosisBlockedReason} onProvider={!providerConfigured && !recording && !busy && !securityBusy && !runPending && !pendingRecovery ? () => setPage('provider') : undefined} mode={mode} onMode={setMode} goals={goals} onGoals={setGoals} onStart={(workload, duration, attachments, imagesConfirmed, conditions) => { void completeDiagnosis(workload, duration, attachments, imagesConfirmed, conditions); }} progress={diagnosisProgress} auditPreview={auditPreview} onAuditApprove={() => auditReview.current?.(true)} onCancel={cancelCompleteDiagnosis} blocked={Boolean(diagnosisBlockedReason)}><GoalContextEditor goals={goals} onGoals={setGoals}/></CompleteDiagnosis></div>}
           {page === 'security' && <div className="security-page"><WindowsSecurityPanel blocked={Boolean(recording || busy || diagnosisProgress || pendingRecovery || activeRun && activeRun.mode !== 'auditOnly' && !['completed', 'failed'].includes(activeRun.state))} onBusy={setSecurityBusy}><section className="section-card"><h2>{t('AI-led investigation')}</h2><p>{t('Review Windows privacy and security evidence, protections and detections. Opening this page does not start collection, a scan, an AI request, a download or a system change.')}</p><p className="muted-copy">{t('The privacy and security objective specializes the investigation; mode, consent, provider, risk profile and approval remain separate. Choose it below, then review the complete diagnosis controls before starting.')}</p><button className="primary" disabled={Boolean(recording || busy || securityBusy || diagnosisProgress || pendingRecovery || activeRun && !['completed', 'failed'].includes(activeRun.state))} onClick={() => { setGoals(current => ({ ...current, priority: 'privacySecurity' })); setPage('scan'); }}><ShieldCheck size={16}/>{t('Choose privacy & security diagnosis')}</button><div className="settings-lines"><div><LockKeyhole size={18}/><span><strong>{t('Credentials')}</strong><small>{t('Encrypted with Windows DPAPI for this user')}</small></span></div><div><TerminalSquare size={18}/><span><strong>{t('Model output')}</strong><small>{t('AI can propose manual guidance and review-only scripts; only registered actions have write authority')}</small></span></div><div><RotateCcw size={18}/><span><strong>{t('Recovery')}</strong><small>{t('Verified restore point, Registry exports, and action journal')}</small></span></div></div></section></WindowsSecurityPanel></div>}
           {page === 'advanced' && <ScanPage mode={mode} onMode={value => { if (!busy && (!activeRun || ['completed', 'failed'].includes(activeRun.state))) setMode(value); }} scan={scan} diagnosis={displayedDiagnosis} goals={goals} scanning={Boolean(scanRequestId)} onGoals={setGoals} onScan={scanSystem} onDiagnose={diagnose}/>}

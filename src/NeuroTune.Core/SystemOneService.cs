@@ -9,7 +9,7 @@ using System.Text.Json;
 
 namespace NeuroTune;
 
-public sealed record SystemOneOptions(bool Enabled, string Size = "4b", string Device = "auto", string Source = "local", string Model = "");
+public sealed record SystemOneOptions(bool Enabled, string Size = "4b", string Device = "auto", string Source = "local", string Model = "", bool CloudConsent = false);
 public sealed record SystemOneConfigureRequest(SystemOneOptions Options, string? ApiKey = null, bool ForgetApiKey = false);
 public sealed record SystemOneStatus(bool Enabled, bool Installed, string Size, string Device, string Directory, string Detail, bool HasFiles,
     string Source, string Model, bool HasApiKey);
@@ -27,6 +27,7 @@ public static class SystemOneService
     private static string Project => Path.Combine(Root, "source");
     private static string Python => Path.Combine(Project, ".venv", "Scripts", "python.exe");
     internal const string OpenRouterCredentialId = "system-one-openrouter";
+    internal const string FreeRouterModel = "openrouter/free";
     private static string OptionsPath => Path.Combine(Root, "options.json");
 
     public static SystemOneStatus Status()
@@ -34,8 +35,9 @@ public static class SystemOneService
         var options = LoadOptions();
         var installed = InstalledSize() == options.Size && File.Exists(Python) && File.Exists(Path.Combine(Root, "model.gguf"));
         var hasKey = !string.IsNullOrWhiteSpace(new SettingsService().LoadSecret(OpenRouterCredentialId));
-        var ready = options.Source == "openRouter" ? hasKey && !string.IsNullOrWhiteSpace(options.Model) : installed;
-        var detail = options.Source == "openRouter" ? "Optional cloud classifier via OpenRouter: token-based API usage, not local Rizzo scoring. Only sampled context is sent; no automatic local/provider fallback."
+        var ready = options.Source != "local" ? options.CloudConsent && hasKey && !string.IsNullOrWhiteSpace(options.Model) : installed;
+        var detail = options.Source == "openRouterFree" ? "Optional free cloud classifier via openrouter/free: zero-price router randomly selects an available compatible free model. Separate cloud consent and API key required; sampled context leaves this PC. Rate limits, availability and latency vary. No local install or paid/local fallback; not Rizzo scoring."
+            : options.Source == "openRouter" ? "Optional cloud classifier via OpenRouter: token-based API usage, not local Rizzo scoring. Only sampled context is sent; no automatic local/provider fallback."
             : installed ? "One-shot local worker; exits and unloads after each analysis. No background server." : "Optional component not installed. No model download or inference until explicitly requested.";
         return new(options.Enabled && ready, installed, options.Size, options.Device, Root, detail, Directory.Exists(Root), options.Source, options.Model, hasKey);
     }
@@ -43,7 +45,7 @@ public static class SystemOneService
     {
         ValidateOptions(options);
         if (options.Enabled && options.Source == "local" && InstalledSize() != options.Size) throw new InvalidOperationException("Install the selected optional model before enabling it.");
-        if (options.Enabled && options.Source == "openRouter" && (string.IsNullOrWhiteSpace(options.Model) || string.IsNullOrWhiteSpace(new SettingsService().LoadSecret(OpenRouterCredentialId))))
+        if (options.Enabled && options.Source != "local" && (string.IsNullOrWhiteSpace(options.Model) || string.IsNullOrWhiteSpace(new SettingsService().LoadSecret(OpenRouterCredentialId))))
             throw new InvalidOperationException("Save a separate OpenRouter API key and choose the optional classifier model before enabling it.");
         Directory.CreateDirectory(Root); CheckDirectory(Root);
         AtomicWrite(OptionsPath, JsonSerializer.Serialize(options));
@@ -136,12 +138,14 @@ public static class SystemOneService
                 MeasurementService.WithCaptureMutex(() =>
                 {
                     if (MeasurementService.HasActiveRecording()) throw new InvalidOperationException("Optional classification skipped while recording.");
-                    if (status.Source == "openRouter")
+                    if (status.Source != "local")
                     {
                         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken); deadline.CancelAfter(TimeSpan.FromSeconds(30));
-                        progress?.Invoke("Optional OpenRouter classifier: sending sampled context using its separate API key; API billing applies.");
+                        progress?.Invoke(status.Source == "openRouterFree"
+                            ? "Optional free OpenRouter classifier: sending sampled context with its separate API key through openrouter/free; only zero-price routing, subject to availability and rate limits."
+                            : "Optional OpenRouter classifier: sending sampled context using its separate API key; API billing applies.");
                         var key = new SettingsService().LoadSecret(OpenRouterCredentialId) ?? throw new InvalidOperationException("The optional OpenRouter key is unavailable.");
-                        var cloud = LlmClient.ClassifyTopicAsync(status.Model, key, CloudContext(context), deadline.Token).GetAwaiter().GetResult();
+                        var cloud = LlmClient.ClassifyTopicAsync(status.Model, key, CloudContext(context), deadline.Token, freeOnly: status.Source == "openRouterFree").GetAwaiter().GetResult();
                         result = ParseCloudAdvisory(cloud, phase, facts?.Keys.ToList() ?? [], watch.Elapsed.TotalSeconds, status.Model);
                         return;
                     }
@@ -197,7 +201,7 @@ public static class SystemOneService
         var domain = json.RootElement.GetProperty("domain").GetString();
         if (domain is null || !Domains.Contains(domain)) throw new InvalidOperationException("Optional cloud classifier returned an unsupported topic.");
         return new(phase, domain == "unknown" ? "uncertain" : "ok", domain, null, seconds,
-            $"OpenRouter API topic classification ({model}); token-based, no calibrated probability or causal proof. It cannot approve or execute changes.",
+            $"OpenRouter API topic classification ({model}); {(model == FreeRouterModel ? "zero-price free router, randomly selected compatible free model; " : "token-based; ")}no calibrated probability or causal proof. It cannot approve or execute changes.",
             domain == "unknown" ? [] : knownIds.Where(id => MatchesDomain(id, domain)).Take(24).ToList());
     }
     private static bool MatchesDomain(string id, string domain) => domain switch
@@ -211,14 +215,24 @@ public static class SystemOneService
     };
     internal static void ValidateOptions(SystemOneOptions options)
     {
-        if (options.Source is not ("local" or "openRouter") || options.Model is null || options.Model.Length > 512 || options.Model.Any(char.IsControl)) throw new ArgumentException("Select a supported assistant source and valid model ID.");
+        if (options.Source is not ("local" or "openRouter" or "openRouterFree") || options.Model is null || options.Model.Length > 512 || options.Model.Any(char.IsControl)) throw new ArgumentException("Select a supported assistant source and valid model ID.");
+        if (options.Source == "openRouterFree" && options.Model != FreeRouterModel) throw new ArgumentException("Free mode only accepts openrouter/free; paid or manually selected models are not allowed.");
+        if (options.Enabled && options.Source != "local" && !options.CloudConsent) throw new ArgumentException("Separate explicit cloud consent is required before enabling the optional classifier.");
         if (options.Size is not ("4b" or "1.7b") || options.Device is not ("auto" or "cpu")) throw new ArgumentException("Select a supported optional model and CPU/automatic compute mode.");
     }
     private static SystemOneOptions LoadOptions()
     {
         if (!File.Exists(OptionsPath)) return new(false);
-        try { var options = JsonSerializer.Deserialize<SystemOneOptions>(File.ReadAllText(OptionsPath)) ?? new(false); ValidateOptions(options); return options; }
+        try { return ParseOptions(File.ReadAllText(OptionsPath)); }
         catch (Exception error) when (error is JsonException or ArgumentException or IOException) { return new(false); }
+    }
+    internal static SystemOneOptions ParseOptions(string json)
+    {
+        var options = JsonSerializer.Deserialize<SystemOneOptions>(json) ?? new(false);
+        // Preserve legacy cloud drafts, but require renewed consent rather than infer it from Enabled.
+        if (options.Source != "local" && !options.CloudConsent) options = options with { Enabled = false };
+        ValidateOptions(options);
+        return options;
     }
     private static string? InstalledSize()
     {

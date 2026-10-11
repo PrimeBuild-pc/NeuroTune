@@ -26,6 +26,11 @@ jobs:
         with:
           components: clippy, rustfmt
 
+      - run: npm ci --ignore-scripts
+        working-directory: ui
+      - name: Bundle the default Pi agent and Node runtime
+        run: npm run pi:build
+        working-directory: ui
       - run: dotnet restore
       - run: dotnet format NeuroTune.sln --verify-no-changes --no-restore
       - run: dotnet build --configuration Release --no-restore
@@ -48,8 +53,6 @@ jobs:
       - name: Verify MIT and release metadata
         shell: pwsh
         run: ./scripts/test-release-metadata.ps1
-      - run: npm ci
-        working-directory: ui
       - name: Publish Tauri agent resources
         run: npm run agent:publish
         working-directory: ui

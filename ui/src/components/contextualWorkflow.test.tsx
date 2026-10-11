@@ -34,9 +34,14 @@ describe('Saved before/after and setup boundaries', () => {
     expect(rejected).toContain('Comparison rejected'); expect(rejected).toContain('Conditions differ'); expect(rejected).not.toContain('-50.0%');
   });
   it('provides a semantic setup dialog without consent-by-opening or installation claims', () => {
-    const html = renderToStaticMarkup(<SetupGuide open={false} initial={{ telemetry: false, firmware: false }} onFinish={noop} onClose={noop}/>);
+    const html = renderToStaticMarkup(<SetupGuide open={false} initial={{ telemetry: false, firmware: false }} onLoadModels={noop} onSignIn={noop} onOther={noop} onFinish={noop} onClose={noop}/>);
     expect(html).toContain('<dialog'); expect(html).toContain('Welcome to NeuroTune'); expect(html).toContain('Nothing is installed');
     expect(html).toContain('Skip without changing permissions'); expect(html).toContain('measurement and backup gates');
     expect(html).not.toContain('checked=""'); expect(html).not.toContain('System One is installed');
+    expect(html).toContain('Continue with ChatGPT'); expect(html).toContain('Sign in with OpenRouter'); expect(html).toContain('Other');
+    const busy = renderToStaticMarkup(<SetupGuide open initial={{ telemetry: true, firmware: false }} busy="Waiting for browser authorization…" onLoadModels={noop} onSignIn={noop} onOther={noop} onFinish={noop} onClose={noop}/>);
+    expect(busy).toContain('aria-busy="true"'); expect(busy).toContain('<fieldset disabled=""'); expect(busy).toContain('role="status"');
+    const failed = renderToStaticMarkup(<SetupGuide open initial={{ telemetry: false, firmware: false }} message="Authorization cancelled" error onLoadModels={noop} onSignIn={noop} onOther={noop} onFinish={noop} onClose={noop}/>);
+    expect(failed).toContain('role="alert"'); expect(failed).toContain('Authorization cancelled'); expect(failed).not.toContain('<fieldset disabled=""');
   });
 });
