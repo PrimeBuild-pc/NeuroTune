@@ -216,6 +216,22 @@ and run `node scripts/check-ui-polish.cjs`,
 Every Agent/provider call in those browser scripts is mocked. These checks
 cannot certify native Windows behavior, billing, recovery or performance.
 
+### Native UI check (`check-native-ui.cjs`)
+
+This one attaches to the real Release build, so it needs a packaged window with a debug port:
+
+1. Build it once: `cd ui && npm run tauri -- build --bundles nsis` (with `NEUROTUNE_NODE_LICENSE` set as above).
+2. Close **every** NeuroTune window. WebView2 shares one browser process per profile, so a running instance
+   silently ignores the debug flag and the port never opens.
+3. Start the Release executable with the port, from PowerShell:
+   `$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS="--remote-debugging-port=9224"; Start-Process ui/src-tauri/target/release/neurotune.exe`
+   (the app elevates itself; accept the Windows prompt, or run an already elevated shell).
+4. From the repository root: `$env:PLAYWRIGHT_PATH="<path to playwright-core>"; node scripts/check-native-ui.cjs`.
+   `NATIVE_CDP_URL` overrides the endpoint. Without `NATIVE_CAPTURE=1` it performs no system-wide capture and
+   verifies that operation history is unchanged; `NATIVE_CAPTURE=1` additionally runs real WPR smoke captures.
+
+A development build (`tauri dev`, `localhost:1420`) is rejected: the page URL must be `http://tauri.localhost/`.
+
 ## Feedback
 
 Include release/version, Windows build, provider/model ID, selected mode,
