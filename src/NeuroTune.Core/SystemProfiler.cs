@@ -41,6 +41,8 @@ public sealed class SystemProfiler
             profile.NetworkSettings = ReadNetworkSettings();
             profile.RelevantDrivers = ReadRelevantDrivers();
             profile.DeviceIssues = ReadDeviceIssues();
+            try { profile.DeviceCandidates = DeviceControl.Describe(DeviceControl.Machine); }
+            catch (Exception error) when (error is not OutOfMemoryException) { profile.DeviceCandidates = [$"unavailable: {error.GetType().Name}"]; }
         });
         RunPhase("Installed and active software", () =>
         {
