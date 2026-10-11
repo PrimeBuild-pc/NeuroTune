@@ -229,7 +229,10 @@ public sealed class PlannerLoopTests
         {
             var outcome = await new LlmClient(new OptimizationCatalog()).PlanAsync(new SystemProfile
             {
-                Cpu = "CPU", StartupItems = ["Example helper"], AutomaticServices = ["Example service"], InstalledSoftware = ["Example app"]
+                Cpu = "CPU",
+                StartupItems = ["Example helper"],
+                AutomaticServices = ["Example service"],
+                InstalledSoftware = ["Example app"]
             }, new TuningGoals(), settings, null);
             await server;
             Assert.IsFalse(outcome.UsedLocalFallback);
