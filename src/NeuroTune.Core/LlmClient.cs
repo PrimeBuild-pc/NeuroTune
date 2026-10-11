@@ -86,6 +86,7 @@ public sealed class LlmClient
         if (!Enum.IsDefined(mode)) throw new InvalidOperationException("Unknown investigation mode.");
         if (MeasurementService.HasActiveRecording()) throw new InvalidOperationException("Diagnosis cannot run while recording.");
         ValidateInvestigationBudget(settings);
+        var callerToken = cancellationToken;
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(TimeSpan.FromMinutes(settings.InvestigationMaxMinutes));
         cancellationToken = deadline.Token;
@@ -147,8 +148,14 @@ public sealed class LlmClient
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            audit.Add(new(currentTurn, "rejected", plannerTurn?.EvidenceIds ?? [], false, PlannerFailureReason(exception, stage)));
+            audit.Add(new(currentTurn, "rejected", plannerTurn?.EvidenceIds ?? [], false, PlannerFailureReason(exception, stage) + ModelAdvice(exception, settings)));
             return new(LocalFallback(localConflicts), audit, "local-conflict-fallback", true, additionalEvidence);
+        }
+        catch (OperationCanceledException exception) when (!callerToken.IsCancellationRequested)
+        {
+            // The investigation budget or the provider timeout expired: the model did not answer in time, which is not a user cancellation.
+            audit.Add(new(currentTurn, "rejected", [], false, $"The model did not finish within the {settings.InvestigationMaxMinutes}-minute investigation budget.{ModelAdvice(exception, settings)}"));
+            return new(LocalFallback(localConflicts), audit, "investigation-timeout", true, additionalEvidence);
         }
 
         async Task<string> GenerateAsync(int turnNumber)
@@ -310,6 +317,7 @@ public sealed class LlmClient
         OptimizationPriority.SystemLatency => "SYSTEM LATENCY: prioritize responsiveness, stalls and tail delays. Distinguish CPU ready time, DPC/ISR attribution, paging/storage waits and display/input/presentation context. Request relevant read-only follow-ups rather than blaming the longest driver event. Scheduling/interrupt durations are not end-to-end input latency or proof of causality; identify missing supported measurements and a repeatable workload test. Consider throughput, energy, visual quality and stability costs without automatically disabling background services or security features.",
         OptimizationPriority.NetworkLatency => "NETWORK OPTIMIZATION: prioritize the user's actual connection problem: latency, jitter, packet loss, disconnects or throughput. Distinguish local adapter/link/Wi-Fi conditions, VPN/filter software, host load, LAN/router, ISP/WAN route and remote service limitations. Adapter counters and TCP configuration alone cannot measure ping, jitter or path causality. If controlled endpoint/path measurements are missing, propose a consented manual follow-up, not an invented probe result. Do not assume DNS changes, generic TCP values or disabling offloads will improve game latency; explain reliability, throughput and security trade-offs.",
         OptimizationPriority.PrivacySecurity => "WINDOWS PRIVACY AND SECURITY: investigate data collection and security posture as separate sections, not performance gains. Inspect optional versus required diagnostics, advertising ID, tailored experiences, speech/input personalization, activity/cloud search, location/app permissions and documented Recall policies only where supported. Registry absence is not disabled, a policy value is not proof of effective behavior or observed network traffic; qualify build, edition, user versus device scope and management overrides. Do not promise zero telemetry: diagnostic-data-off is edition-qualified and does not cover every connected service. Preserve user-required features and explain trade-offs, supported Settings paths, verification and reversal. Preserve Defender, Firewall, SmartScreen, Windows Update, tamper protection and core isolation; do not disable security cloud protection/sample submission as an automatic privacy tweak. Request bounded privacy/security status and Defender detection summaries; unsupported scanner or file requests become optional manual follow-ups. Antivirus passive/unavailable/stale status is not absence of threats. Distinguish scanner-reported detections from suspicious persistence/signature metadata; unsigned or unfamiliar software is not malware and no detections does not certify a clean PC. Never infer infection from an installed tool alone. Quick/full scans may remediate and use network/cloud under existing antivirus policy: require separate explicit user consent, not a read-only request. Recommend Windows Security Protection history for user-managed remediation; do not generate generic deletion, security bypass, arbitrary exclusions or automatic download/EULA/VirusTotal actions. Autoruns and Sigcheck are optional official-source manual follow-ups, not installed/executed tools. No change is valid; finish with uncertainty and urgent protective guidance when evidence warrants it.",
+        OptimizationPriority.CompromiseReview => "COMPROMISE AND VULNERABILITY REVIEW: look for exposure and indicators of compromise as hypotheses, never as a verdict. Start from protections (Defender, firewall, hardening settings), then investigate persistence (startup, scheduled tasks, services including unquoted or user-writable image paths, WMI event subscriptions), network exposure (listening ports with owning process names, remote-access settings, hosts-file and proxy tampering), account counts and patch level, requesting the matching read-only tools. An inventory item, an unusual port or a missing registry value is not proof of malware or a vulnerability; legitimate software commonly produces all of them, and no hashes, signatures, memory or network traffic are inspected. Qualify each finding with what was and was not observed and never present the absence of findings as a clean PC. Do not recommend deleting files, killing processes or disabling security features: propose manual verification steps, supported reversible hardening settings with verification and reversal, and official resources. Executable changes remain limited to registered reversible actions after separate consent.",
         OptimizationPriority.Stability => "SYSTEM STABILITY: prioritize reproducible crashes, freezes, device resets, recurring errors and data-integrity risks before marginal performance gains. Investigate device/driver health, recent System event IDs/sources/times, storage health metadata, memory/commit pressure, firmware/tuning context and thermal/power uncertainty. A warning, driver age, clean snapshot or installed tuning app does not prove a root cause, instability, an active overclock or a stable system. Do not automatically reset settings or disable recovery mechanisms. Separate urgent protective advice, reversible diagnostic isolation and longer user-approved validation; no stress test, firmware write, download or repair is an automatic tool.",
         OptimizationPriority.Fps => "LEGACY FRAME-RATE FOCUS: prioritize sustained gaming throughput and frame-time consistency for the specified workload. Distinguish CPU/GPU limits and measurement availability; scheduling traces are not FPS or 1% lows. Explain image-quality, latency, energy and stability trade-offs and require representative frame measurements before claiming gains.",
         OptimizationPriority.Efficiency => "LEGACY EFFICIENCY FOCUS: prioritize useful work per unit of energy, battery life, sustained performance, thermals and noise. Configuration and indirect ACPI readings do not establish measured power or temperature benefits. Seek available workload evidence and propose controlled validation while explaining responsiveness and throughput trade-offs; do not automatically select a power plan.",
@@ -415,6 +423,28 @@ public sealed class LlmClient
             message.TryGetProperty("refusal", out var refusal) && refusal.ValueKind != JsonValueKind.Null)
             throw new InvalidOperationException("Optional OpenRouter returned incomplete/refused/tool output; its classification was discarded.");
         return message.GetProperty("content").GetString() ?? throw new InvalidOperationException("Missing optional classifier content.");
+    }
+
+    // Model-attributable causes get an actionable hint; only the user's own model ID is echoed, never provider or evidence text.
+    private static string ModelAdvice(Exception exception, UserSettings settings)
+    {
+        if (exception is InvalidOperationException && exception.Message.StartsWith("ChatGPT", StringComparison.Ordinal)) return "";
+        var model = settings.Model.Length <= 80 ? settings.Model : settings.Model[..80];
+        var cause = exception switch
+        {
+            HttpRequestException { StatusCode: HttpStatusCode.TooManyRequests } => $"{model} is rate-limited or out of quota at the provider; free models are often throttled.",
+            HttpRequestException { StatusCode: HttpStatusCode.PaymentRequired } => $"The provider reports no credits for {model}.",
+            HttpRequestException { StatusCode: HttpStatusCode.Unauthorized } => "The provider rejected the credential; sign in again or replace the key.",
+            HttpRequestException { StatusCode: HttpStatusCode.Forbidden or HttpStatusCode.NotFound or HttpStatusCode.BadRequest } =>
+                $"{model} is unavailable for this key or does not accept this request.",
+            HttpRequestException { StatusCode: { } status } when (int)status >= 500 => $"The provider or its upstream host for {model} failed.",
+            HttpRequestException => "The provider could not be reached.",
+            OperationCanceledException => $"{model} was too slow for this budget.",
+            InvalidOperationException => $"{model} returned output NeuroTune cannot validate; small or free models often cannot follow the strict JSON evidence protocol.",
+            _ => ""
+        };
+        return cause.Length == 0 ? "" :
+            $" {cause} Choose another model or retry later in Provider settings; NeuroTune never retries or switches models on its own, and nothing was applied.";
     }
 
     private static string PlannerFailureReason(Exception exception, string stage) => exception switch

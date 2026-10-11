@@ -69,6 +69,44 @@ public sealed class PlannerLoopTests
     }
 
     [TestMethod]
+    [DataRow(429, "rate-limited")]
+    [DataRow(402, "no credits")]
+    [DataRow(404, "unavailable for this key")]
+    [DataRow(503, "upstream host")]
+    public async Task Model_side_provider_failures_name_the_model_and_tell_the_user_how_to_recover(int status, string cause)
+    {
+        var (listener, server, settings) = StartServer(new Func<string, string>[] { _ => "secret-response-body" }, status);
+        settings.Model = "vendor/free-model:free";
+        using (listener)
+        {
+            var outcome = await new LlmClient(new OptimizationCatalog()).PlanAsync(new SystemProfile { Cpu = "CPU" }, new TuningGoals(), settings, null);
+            await server;
+            Assert.IsTrue(outcome.UsedLocalFallback);
+            var reason = outcome.Audit.Single().Reason;
+            Assert.Contains(cause, reason);
+            Assert.Contains("vendor/free-model:free", reason);
+            Assert.Contains("never retries or switches models", reason);
+            Assert.Contains(reason, outcome.Diagnosis.Summary);
+            Assert.DoesNotContain("secret-response", JsonSerializer.Serialize(outcome));
+        }
+    }
+
+    [TestMethod]
+    public async Task Unusable_model_output_is_attributed_to_the_model_without_echoing_it()
+    {
+        var (listener, server, settings) = StartServer(["secret-not-json"]);
+        settings.Model = "tiny-model";
+        using (listener)
+        {
+            var outcome = await new LlmClient(new OptimizationCatalog()).PlanAsync(new SystemProfile { Cpu = "CPU" }, new TuningGoals(), settings, null);
+            await server;
+            Assert.IsTrue(outcome.UsedLocalFallback);
+            Assert.Contains("tiny-model returned output NeuroTune cannot validate", outcome.Audit.Single().Reason);
+            Assert.DoesNotContain("secret-not-json", JsonSerializer.Serialize(outcome));
+        }
+    }
+
+    [TestMethod]
     [DataRow("{\"kind\":\"requestEvidence\",\"evidenceIds\":[\"unknown:fact\"]}", "The planner requested unknown or repeated evidence.", "evidence request")]
     [DataRow("not-json-secret-response", "The planner envelope contains invalid JSON syntax.", "planner envelope")]
     [DataRow("{\"kind\":\"secret-unknown-kind\"}", "The planner returned an unknown turn kind.", "planner envelope")]

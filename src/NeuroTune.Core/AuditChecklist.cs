@@ -38,7 +38,7 @@ public static class AuditChecklist
         new("memory", "health", "Memoria · pressione e paging", ["hardware:Memory pressure sample", "investigation:memory-pressure:"], ["memory-pressure"]),
     ];
 
-    public static bool Required(InvestigationMode mode, TuningGoals goals) => mode == InvestigationMode.AuditOnly || goals.Priority == OptimizationPriority.PrivacySecurity;
+    public static bool Required(InvestigationMode mode, TuningGoals goals) => mode == InvestigationMode.AuditOnly || goals.Priority is OptimizationPriority.PrivacySecurity or OptimizationPriority.CompromiseReview;
 
     public static IReadOnlyList<string> Missing(DiagnosisResult diagnosis) => Checks.Where(check =>
         !(diagnosis.AuditCoverage ?? []).Any(row => row.CheckId == check.Id)).Select(check => check.Id).ToList();
