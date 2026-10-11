@@ -190,7 +190,7 @@ cd ..
   <li><a href="SECURITY.md">Security policy and upgrade safety</a> · <a href="RELEASE_NOTES.md">Alpha release notes</a></li>
   <li><a href="docs/TESTING.md">Alpha testing and contributor checks</a></li>
   <li><a href="docs/PROVIDERS.md">Provider guide</a> · <a href="docs/DETERMINISTIC_CONTROLS.md">Investigation/execution boundaries</a></li>
-  <li><a href="docs/SCEWIN_SYSTEM_ONE.md">Optional SCEWIN / System One</a> · <a href="docs/PRIVACY_SECURITY.md">Privacy and Windows security</a> · <a href="docs/COMPROMISE_REVIEW.md">Vulnerability and compromise review</a></li>
+  <li><a href="docs/SCEWIN_SYSTEM_ONE.md">Optional SCEWIN / System One</a> · <a href="docs/PRIVACY_SECURITY.md">Privacy and Windows security</a> · <a href="docs/COMPROMISE_REVIEW.md">Vulnerability and compromise review</a> · <a href="docs/DEVICE_CONTROLS.md">Device Manager controls</a></li>
 </ul>
 <p>Internal planning, research notes and historical machine reports are not part of the public user documentation. Source checks and previous tests are not exact-candidate release certification.</p>
 <p>To contribute hardware inventory, use the <a href="tools/hardware-collector/README.md">source-visible hardware collector</a>. It runs offline without administrator rights, traces or settings changes. Review its dated JSON before sharing; inventory is not a performance benchmark.</p>

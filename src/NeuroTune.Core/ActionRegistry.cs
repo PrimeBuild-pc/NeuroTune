@@ -62,6 +62,8 @@ public static class ActionPolicy
             RiskProfile.Aggressive => true,
             _ => false
         };
+        // Device toggles remove a function the user must confirm they do not need: never pre-selected.
+        if (definition.Id.StartsWith("device.disable.", StringComparison.Ordinal)) preselected = false;
         var confirmation = definition.Risk == RiskLevel.High;
         return new(confirmation ? PolicyDisposition.ConfirmationRequired : PolicyDisposition.Allowed,
             preselected, confirmation, confirmation
