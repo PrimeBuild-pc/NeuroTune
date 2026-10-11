@@ -35,8 +35,9 @@ public static class SystemOneService
         var options = LoadOptions();
         var installed = InstalledSize() == options.Size && File.Exists(Python) && File.Exists(Path.Combine(Root, "model.gguf"));
         var hasKey = !string.IsNullOrWhiteSpace(new SettingsService().LoadSecret(OpenRouterCredentialId));
-        var ready = options.Source != "local" ? options.CloudConsent && hasKey && !string.IsNullOrWhiteSpace(options.Model) : installed;
-        var detail = options.Source == "openRouterFree" ? "Optional free cloud classifier via openrouter/free: zero-price router randomly selects an available compatible free model. Separate cloud consent and API key required; sampled context leaves this PC. Rate limits, availability and latency vary. No local install or paid/local fallback; not Rizzo scoring."
+        var ready = options.Source == "clm" ? ClmClient.Reachable() : options.Source != "local" ? options.CloudConsent && hasKey && !string.IsNullOrWhiteSpace(options.Model) : installed;
+        var detail = options.Source == "clm" ? (ready ? "Local CLM (Contrastive Language Model) server reachable on this PC. Sampled context stays on loopback; no cloud, API key or NeuroTune-managed download." : "Local CLM server not reachable. Start it with scripts/clm-stack.ps1; NeuroTune does not start or download it.")
+            : options.Source == "openRouterFree" ? "Optional free cloud classifier via openrouter/free: zero-price router randomly selects an available compatible free model. Separate cloud consent and API key required; sampled context leaves this PC. Rate limits, availability and latency vary. No local install or paid/local fallback; not Rizzo scoring."
             : options.Source == "openRouter" ? "Optional cloud classifier via OpenRouter: token-based API usage, not local Rizzo scoring. Only sampled context is sent; no automatic local/provider fallback."
             : installed ? "One-shot local worker; exits and unloads after each analysis. No background server." : "Optional component not installed. No model download or inference until explicitly requested.";
         return new(options.Enabled && ready, installed, options.Size, options.Device, Root, detail, Directory.Exists(Root), options.Source, options.Model, hasKey);
@@ -45,7 +46,8 @@ public static class SystemOneService
     {
         ValidateOptions(options);
         if (options.Enabled && options.Source == "local" && InstalledSize() != options.Size) throw new InvalidOperationException("Install the selected optional model before enabling it.");
-        if (options.Enabled && options.Source != "local" && (string.IsNullOrWhiteSpace(options.Model) || string.IsNullOrWhiteSpace(new SettingsService().LoadSecret(OpenRouterCredentialId))))
+        if (options.Enabled && options.Source == "clm" && !ClmClient.Reachable(refresh: true)) throw new InvalidOperationException("The local CLM server is not reachable. Start it with scripts/clm-stack.ps1, then enable the assistant.");
+        if (options.Enabled && options.Source is "openRouter" or "openRouterFree" && (string.IsNullOrWhiteSpace(options.Model) || string.IsNullOrWhiteSpace(new SettingsService().LoadSecret(OpenRouterCredentialId))))
             throw new InvalidOperationException("Save a separate OpenRouter API key and choose the optional classifier model before enabling it.");
         Directory.CreateDirectory(Root); CheckDirectory(Root);
         AtomicWrite(OptionsPath, JsonSerializer.Serialize(options));
@@ -138,6 +140,14 @@ public static class SystemOneService
                 MeasurementService.WithCaptureMutex(() =>
                 {
                     if (MeasurementService.HasActiveRecording()) throw new InvalidOperationException("Optional classification skipped while recording.");
+                    if (status.Source == "clm")
+                    {
+                        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken); deadline.CancelAfter(TimeSpan.FromSeconds(30));
+                        progress?.Invoke("System One · CLM: classifying sampled context on the local CLM server; nothing leaves this PC.");
+                        var answer = ClmClient.DecideAsync(context, deadline.Token).GetAwaiter().GetResult();
+                        result = ClmClient.ParseAdvisory(answer, phase, facts?.Keys.ToList() ?? [], watch.Elapsed.TotalSeconds, MatchesDomain);
+                        return;
+                    }
                     if (status.Source != "local")
                     {
                         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken); deadline.CancelAfter(TimeSpan.FromSeconds(30));
@@ -215,14 +225,15 @@ public static class SystemOneService
     };
     internal static void ValidateOptions(SystemOneOptions options)
     {
-        if (options.Source is not ("local" or "openRouter" or "openRouterFree") || options.Model is null || options.Model.Length > 512 || options.Model.Any(char.IsControl)) throw new ArgumentException("Select a supported assistant source and valid model ID.");
+        if (options.Source is not ("local" or "openRouter" or "openRouterFree" or "clm") || options.Model is null || options.Model.Length > 512 || options.Model.Any(char.IsControl)) throw new ArgumentException("Select a supported assistant source and valid model ID.");
         if (options.Source == "openRouterFree" && options.Model != FreeRouterModel) throw new ArgumentException("Free mode only accepts openrouter/free; paid or manually selected models are not allowed.");
-        if (options.Enabled && options.Source != "local" && !options.CloudConsent) throw new ArgumentException("Separate explicit cloud consent is required before enabling the optional classifier.");
+        if (options.Source == "clm" && options.Model is not ("" or ClmClient.Model)) throw new ArgumentException("The CLM source only accepts the clm-latest model.");
+        if (options.Enabled && options.Source is "openRouter" or "openRouterFree" && !options.CloudConsent) throw new ArgumentException("Separate explicit cloud consent is required before enabling the optional classifier.");
         if (options.Size is not ("4b" or "1.7b") || options.Device is not ("auto" or "cpu")) throw new ArgumentException("Select a supported optional model and CPU/automatic compute mode.");
     }
     private static SystemOneOptions LoadOptions()
     {
-        if (!File.Exists(OptionsPath)) return new(false);
+        if (!File.Exists(OptionsPath)) return new(false, Source: "clm");
         try { return ParseOptions(File.ReadAllText(OptionsPath)); }
         catch (Exception error) when (error is JsonException or ArgumentException or IOException) { return new(false); }
     }
@@ -230,7 +241,7 @@ public static class SystemOneService
     {
         var options = JsonSerializer.Deserialize<SystemOneOptions>(json) ?? new(false);
         // Preserve legacy cloud drafts, but require renewed consent rather than infer it from Enabled.
-        if (options.Source != "local" && !options.CloudConsent) options = options with { Enabled = false };
+        if (options.Source is "openRouter" or "openRouterFree" && !options.CloudConsent) options = options with { Enabled = false };
         ValidateOptions(options);
         return options;
     }
