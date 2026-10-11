@@ -39,7 +39,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
       };
     });
     await page.goto(process.env.UI_PREVIEW_URL || 'http://127.0.0.1:4173/');
-    await page.locator('#startup').waitFor({ state: 'detached' });
+    await page.locator('#startup').waitFor({ state: 'detached' }); await page.getByRole('button', { name: 'Skip without changing permissions', exact: true }).click({ timeout: 3000 }).catch(() => {});
     await page.getByRole('button', { name: 'Complete diagnosis', exact: true }).first().click();
     await page.getByRole('combobox', { name: 'Objective', exact: true }).selectOption('privacySecurity');
     const mode = page.getByRole('group', { name: 'Investigation mode', exact: true });
