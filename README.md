@@ -123,13 +123,15 @@
 
 <h2>Your model. Explicit data boundaries.</h2>
 <p><strong>Main AI:</strong> OpenRouter, OpenAI API, Anthropic, DeepSeek, compatible custom APIs, or loopback servers such as Ollama, LM Studio and vLLM. Official browser authorization is available for OpenRouter and eligible ChatGPT plans/credits; availability and limits are provider-controlled. See the <a href="docs/PROVIDERS.md">provider guide</a>.</p>
+<p><strong>Default investigation agent: Pi CORE.</strong> NeuroTune embeds <code>@earendil-works/pi-agent-core</code>, not the full Pi coding CLI/TUI. Pi schedules the bounded investigation in an in-memory, short-lived non-admin subprocess; NeuroTune retains provider transport/OAuth, fixed read-only readers and all evidence/approval/execution validation. No shell or file tool is exposed. Non-admin is not a filesystem/network sandbox. The packaged Node runtime needs no user npm installation, global Pi or local model; inference still uses your selected provider. A missing/failed agent is reported, never replaced by another agent.</p>
+<p>First-launch setup offers <strong>ChatGPT, OpenRouter or Other</strong>. Browser sign-in saves the connection independently of optional sensor/firmware/System One choices. A signed-in connection can retry <strong>Load available models</strong> without another login; identity-only ChatGPT must still grant plan use. Only <strong>Save choices and continue</strong> saves optional permissions; Skip preserves them.</p>
 <p>Local scans, captures and numerical analysis do not call a model. Consented diagnosis sends prepared evidence to the <strong>selected provider</strong>. A local endpoint keeps that request local; remote providers apply their own processing/retention policies. Common identity/path redaction is best-effort, <strong>not guaranteed anonymization</strong>. A separately enabled optional cloud classifier still has its own transmission boundary.</p>
 <details>
   <summary><strong>Optional features: consent, costs and limits</strong></summary>
   <table>
     <tr><th>Feature</th><th>Consent and limits</th></tr>
     <tr><td>Supporting reports/screenshots</td><td>Up to 8 files, including 4 images, with prepared previews and separate transmission consent. Reports are inert text; images require model-vision/cost confirmation. <strong>Pixels are not anonymized</strong> and may be resent each turn. Report text/metadata persist locally; screenshot pixels are transient. User files cannot unlock a measurement gate.</td></tr>
-    <tr><td>System One assistant</td><td>Default-off topic advice through a managed local Rizzo component or a separately consented OpenRouter classifier. Local setup downloads multi-GB third-party assets; cloud use has separate credentials/costs. Neither approves writes. No speed/accuracy guarantee; non-admin workers are not filesystem/network sandboxes.</td></tr>
+    <tr><td>System One assistant</td><td>Default-off topic advice through local Rizzo, OpenRouter Free (<code>openrouter/free</code>, bounded zero-price routing) or a paid OpenRouter API model. Free routing randomly selects an available compatible model, with rate/availability limits and no paid/local fallback. Both cloud choices need separate credentials and cloud consent, not installs. Old cloud configurations require renewed consent. Radio choices are unsaved drafts: actual enabled source/model, details and costs remain those of the saved configuration until explicitly changed. Local setup downloads multi-GB third-party assets. Neither approves writes. No speed/accuracy guarantee; non-admin workers are not filesystem/network sandboxes.</td></tr>
     <tr><td>BIOS inspection / SCEWIN</td><td>BIOS reads are opt-in. Offline imports are unverified. Export requires a user-supplied, hash-approved privileged package and additional consent; third-party drivers can affect the system. No AMI binaries are bundled, no protections are weakened and no BIOS write command is exposed. Live board compatibility remains unverified.</td></tr>
     <tr><td>Defender quick/full scans</td><td>Separate explicit consent and final confirmation. Defender may quarantine/remove detections under its configured policy; network/cloud/sample behavior must be reviewed. Scan return/history is not a clean-PC verdict. Remediation belongs in Windows Security → Protection history; restore points do not guarantee reversal.</td></tr>
   </table>
@@ -160,14 +162,19 @@
 <p>From PowerShell:</p>
 <pre lang="powershell">git clone https://github.com/PrimeBuild-pc/NeuroTune.git
 cd NeuroTune
+cd ui
+npm ci --ignore-scripts
+npm run pi:build
+cd ..
 dotnet restore
 dotnet build --configuration Release
+dotnet test tests/NeuroTune.Tests -c Release --filter "TestCategory!=WindowsIntegration"
 cd ui
-npm ci
 npm test
 npm run typecheck
 npm run lint
 npm run tauri dev</pre>
+<p><code>pi:build</code> bundles pinned CORE dependencies, the build machine's Windows x64 Node runtime and license notices. Use a complete official Node distribution. Only if its license is missing beside <code>node.exe</code>, set <code>NEUROTUNE_NODE_LICENSE</code> to an official license file matching that exact Node version/distribution; no runtime/license is downloaded automatically. See the <a href="docs/TESTING.md#contributor-checks-no-live-provider-or-system-writers">contributor checks</a>.</p>
 <p>Launching the app requires normal Windows UAC approval. Integration tests and writer/installer checks belong in a disposable VM; use the <a href="docs/TESTING.md">test guide</a>, not your primary PC.</p>
 <details>
   <summary><strong>Build the unsigned installer and portable archive</strong></summary>
@@ -175,7 +182,7 @@ npm run tauri dev</pre>
 npm run tauri -- build --bundles nsis
 cd ..
 ./scripts/package-release.ps1</pre>
-  <p>CI produces the <code>NeuroTune-win-x64</code> artifact: a per-machine NSIS installer, a complete portable ZIP containing both self-contained agents, and <code>SHA256SUMS</code>. <strong>Portable means no installation, not no elevation or no persistent data.</strong> Optional model weights, SCEWIN tools and vendor drivers are not bundled. SHA-256 checks identify bytes; they do not authenticate an unsigned publisher or establish safety.</p>
+  <p>CI produces the <code>NeuroTune-win-x64</code> artifact: a per-machine NSIS installer, a complete portable ZIP containing both self-contained agents plus the bundled Pi CORE/Node runtime and notices, and <code>SHA256SUMS</code>. <strong>Portable means no installation, not no elevation or no persistent data.</strong> Optional model weights, SCEWIN tools and vendor drivers are not bundled. SHA-256 checks identify bytes; they do not authenticate an unsigned publisher or establish safety.</p>
 </details>
 
 <h2>Documentation and contributing</h2>

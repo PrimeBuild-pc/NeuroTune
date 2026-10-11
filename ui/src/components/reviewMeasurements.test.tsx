@@ -59,6 +59,16 @@ describe('Provider, review and measurement presentation preserves gates', () => 
     const legacy = renderToStaticMarkup(<AuditCoverageView diagnosis={{ ...diagnosis, auditCoverage: undefined }}/>);
     expect(legacy).toContain('without a verified checklist'); expect(legacy).toContain('0 / 15');
   });
+  it('keeps service, startup and uninstall proposals visible and review-only without removal controls', () => {
+    const manual = (id: string, title: string): Recommendation => ({ ...proposal, id, kind: 'manualGuidance', title, actionId: '', scriptLanguage: '', script: '', reason: 'Optional manual review only', reviewWarnings: ['Manual guidance is not executed or verified by NeuroTune.'] });
+    const html = renderToStaticMarkup(<ReviewPage diagnosis={{ summary: 'Review optional background software', findings: [], conflicts: [], recommendations: [
+      manual('service', 'Review background service'), manual('startup', 'Review startup entry'), manual('uninstall', 'Review installed app'),
+    ], consentQuestion: 'Review without changes' }} actions={[]} recommendations={new Map()} selected={new Set()} riskProfile="aggressive" canApply onToggle={noop} onPreset={noop} onApply={noop}/>);
+    expect(html).toContain('<dt>Executable proposals</dt><dd>0</dd>'); expect(html).toContain('<dt>Review-only proposals</dt><dd>3</dd>');
+    expect(html).toContain('Review background service'); expect(html).toContain('Review startup entry'); expect(html).toContain('Review installed app');
+    expect(html).toContain('Manual guidance'); expect(html).toContain('Nothing auto-applied');
+    expect(html).not.toContain('Remove app'); expect(html).not.toContain('class="action-card');
+  });
   it('separates comparison from AI evidence and never treats failed or unanalyzed traces as valid', () => {
     const sessions = [
       { id: 'failed', state: 'failed', label: 'baseline', error: 'Missing ETL' },

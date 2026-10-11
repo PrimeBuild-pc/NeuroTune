@@ -1,5 +1,15 @@
 # Optional SCEWIN export and managed System One
 
+These optional components are separate from the default **Pi CORE investigation
+agent** (`@earendil-works/pi-agent-core`, not the full coding CLI/TUI). CORE uses
+the selected main provider through NeuroTune-owned transport/OAuth and fixed
+read-only readers; evidence and execution validations stay in the host. Its
+in-memory non-admin subprocess exposes no shell/file tool and is not a
+filesystem/network sandbox. Node is bundled; users need no npm, global Pi or
+local model. Agent failure never selects a replacement agent. See
+[investigation boundaries](DETERMINISTIC_CONTROLS.md) and
+[build prerequisites/notices](TESTING.md#contributor-checks-no-live-provider-or-system-writers).
+
 ## SCEWIN: explicit local tool approval, not a driver bundle
 
 NeuroTune now exposes three fixed agent commands: `scewin-inspect`, `scewin-export`, and `scewin-import`. They are separate from the normal Windows firmware reader and from AI diagnosis. No scan, diagnosis, model output or startup task invokes SCEWIN automatically.
@@ -52,11 +62,27 @@ Unsuitable authority: choosing a BIOS value, disabling protections, executing a 
 
 ## OpenRouter alternative (explicit cloud consent)
 
-Settings → System One assistant also offers a separate OpenRouter API key/model instead of local Rizzo. No model/runtime download is needed. Cloud enablement explicitly consents to API charges and sampled-context transmission; main ChatGPT/OpenRouter credentials and model remain untouched. The key is DPAPI-protected independently and can be deleted separately. This auxiliary path uses bounded chat generation for the same fixed topic categories, **not** Rizzo's probability scoring; scores remain null. Unknown/malformed/refused/incomplete outputs do not become actions. A 30-second/256-output-token bound and no automatic provider/local fallback apply. Native capture exclusion applies to both sources. Common identity/drive-path redaction is best-effort, not guaranteed anonymization. Live billing/accuracy/speed have not been tested with a real key.
+Advanced tools → System One assistant offers **OpenRouter Free** and
+**OpenRouter API** instead of local Rizzo. Both need a separate API key and cloud
+consent; no local install or model/runtime download is needed. Free fixes the
+model to `openrouter/free`, randomly routing to an available compatible free
+model with rate/availability/quota limits. Its bounded request sets provider
+`max_price` to zero for prompt/completion/request/image, requires supported
+parameters and disables provider fallback (`allow_fallbacks:false`); no paid or
+local fallback exists. Paid API mode uses the explicitly selected model and can
+consume credits. Cloud enablement consents to sampled-context transmission to
+OpenRouter/the routed provider; main ChatGPT/OpenRouter credentials and model
+remain untouched. Old cloud configurations lacking the separate consent flag
+are disabled until renewed consent is given.
+
+Radio selections are unsaved drafts and do not write settings. Actual saved
+source/model, enabled state and details remain visible when selecting Free over
+an enabled paid configuration: that saved paid configuration can still incur
+charges until explicitly changed. The key is DPAPI-protected independently and can be deleted separately. This auxiliary path uses bounded chat generation for the same fixed topic categories, **not** Rizzo's probability scoring; scores remain null. Unknown/malformed/refused/incomplete outputs do not become actions. A 30-second/256-output-token bound and no automatic provider/local fallback apply. Native capture exclusion applies to both sources. Common identity/drive-path redaction is best-effort, not guaranteed anonymization. Live billing/accuracy/speed have not been tested with a real key.
 
 ## Implemented optional component
 
-**Settings → System One assistant → Local** is disabled by default. Consent starts an app-managed Windows x64 installation; no external Python, server or command line is required from the user. Choose Rizzo Flow 4B Q8 (approximately 4.4 GB weights) or 1.7B Q8 (approximately 1.8 GB), and automatic Vulkan/CPU or CPU-only compute. Reserve at least 7/4 GiB disk respectively, plus sufficient RAM/VRAM; the larger model is not automatically better or faster on this PC.
+**Advanced tools → System One assistant → Local** is disabled by default. Consent starts an app-managed Windows x64 installation; no external Python, server or command line is required from the user. Choose Rizzo Flow 4B Q8 (approximately 4.4 GB weights) or 1.7B Q8 (approximately 1.8 GB), and automatic Vulkan/CPU or CPU-only compute. Reserve at least 7/4 GiB disk respectively, plus sufficient RAM/VRAM; the larger model is not automatically better or faster on this PC.
 
 The installer pins Rizzo source revision `b9ba007ee4d2928bbab5b1d8bfe9009c3696b6de`, uv `0.12.21`, private Python `3.12.12`, llama.cpp `b11081` Windows Vulkan, and immutable model revisions/SHA-256 digests. Source, uv, runtime and weights downloads have size/hash checks, resumable partial files and bounded safe ZIP extraction. Python and transitive dependencies are installed by uv from the pinned lockfile; this is a supply-chain dependency, not proof of absence of vulnerabilities. Upstream Rizzo, uv, llama.cpp, Python and model licenses still apply; these assets are not bundled into NeuroTune's executable.
 

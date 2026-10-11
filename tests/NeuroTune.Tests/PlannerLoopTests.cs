@@ -168,6 +168,88 @@ public sealed class PlannerLoopTests
         }
     }
 
+    public static IEnumerable<object[]> ProposalPolicyCases => Enum.GetValues<InvestigationMode>()
+        .SelectMany(mode => Enum.GetValues<OptimizationPriority>().Select(priority => new object[] { mode, priority }));
+
+    [TestMethod]
+    [DynamicData(nameof(ProposalPolicyCases))]
+    public void Background_software_proposal_policy_is_present_for_every_mode_and_focus(InvestigationMode mode, OptimizationPriority priority)
+    {
+        var prompt = LlmClient.BuildPlannerPrompt(new TuningGoals { Priority = priority },
+            new Dictionary<string, string> { ["system:cpu"] = "CPU" }, new Dictionary<string, string> { ["system:cpu"] = "CPU" },
+            [], "[]", [], [], 1, 2, 1, [], null, mode);
+
+        foreach (var clause in new[]
+        {
+            "OPTIONAL REVIEW-ONLY BACKGROUND-SOFTWARE POLICY", "manualGuidance with no actionId", "Distinguish disabling a startup entry",
+            "Cite only PROVIDED EVIDENCE", "existing registered readers within the remaining budget", "motivation, risk, lost functionality, dependencies, uncertainty, manual verification, and reversal",
+            "user data/configuration/licenses, backup, and reinstall", "Protect Windows, security, updates, drivers, shared runtimes/dependencies, and user-required software",
+            "If role or dependencies are ambiguous, recommend verification, not removal", "do not prove use, redundancy, malware, resource consumption, app size, or reclaimable storage",
+            "free volume rather than app size/reclaimable space", "generic debloaters, AppX removal scripts, inferred scope", "Evidence-based manual AppX explanations and review through Windows Settings are allowed", "they never authorize execution", "Do not change provider PII/consent handling", "never claim a change succeeded"
+        }) Assert.Contains(clause, prompt);
+        Assert.Contains(LlmClient.AnalysisFocus(priority), prompt);
+        Assert.Contains(mode == InvestigationMode.AuditOnly ? "AUDIT ONLY" : "MEASURED OPTIMIZATION", prompt);
+    }
+
+    [TestMethod]
+    public async Task Background_software_policy_reaches_all_provider_request_payloads()
+    {
+        var prompt = LlmClient.BuildPlannerPrompt(new TuningGoals(),
+            new Dictionary<string, string> { ["system:cpu"] = "CPU" }, new Dictionary<string, string> { ["system:cpu"] = "CPU" },
+            [], "[]", [], [], 1, 2, 1, [], null, InvestigationMode.MeasuredOptimization);
+        var compatible = LlmClient.Defaults(LlmProvider.Local); compatible.Model = "test-model";
+        var deepSeek = LlmClient.Defaults(LlmProvider.DeepSeek);
+        var anthropic = LlmClient.Defaults(LlmProvider.Anthropic);
+        var chatGpt = LlmClient.Defaults(LlmProvider.ChatGpt); chatGpt.Model = "account-model";
+
+        using (var request = LlmClient.CreateOpenAiRequest(compatible, null, prompt))
+        using (var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync()))
+            Assert.AreEqual(prompt, body.RootElement.GetProperty("messages")[0].GetProperty("content").GetString());
+        using (var request = LlmClient.CreateOpenAiRequest(deepSeek, "test-key", prompt))
+        using (var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync()))
+            Assert.AreEqual(prompt, body.RootElement.GetProperty("messages")[1].GetProperty("content").GetString());
+        using (var request = LlmClient.CreateAnthropicRequest(anthropic, "test-key", prompt))
+        using (var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync()))
+            Assert.AreEqual(prompt, body.RootElement.GetProperty("messages")[0].GetProperty("content").GetString());
+        using (var request = LlmClient.CreateChatGptRequest(chatGpt, "test-token", prompt))
+        using (var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync()))
+            Assert.AreEqual(prompt, body.RootElement.GetProperty("input")[0].GetProperty("content").GetString());
+    }
+
+    [TestMethod]
+    public async Task Planner_keeps_background_software_proposals_manual_on_every_turn()
+    {
+        var prompts = new List<string>();
+        var (listener, server, settings) = StartServer(new Func<string, string>[]
+        {
+            request => { Capture(request); return """{"kind":"requestEvidence","evidenceIds":["startup:0","service:0","software:0"]}"""; },
+            request => { Capture(request); return """{"kind":"diagnosis","diagnosis":{"summary":"Review optional background software changes","findings":[{"title":"Observed startup entry","evidenceId":"startup:0","currentValue":"Example helper","assessment":"Inventory only"}],"recommendations":[{"id":"startup","kind":"manualGuidance","title":"Review startup entry","evidenceIds":["startup:0"],"reason":"Optional startup-disable review"},{"id":"service","kind":"manualGuidance","title":"Review background service","evidenceIds":["service:0"],"reason":"Optional service-setting review"},{"id":"uninstall","kind":"manualGuidance","title":"Review installed app","evidenceIds":["software:0"],"reason":"Optional uninstall review"}],"consentQuestion":"Review these optional proposals without changes?"}}"""; }
+        });
+        using (listener)
+        {
+            var outcome = await new LlmClient(new OptimizationCatalog()).PlanAsync(new SystemProfile
+            {
+                Cpu = "CPU", StartupItems = ["Example helper"], AutomaticServices = ["Example service"], InstalledSoftware = ["Example app"]
+            }, new TuningGoals(), settings, null);
+            await server;
+            Assert.IsFalse(outcome.UsedLocalFallback);
+            Assert.HasCount(3, outcome.Diagnosis.Recommendations);
+            foreach (var recommendation in outcome.Diagnosis.Recommendations)
+            {
+                Assert.AreEqual(PlanRecommendationKind.ManualGuidance, recommendation.Kind);
+                Assert.IsEmpty(recommendation.ActionId);
+            }
+            Assert.HasCount(2, prompts);
+            foreach (var prompt in prompts) Assert.Contains("OPTIONAL REVIEW-ONLY BACKGROUND-SOFTWARE POLICY", prompt);
+        }
+
+        void Capture(string request)
+        {
+            using var body = JsonDocument.Parse(request);
+            prompts.Add(body.RootElement.GetProperty("messages")[0].GetProperty("content").GetString()!);
+        }
+    }
+
     [TestMethod]
     public void Conflict_references_cannot_bypass_initial_evidence_privacy()
     {

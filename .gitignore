@@ -34,6 +34,9 @@ operations/
 /docs/VALIDATION_MATRIX.md
 /docs/TESTING_INTERNAL.md
 
+# Generated Pi bridge, bundled Node runtime and third-party notices
+/ui/src-tauri/agent/pi/
+
 # OS
 Thumbs.db
 .DS_Store
