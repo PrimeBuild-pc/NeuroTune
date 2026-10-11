@@ -62,7 +62,7 @@ export class DiagnosisFlow {
         if (input.attachments.some(item => item.kind === 'image') && !input.imagesConfirmed) throw new Error(t('Confirm screenshot review and selected-model vision support before diagnosis.'));
       }
       this.update('scan', t('Collecting hardware, Windows, driver and software evidence locally…'));
-      const scan = await this.call<ScanResult>('scan', { optionalTelemetryConsent: input.optionalTelemetryConsent, firmwareReadConsent: input.firmwareReadConsent, privacySecurityReadConsent: mode === 'auditOnly' || input.goals.priority === 'privacySecurity' }, true);
+      const scan = await this.call<ScanResult>('scan', { optionalTelemetryConsent: input.optionalTelemetryConsent, firmwareReadConsent: input.firmwareReadConsent, privacySecurityReadConsent: mode === 'auditOnly' || input.goals.priority === 'privacySecurity' || input.goals.priority === 'compromiseReview' }, true);
       this.check();
       if (mode === 'auditOnly' && input.reviewAudit) {
         this.update('scan', t('Audit evidence is ready locally. Review the prepared profile before consenting to provider transmission.'));

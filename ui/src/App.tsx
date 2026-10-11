@@ -374,7 +374,7 @@ function App() {
     setBusy('Deep scan · starting hardware inventory…');
     setNotice(undefined);
     try {
-      const result = await agent<ScanResult>('scan', { optionalTelemetryConsent: telemetryConsent, firmwareReadConsent: firmwareConsent, privacySecurityReadConsent: mode === 'auditOnly' || goals.priority === 'privacySecurity' }, requestId);
+      const result = await agent<ScanResult>('scan', { optionalTelemetryConsent: telemetryConsent, firmwareReadConsent: firmwareConsent, privacySecurityReadConsent: mode === 'auditOnly' || goals.priority === 'privacySecurity' || goals.priority === 'compromiseReview' }, requestId);
       setScan(result);
       setActions(result.actions);
       setDiagnosis(undefined);

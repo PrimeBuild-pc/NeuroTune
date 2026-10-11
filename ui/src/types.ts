@@ -132,7 +132,7 @@ export interface Recommendation {
   executionIssue?: '' | 'missingActionId' | 'unknownActionId';
 }
 
-export type OptimizationPriority = 'balanced' | 'fps' | 'systemLatency' | 'networkLatency' | 'efficiency' | 'stability' | 'privacySecurity';
+export type OptimizationPriority = 'balanced' | 'fps' | 'systemLatency' | 'networkLatency' | 'efficiency' | 'stability' | 'privacySecurity' | 'compromiseReview';
 export type InvestigationMode = 'measuredOptimization' | 'auditOnly';
 
 export interface TuningGoals {

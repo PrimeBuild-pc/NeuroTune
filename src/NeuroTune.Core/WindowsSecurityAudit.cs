@@ -71,7 +71,13 @@ public static class WindowsSecurityAudit
     public static Dictionary<string, string> ReadPrivacy()
     {
         var facts = new Dictionary<string, string>(StringComparer.Ordinal) { ["privacy.limitations"] = Limitations };
-        foreach (var probe in ProbeCatalog.PrivacySecurityRegistry)
+        ReadRegistryProbes(ProbeCatalog.PrivacySecurityRegistry, "privacy.", facts);
+        return facts;
+    }
+
+    private static void ReadRegistryProbes(IEnumerable<ProbeDefinition> probes, string prefix, Dictionary<string, string> facts)
+    {
+        foreach (var probe in probes)
         {
             var value = "Unavailable";
             try
@@ -81,9 +87,8 @@ public static class WindowsSecurityAudit
                 value = DescribeRegistryValue(probe.ExpectedType, observed);
             }
             catch (Exception error) { value = $"Unavailable ({error.GetType().Name})"; }
-            facts["privacy." + probe.ProfileKey] = value + "; " + probe.Interpretation;
+            facts[prefix + probe.ProfileKey] = value + "; " + probe.Interpretation;
         }
-        return facts;
     }
 
     internal static string DescribeRegistryValue(RegistryValueType type, object? value) => (type, value) switch
@@ -109,6 +114,7 @@ public static class WindowsSecurityAudit
         var guard = SystemProfiler.Query(@"root\Microsoft\Windows\DeviceGuard", "SELECT VirtualizationBasedSecurityStatus,SecurityServicesRunning FROM Win32_DeviceGuard",
             row => new { vbsStatus = row["VirtualizationBasedSecurityStatus"]?.ToString() ?? "Unknown", servicesRunning = row["SecurityServicesRunning"] as uint[] });
         facts["security.device-guard"] = guard.Count == 0 ? "Unavailable; not disabled." : JsonSerializer.Serialize(guard.Take(1));
+        ReadRegistryProbes(ProbeCatalog.HardeningRegistry, "security.hardening.", facts);
         return facts;
     }
 

@@ -23,6 +23,12 @@ public static class InvestigationService
         new("privacy-settings", "Fixed privacy preference/policy snapshots; missing is not disabled, build/edition/management applicability remains unverified."),
         new("security-status", "Fixed Defender/Firewall/antivirus security metadata; no scan, download, exclusions, sample files or setting changes."),
         new("defender-detections", "Bounded Defender threat summaries without resource/file paths; scanner reports, not proof that the PC is clean or arbitrary software is malware."),
+        new("network-exposure", "Listening TCP/UDP sockets with scope and owning process name; no paths, remote peers, traffic or firewall evaluation."),
+        new("service-integrity", "Services whose image path is unquoted-with-spaces or in a user-writable location; names and flags only, no paths or signatures."),
+        new("patch-level", "OS build, reported hotfix count/newest date and last Windows Update install time; not a vulnerability scan."),
+        new("account-summary", "Local account counts, built-in Administrator/Guest enabled flags and Administrators-group member count; no account names."),
+        new("wmi-persistence", "Counts of permanent WMI event filters, consumers and bindings; no commands or scripts."),
+        new("hosts-and-proxy", "Hosts-file entry counts and user proxy/PAC flags; no domains or addresses."),
         new("driver-details", "Current associations/version metadata for an observed .sys filename (module parameter)."),
     ];
     public static async Task<IReadOnlyDictionary<string, string>> ReadAsync(InvestigationRequest request, CancellationToken cancellationToken = default)
@@ -49,6 +55,12 @@ public static class InvestigationService
                 "privacy-settings" => WindowsSecurityAudit.ReadPrivacy(),
                 "security-status" => WindowsSecurityAudit.ReadSecurity(),
                 "defender-detections" => WindowsSecurityAudit.ReadDefender(),
+                "network-exposure" => CompromiseAudit.ReadNetworkExposure(),
+                "service-integrity" => CompromiseAudit.ReadServiceIntegrity(),
+                "patch-level" => CompromiseAudit.ReadPatchLevel(),
+                "account-summary" => CompromiseAudit.ReadAccountSummary(),
+                "wmi-persistence" => CompromiseAudit.ReadWmiPersistence(),
+                "hosts-and-proxy" => CompromiseAudit.ReadHostsAndProxy(),
                 _ => new { status = "unavailable", reason = "No safe reader exists for this requested tool. Suggest a specific manual follow-up; no arbitrary command or query was executed." }
             };
             cancellationToken.ThrowIfCancellationRequested();

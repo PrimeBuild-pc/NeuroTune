@@ -208,6 +208,7 @@ export const reportMessages: Messages = {
   'networkLatency': ['网络延迟', 'ネットワーク遅延', 'latencia de red', 'задержка сети'],
   'efficiency': ['效率', '効率', 'eficiencia', 'эффективность'],
   'stability': ['稳定性', '安定性', 'estabilidad', 'стабильность'],
+  'compromiseReview': ['入侵排查', '侵害の調査', 'revisión de compromiso', 'проверка на компрометацию'],
   'privacySecurity': ['隐私与安全', 'プライバシーとセキュリティ', 'privacidad y seguridad', 'конфиденциальность и безопасность'],
   'Findings · citations establish provenance, not truth': ['发现 · 引用证明来源，而非真实性', '所見 · 引用は出所を示すものであり、真実を証明するものではありません', 'Hallazgos · las citas establecen procedencia, no veracidad', 'Наблюдения · ссылки устанавливают происхождение, а не истинность'],
   'User-supplied support · unverified': ['用户提供的支持材料 · 未经验证', 'ユーザー提供の補足資料 · 未検証', 'Apoyo aportado por el usuario · sin verificar', 'Материалы пользователя · не проверены'],
