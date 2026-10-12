@@ -50,7 +50,8 @@ public static class ActionPolicy
     public static ActionPolicyDecision Evaluate(ActionDefinition definition, RiskProfile profile)
     {
         ArgumentNullException.ThrowIfNull(definition);
-        if (ForbiddenPerformanceTargets.Any(target =>
+        // defender.exclusion is the one Defender write allowed (always High, separate confirmation).
+        if (!definition.Id.StartsWith("defender.exclusion.", StringComparison.Ordinal) && ForbiddenPerformanceTargets.Any(target =>
             definition.Id.Contains(target, StringComparison.OrdinalIgnoreCase)))
             return new(PolicyDisposition.Blocked, false, false,
                 "This target is outside NeuroTune's executable performance policy.");

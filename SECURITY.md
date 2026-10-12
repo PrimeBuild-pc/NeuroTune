@@ -9,9 +9,10 @@ Include the affected version, reproduction steps, expected impact, and a contact
 ## Security Model
 
 - Every LLM response is treated as untrusted input.
-- Only action identifiers compiled into the local allowlist are accepted.
+- Only action identifiers compiled into the local allowlist, or typed parametric primitives, are accepted. A parametric action's ID is its kind plus a SHA-256 prefix of its normalized parameters; the journal (schema v4, v3 still readable) stores kind and parameters, and recovery rebuilds the action from them and rejects any ID mismatch.
+- Parametric primitives refuse protected targets before capture: `SAM`, `SECURITY`, `BCD00000000`, `Lsa`, `CI`, `DeviceGuard`, `SafeBoot`, Defender/firewall/UAC policy keys, Winlogon, IFEO (except `PerfOptions` through `ifeo.perf`), `Classes`, autostart `Run*` keys, environment keys, service `ImagePath`/`ServiceDll`, boot-critical and security services, Defender scheduled tasks, BCD elements outside a short list, and configuration files outside the user profile/Steam folder or behind links. HKLM Registry writes, disabled services, BCD changes and Defender exclusions are High risk and need separate confirmation. The forbidden list covers known security, boot and autostart paths, not every possible hijack path; the user's confirmation remains the last gate.
 - Diagnosis findings are rejected unless their evidence identifier and value exactly match the local scan.
-- Model-generated commands, scripts, paths, Registry locations, and Registry values are never executed.
+- Model-generated commands and scripts are never executed. Model-proposed paths, Registry locations and values only reach Windows as validated parameters of a typed primitive.
 - Compatibility and current state are checked locally before execution.
 - The engine stops before making changes if it cannot verify a new restore point or export required Registry keys.
 - Every action attempt is journaled before execution and verified after application.

@@ -57,6 +57,8 @@ public sealed class OptimizationAction : IReversibleAction
     public bool Verify() => _verify();
     internal string ConflictTarget { get; }
     internal string? RecoveryTarget { get; }
+    internal string? Kind { get; init; }
+    internal string? Parameters { get; init; }
     internal bool VerifyRestored(string state) => _verifyRestored?.Invoke(state) ??
         string.Equals(Capture(), state, StringComparison.Ordinal);
     internal void ValidateSnapshot(string state)
@@ -211,6 +213,15 @@ public sealed class OptimizationCatalog
 
     public bool Contains(string id) => _actions.ContainsKey(id);
 
+    // Registers a model-proposed typed primitive so the ID-based approval and apply flow can select it.
+    public OptimizationAction AddParametric(string kind, string parameters)
+    {
+        var action = ParametricActions.Create(kind, parameters);
+        if (_actions.TryGetValue(action.Id, out var existing)) return existing;
+        _actions.Add(action.Id, action);
+        return action;
+    }
+
     internal static void ValidateSelection(IReadOnlyList<OptimizationAction> actions)
     {
         if (actions.Count > 100 || actions.GroupBy(action => action.ConflictTarget, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))
@@ -220,7 +231,15 @@ public sealed class OptimizationCatalog
     internal OptimizationAction ResolveRollback(ActionRecord record)
     {
         OptimizationAction action;
-        if (Regex.IsMatch(record.ActionId, @"^power\.custom\.[0-9a-f]{64}$", RegexOptions.CultureInvariant))
+        if (record.Kind is not null)
+        {
+            if (record.RecoveryTarget is not null) throw new InvalidOperationException("Unexpected parametric recovery metadata.");
+            action = ParametricActions.Create(record.Kind, record.Parameters ?? throw new InvalidOperationException("The parametric record has no parameters."));
+            if (!action.Id.Equals(record.ActionId, StringComparison.Ordinal) || action.Kind != record.Kind)
+                throw new InvalidOperationException("The parametric action does not match its recorded ID.");
+        }
+        else if (record.Parameters is not null) throw new InvalidOperationException("Unexpected parameters without an action kind.");
+        else if (Regex.IsMatch(record.ActionId, @"^power\.custom\.[0-9a-f]{64}$", RegexOptions.CultureInvariant))
         {
             if (record.RecoveryTarget is not null) throw new InvalidOperationException("Unexpected power-plan recovery metadata.");
             action = CustomPowerPlan(new("Journal recovery", "", 0, record.ActionId["power.custom.".Length..]));
@@ -685,7 +704,7 @@ public sealed class OptimizationCatalog
             validateSnapshot: state => _ = ReadBcdSnapshot(state, valueNames));
     }
 
-    private static RegistryValueSnapshot CaptureRegistryValue(RegistryHive hive, string path, string valueName)
+    internal static RegistryValueSnapshot CaptureRegistryValue(RegistryHive hive, string path, string valueName)
     {
         using var key = RegistryKey.OpenBaseKey(hive, RegistryView.Registry64).OpenSubKey(path);
         var value = key?.GetValue(valueName, null, RegistryValueOptions.DoNotExpandEnvironmentNames);
@@ -694,7 +713,7 @@ public sealed class OptimizationCatalog
         return new(true, kind, SerializeRegistryValue(kind, value));
     }
 
-    private static void RestoreRegistryValue(RegistryHive hive, string path, string valueName, RegistryValueSnapshot snapshot)
+    internal static void RestoreRegistryValue(RegistryHive hive, string path, string valueName, RegistryValueSnapshot snapshot)
     {
         ValidateRegistrySnapshot(snapshot);
         using var key = RegistryKey.OpenBaseKey(hive, RegistryView.Registry64).CreateSubKey(path, true)
@@ -824,7 +843,7 @@ public sealed class OptimizationCatalog
     private static string RunPowerCfg(params string[] arguments)
         => RunExecutable("powercfg.exe", arguments);
 
-    private static Guid ActivePowerScheme()
+    internal static Guid ActivePowerScheme()
     {
         var status = NativePower.PowerGetActiveScheme(IntPtr.Zero, out var schemePointer);
         if (status != 0 || schemePointer == IntPtr.Zero)

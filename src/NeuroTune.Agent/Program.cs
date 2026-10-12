@@ -385,12 +385,16 @@ async Task<OperationManifest> Apply(ApplyRequest request, OptimizationCatalog ac
         throw new InvalidOperationException("Every system write must belong to an optimization run.");
     var run = runService.Load(request.RunId);
     if (run.Mode == InvestigationMode.AuditOnly) throw new InvalidOperationException("Audit-only runs cannot apply Windows changes.");
+    if (request.Parametric?.Count > 100) throw new InvalidOperationException("Too many parametric actions.");
+    var actionIds = request.ActionIds.Concat((request.Parametric ?? [])
+        .Select(item => actionCatalog.AddParametric(item.Kind, item.Parameters.GetRawText()).Id))
+        .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     if (run.State == OptimizationRunState.BaselineReady)
-        run = runService.Approve(run.Id, request.ActionIds, request.HighRiskConfirmed, actionCatalog);
+        run = runService.Approve(run.Id, actionIds, request.HighRiskConfirmed, actionCatalog);
     else if (run.State == OptimizationRunState.Approved)
     {
         if (!run.ApprovedActionIds.ToHashSet(StringComparer.OrdinalIgnoreCase)
-                .SetEquals(request.ActionIds) || run.HighRiskConfirmed != request.HighRiskConfirmed)
+                .SetEquals(actionIds) || run.HighRiskConfirmed != request.HighRiskConfirmed)
             throw new InvalidOperationException("The requested actions do not match the persisted approval.");
     }
     else throw new InvalidOperationException($"Optimization run {run.Id} is not ready to apply.");
@@ -400,10 +404,10 @@ async Task<OperationManifest> Apply(ApplyRequest request, OptimizationCatalog ac
     try
     {
         var manifest = await new OptimizationEngine(actionCatalog, backupService)
-            .ApplyAsync(request.ActionIds, request.HighRiskConfirmed, operationId, run.Id);
-        var restart = request.ActionIds.Select(actionCatalog.Get).Any(action => action.RequiresRestart);
+            .ApplyAsync(actionIds, request.HighRiskConfirmed, operationId, run.Id);
+        var restart = actionIds.Select(actionCatalog.Get).Any(action => action.RequiresRestart);
         runService.RecordApplyCompleted(run.Id, restart);
-        await AnnotateOperation(manifest, "application-result", JsonSerializer.Serialize(new { manifest.Status, verified = manifest.Actions.All(action => action.Applied), actions = request.ActionIds.Select(id => actionCatalog.Get(id).Name) }));
+        await AnnotateOperation(manifest, "application-result", JsonSerializer.Serialize(new { manifest.Status, verified = manifest.Actions.All(action => action.Applied), actions = actionIds.Select(id => actionCatalog.Get(id).Name) }));
         return manifest;
     }
     catch (Exception exception)
@@ -502,7 +506,7 @@ sealed record SaveProviderRequest(UserSettings Settings, string? ApiKey);
 sealed record DiagnoseRequest(SystemProfile? Profile, TuningGoals? Goals, List<Guid>? MeasurementSessionIds = null, Guid? RunId = null,
     List<SupportingAttachment>? Attachments = null, bool ImagesConfirmed = false, JsonElement Language = default);
 sealed record MeasurementExplanationAgentRequest(MeasurementCompareRequest Comparison, TuningGoals Goals, JsonElement Language = default);
-sealed record ApplyRequest(List<string> ActionIds, bool HighRiskConfirmed, Guid RunId);
+sealed record ApplyRequest(List<string> ActionIds, bool HighRiskConfirmed, Guid RunId, List<ParametricActionRequest>? Parametric = null);
 sealed record RollbackRequest(Guid OperationId, Guid? RunId = null);
 sealed record ScanRequest(bool OptionalTelemetryConsent, bool FirmwareReadConsent = false, bool PrivacySecurityReadConsent = false);
 sealed record RunCreateRequest(SystemProfile? Profile, TuningGoals? Goals, List<Guid>? MeasurementSessionIds = null,

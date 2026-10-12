@@ -118,14 +118,15 @@ public sealed class BackupService
 
     internal void Validate(OperationManifest manifest)
     {
-        if (manifest.SchemaVersion != 3 || manifest.Id == Guid.Empty || manifest.OptimizationRunId == Guid.Empty ||
+        if (manifest.SchemaVersion is not (3 or 4) || manifest.Id == Guid.Empty || manifest.OptimizationRunId == Guid.Empty ||
             manifest.Actions is null || manifest.Actions.Count > 100 || manifest.SystemOneAdvisories is null ||
             manifest.SystemOneAdvisories.Count > 100 || manifest.RestorePoint is null || manifest.RestorePoint.Length > 300 ||
             manifest.Status is not ("Preparing" or "Backup completed" or "Applying" or "Completed" or "Error — automatic rollback" or
                 "Error — rollback incomplete" or "Error — rollback completed" or "Rolling back" or "Rollback incomplete" or "Rollback completed") ||
             manifest.Error?.Length > 16_384 || manifest.Actions.Any(record => record is null) ||
             manifest.Actions.Select(record => record.ActionId).Distinct(StringComparer.OrdinalIgnoreCase).Count() != manifest.Actions.Count ||
-            manifest.Actions.Sum(record => (long)(record.OriginalState?.Length ?? 0)) > 4 * 1024 * 1024)
+            manifest.Actions.Sum(record => (long)(record.OriginalState?.Length ?? 0)) > 4 * 1024 * 1024 ||
+            manifest.Actions.Any(record => record.Parameters?.Length > 16_384 || manifest.SchemaVersion == 3 && (record.Kind ?? record.Parameters) is not null))
             throw new InvalidOperationException("The operation journal schema or records are invalid.");
         if (manifest.Status is "Preparing" or "Backup completed" && manifest.Actions.Count != 0 ||
             manifest.Status == "Completed" && (manifest.Actions.Count == 0 || manifest.Actions.Any(record => !record.Applied || record.RolledBack)) ||
