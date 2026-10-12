@@ -16,10 +16,7 @@ internal static class OptionalWorkerProcess
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(timeout);
-        using var job = new SafeFileHandle(CreateJobObject(IntPtr.Zero, null), true);
-        Check(!job.IsInvalid);
-        var limits = new JobLimits { Basic = new BasicLimits { LimitFlags = 0x2000 } }; // KILL_ON_JOB_CLOSE.
-        Check(SetInformationJobObject(job, 9, ref limits, Marshal.SizeOf<JobLimits>()));
+        using var job = NewJob();
         using var token = NonAdminToken();
         var security = new SecurityAttributes { Length = Marshal.SizeOf<SecurityAttributes>(), Inherit = true };
         Check(CreatePipe(out var stdinRead, out var stdinWrite, ref security, 0));
@@ -91,19 +88,60 @@ internal static class OptionalWorkerProcess
             }
         }
     }
+    internal static SafeFileHandle NewJob()
+    {
+        var job = new SafeFileHandle(CreateJobObject(IntPtr.Zero, null), true);
+        Check(!job.IsInvalid);
+        var limits = new JobLimits { Basic = new BasicLimits { LimitFlags = 0x2000 } }; // KILL_ON_JOB_CLOSE.
+        Check(SetInformationJobObject(job, 9, ref limits, Marshal.SizeOf<JobLimits>()));
+        return job;
+    }
+
+    // A local server without pipes, under the same non-admin token. It and its children die when the job closes,
+    // including when this process exits for any reason.
+    internal static void StartInJob(SafeFileHandle job, string executable, IReadOnlyList<string> arguments, string directory, IReadOnlyDictionary<string, string> environment)
+    {
+        using var token = NonAdminToken();
+        var startup = new StartupInfoEx { Info = new StartupInfo { Size = Marshal.SizeOf<StartupInfo>() } };
+        var command = new StringBuilder(string.Join(' ', new[] { executable }.Concat(arguments).Select(Quote)));
+        var block = Marshal.StringToHGlobalUni(string.Join('\0', environment.OrderBy(item => item.Key, StringComparer.OrdinalIgnoreCase).Select(item => $"{item.Key}={item.Value}")) + "\0\0");
+        ProcessInfo info;
+        try
+        {
+            Check(token is null
+                ? CreateProcess(executable, command, IntPtr.Zero, IntPtr.Zero, false, 0x08000404, block, directory, ref startup, out info)
+                : CreateProcessAsUser(token, executable, command, IntPtr.Zero, IntPtr.Zero, false, 0x08000404, block, directory, ref startup, out info));
+        }
+        finally { Marshal.FreeHGlobal(block); }
+        using var process = new SafeFileHandle(info.Process, true);
+        using var thread = new SafeFileHandle(info.Thread, true);
+        if (!AssignProcessToJobObject(job, process)) { TerminateProcess(process, 1); Check(false); }
+        Check(ResumeThread(thread) != uint.MaxValue);
+    }
     internal const string TokenUnavailable = "No verified non-admin medium-integrity UAC token is available; the optional worker will not run. Administrator fallback and desktop ACL changes are forbidden.";
     internal static SafeFileHandle? NonAdminToken()
     {
         if (!LogService.IsAdministrator()) return null;
-        Check(OpenProcessToken(GetCurrentProcess(), 8, out var original)); // TOKEN_QUERY.
+        // TOKEN_ASSIGN_PRIMARY | TOKEN_DUPLICATE | TOKEN_QUERY | TOKEN_ADJUST_DEFAULT.
+        Check(OpenProcessToken(GetCurrentProcess(), 0x8B, out var original));
         using (original)
         {
-            // Use Windows' linked standard-user token. A hand-filtered admin token can be denied desktop access even when UserInteractive is true.
-            if (!GetTokenInformation(original, 19, out var linked, IntPtr.Size, out _) || linked.Token == IntPtr.Zero)
+            // The UAC linked token is identification-level for a non-TCB caller (CreateProcessAsUser fails with 1346), so
+            // derive what UAC itself would: a LUA-filtered copy of our own token (Administrators deny-only, privileges
+            // stripped) lowered to medium integrity. A restricted copy of the caller's token needs no extra privilege.
+            if (!CreateRestrictedToken(original, 0x5, 0, IntPtr.Zero, 0, IntPtr.Zero, 0, IntPtr.Zero, out var token)) // DISABLE_MAX_PRIVILEGE | LUA_TOKEN.
                 throw new InvalidOperationException(TokenUnavailable);
-            var token = new SafeFileHandle(linked.Token, true);
             try
             {
+                var medium = new SecurityIdentifier("S-1-16-8192");
+                var sid = new byte[medium.BinaryLength]; medium.GetBinaryForm(sid, 0);
+                var pinned = GCHandle.Alloc(sid, GCHandleType.Pinned);
+                try
+                {
+                    var level = new MandatoryLabel { Sid = pinned.AddrOfPinnedObject(), Attributes = 0x20 }; // SE_GROUP_INTEGRITY.
+                    if (!SetTokenInformation(token, 25, ref level, Marshal.SizeOf<MandatoryLabel>() + sid.Length)) throw new InvalidOperationException(TokenUnavailable);
+                }
+                finally { pinned.Free(); }
                 using var identity = new WindowsIdentity(token.DangerousGetHandle());
                 using var owner = WindowsIdentity.GetCurrent();
                 var label = Marshal.AllocHGlobal(256);
@@ -140,7 +178,6 @@ internal static class OptionalWorkerProcess
 
     [StructLayout(LayoutKind.Sequential)] private struct SecurityAttributes { public int Length; public IntPtr Descriptor; [MarshalAs(UnmanagedType.Bool)] public bool Inherit; }
     [StructLayout(LayoutKind.Sequential)] private struct MandatoryLabel { public IntPtr Sid; public uint Attributes; }
-    [StructLayout(LayoutKind.Sequential)] private struct LinkedToken { public IntPtr Token; }
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] private struct StartupInfo { public int Size; public string? Reserved, Desktop, Title; public uint X, Y, Width, Height, XCount, YCount, Fill, Flags; public short Show, ReservedSize; public IntPtr ReservedPointer, Input, Output, Error; }
     [StructLayout(LayoutKind.Sequential)] private struct StartupInfoEx { public StartupInfo Info; public IntPtr Attributes; }
     [StructLayout(LayoutKind.Sequential)] private struct ProcessInfo { public IntPtr Process, Thread; public int Id, ThreadId; }
@@ -159,7 +196,8 @@ internal static class OptionalWorkerProcess
     [DllImport("kernel32.dll", SetLastError = true)] private static extern bool UpdateProcThreadAttribute(IntPtr attributes, uint flags, IntPtr attribute, IntPtr value, IntPtr size, IntPtr previous, IntPtr returned);
     [DllImport("kernel32.dll")] private static extern void DeleteProcThreadAttributeList(IntPtr attributes);
     [DllImport("advapi32.dll", SetLastError = true)] private static extern bool OpenProcessToken(IntPtr process, uint access, out SafeFileHandle token);
-    [DllImport("advapi32.dll", SetLastError = true)] private static extern bool GetTokenInformation(SafeFileHandle token, int kind, out LinkedToken value, int size, out int returned);
+    [DllImport("advapi32.dll", SetLastError = true)] private static extern bool CreateRestrictedToken(SafeFileHandle token, uint flags, int disableCount, IntPtr disable, int deleteCount, IntPtr delete, int restrictCount, IntPtr restrict, out SafeFileHandle restricted);
+    [DllImport("advapi32.dll", SetLastError = true)] private static extern bool SetTokenInformation(SafeFileHandle token, int kind, ref MandatoryLabel value, int size);
     [DllImport("advapi32.dll", SetLastError = true)] private static extern bool GetTokenInformation(SafeFileHandle token, int kind, IntPtr value, int size, out int returned);
     [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)] private static extern bool CreateProcessAsUser(SafeFileHandle token, string executable, StringBuilder command, IntPtr processAttributes, IntPtr threadAttributes, bool inherit, uint flags, IntPtr environment, string directory, ref StartupInfoEx startup, out ProcessInfo info);
 }
