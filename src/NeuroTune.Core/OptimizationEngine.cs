@@ -46,6 +46,8 @@ public sealed class OptimizationEngine
                     var record = new ActionRecord
                     {
                         ActionId = action.Id,
+                        Kind = action.Kind,
+                        Parameters = action.Parameters,
                         OriginalState = action.Capture(),
                         RecoveryTarget = action.RecoveryTarget,
                         Attempted = true

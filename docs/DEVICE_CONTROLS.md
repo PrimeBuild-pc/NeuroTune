@@ -9,6 +9,7 @@ restore point, a per-action journal and one-click rollback. A benefit is never p
 
 - **Allowlist only.** The model can only name a registered `device.disable.<slug>` capability. It never supplies an
   instance ID, a command or a path; NeuroTune resolves the instance from Windows Plug and Play at the moment of use.
+  The parametric kind `device.disable` takes only `{ "Slug": ... }` and maps it onto the same registered capability.
 - **Exact matching.** Each capability matches a device class plus an anchored name pattern (and, for radios, a physical
   bus prefix). Anything else is ignored.
 - **Guards.** A capability is unavailable when the device is absent, when it hosts a keyboard, mouse, HID, USB, disk,
