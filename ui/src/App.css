@@ -517,3 +517,14 @@ html[data-motion='quiet'] :is(button, .brand-mark, .nav-item > svg, .icon-button
 @media (forced-colors: active) {
   button, input, select, textarea, .section-card, .metric-card { forced-color-adjust: auto; }
 }
+
+/* Guided path: one row of steps plus the single next action. */
+.journey-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; margin-bottom: 24px; padding: 14px 18px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.journey-bar ol { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0; padding: 0; list-style: none; }
+.journey-bar li { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; font-weight: 600; }
+.journey-bar li > span { display: grid; place-items: center; width: 22px; height: 22px; border: 1px solid var(--border-strong); border-radius: 50%; font-size: 12px; font-variant-numeric: tabular-nums; }
+.journey-bar li.done { color: var(--muted-strong); }
+.journey-bar li.done > span { border-color: var(--accent-border); background: var(--accent-soft); color: var(--accent-text); }
+.journey-bar li.current { color: var(--text); }
+.journey-bar li.current > span { border-color: var(--accent); background: var(--accent); color: var(--accent-contrast); }
+.section-tabs { margin-bottom: 24px; }
