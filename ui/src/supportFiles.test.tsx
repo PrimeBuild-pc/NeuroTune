@@ -1,11 +1,20 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { SupportingFiles } from './SupportingFiles';
-import { decodeReport, imageDimensions, prepareSupportingFile, validateSupportList } from './supportFiles';
+import { decodeReport, imageDimensions, prepareSupportingFile, selectManualPages, validateSupportList } from './supportFiles';
 import type { SupportingAttachment } from './types';
 
 const report: SupportingAttachment = { id: 'report', name: 'cpu-z.txt', kind: 'report', contentType: 'text/plain', content: '<script>do not execute</script>', sha256: 'prepared-hash' };
 describe('optional supporting files', () => {
+  it('keeps whole manual pages about lanes and ports within the report budget, in page order', () => {
+    const pages = ['Safety and warranty', 'M.2_1 shares bandwidth with PCI_E1: the slot runs at x8 when M.2_2 is populated. PCIe Gen4 lanes.', 'BIOS menu screenshots', 'Back panel: USB 3.2 Gen2 Type-C, USB 2.0 ports and chipset USB.', 'x'.repeat(500) + ' USB SATA'];
+    const text = selectManualPages(pages, 400);
+    expect(text).toMatch(/^Motherboard manual excerpt: pages 2, 4 of 5/);
+    expect(text.indexOf('[page 2]')).toBeLessThan(text.indexOf('[page 4]'));
+    expect(text).not.toContain('Safety'); expect(text).not.toContain('xxxx');
+    expect(text.length).toBeLessThanOrEqual(400);
+    expect(() => selectManualPages(['Safety', 'Warranty'])).toThrow('No pages');
+  });
   it('decodes UTF-8/UTF-16 exports but rejects binary, malformed encodings and oversized reports without slicing', async () => {
     expect(decodeReport(new TextEncoder().encode('CPU clock: 4200 MHz'))).toBe('CPU clock: 4200 MHz');
     expect(decodeReport(new Uint8Array([255, 254, 65, 0, 10, 0]))).toBe('A\n');

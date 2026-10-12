@@ -64,7 +64,7 @@ describe('dynamic plan helpers', () => {
   });
   it('scenario profiles use current objectives, fit the notes field and are translated', () => {
     const current = analysisPresetsFor('balanced').map(item => item.id);
-    expect(scenarioProfiles.map(item => item.id)).toEqual(['competitive', 'streaming', 'quiet']);
+    expect(scenarioProfiles.map(item => item.id)).toEqual(['competitive', 'streaming', 'quiet', 'privacy', 'compromise', 'ports']);
     for (const item of scenarioProfiles) {
       expect(current).toContain(item.priority);
       expect(item.notes.length).toBeLessThanOrEqual(1000);

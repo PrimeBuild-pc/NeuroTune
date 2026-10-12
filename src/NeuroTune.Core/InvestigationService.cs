@@ -29,6 +29,7 @@ public static class InvestigationService
         new("account-summary", "Local account counts, built-in Administrator/Guest enabled flags and Administrators-group member count; no account names."),
         new("wmi-persistence", "Counts of permanent WMI event filters, consumers and bindings; no commands or scripts."),
         new("hosts-and-proxy", "Hosts-file entry counts and user proxy/PAC flags; no domains or addresses."),
+        new("device-topology", "PCIe devices with negotiated/maximum link and CPU-versus-chipset attachment, and USB devices with controller, port path and firmware-declared panel; no serials or instance IDs."),
         new("driver-details", "Current associations/version metadata for an observed .sys filename (module parameter)."),
     ];
     public static async Task<IReadOnlyDictionary<string, string>> ReadAsync(InvestigationRequest request, CancellationToken cancellationToken = default)
@@ -51,6 +52,7 @@ public static class InvestigationService
                 "startup-items" => ReadRows("Win32_StartupCommand", ["Name"]),
                 "scheduled-tasks" => ReadScheduledTasks(),
                 "system-events" => ReadEvents(),
+                "device-topology" => DeviceTopology.Read(),
                 "driver-details" => DriverInspection.Read(request.Module!),
                 "privacy-settings" => WindowsSecurityAudit.ReadPrivacy(),
                 "security-status" => WindowsSecurityAudit.ReadSecurity(),
