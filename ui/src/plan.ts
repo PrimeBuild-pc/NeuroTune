@@ -8,6 +8,7 @@ const analysisPresets: Array<{ id: OptimizationPriority; label: string; detail: 
   { id: 'stability', label: 'System stability', detail: 'Investigate crashes, freezes, resets and recurring errors, distinguishing symptoms, hypotheses and causes to verify.' },
   { id: 'privacySecurity', label: 'Windows privacy & security', detail: 'Investigate data collection, protections and detections. The preset starts no tweak, scanner or removal.' },
   { id: 'compromiseReview', label: 'Vulnerability & compromise review', detail: 'Look for exposure and compromise indicators as hypotheses, never as a verdict. The preset starts no scanner, removal or process kill.' },
+  { id: 'hardwareLayout', label: 'Ports & PCIe lanes', detail: 'CPU versus chipset lanes, GPU and NVMe lane sharing, and the best USB port for each device. Advice only.' },
   { id: 'fps', label: 'Frame rate (legacy)', detail: 'Keep the saved run’s FPS focus; it is not converted to another objective.', legacy: true },
   { id: 'efficiency', label: 'Efficiency (legacy)', detail: 'Keep the saved run’s energy focus; it is not converted to another objective.', legacy: true },
 ];
@@ -21,6 +22,12 @@ export const scenarioProfiles: Array<{ id: string; label: string; detail: string
     notes: 'Streaming or recording while gaming: smooth frame times for the game and the encoder, no dropped frames, stable upload. Keep audio devices, capture tools, network stability and security intact.' },
   { id: 'quiet', label: 'Quiet & efficient', detail: 'Less power, heat, fan noise and background work. Low-risk changes only.', priority: 'balanced', riskProfile: 'safe',
     notes: 'Quiet and efficient: reduce power draw, heat, fan noise and background activity while keeping everyday responsiveness acceptable. Keep security, updates and stability intact.' },
+  { id: 'privacy', label: 'Privacy & security check', detail: 'Data collection, Windows protections and Defender detections. Low-risk changes only.', priority: 'privacySecurity', riskProfile: 'safe',
+    notes: 'Privacy and security check: reduce optional data collection and confirm that Defender, Firewall, SmartScreen, updates and core isolation are working. Keep every security feature on and the apps I use working.' },
+  { id: 'compromise', label: 'Compromise check', detail: 'Exposure and signs of compromise, as hypotheses, never a verdict. Advice only.', priority: 'compromiseReview', riskProfile: 'safe',
+    notes: 'Compromise check: look for exposed services, unusual persistence and signs of tampering, and tell me what to verify by hand. Do not delete files, stop processes or turn off protections.' },
+  { id: 'ports', label: 'Ports & PCIe lanes', detail: 'Where mouse, audio, GPU and NVMe are connected. Advice only.', priority: 'hardwareLayout', riskProfile: 'safe',
+    notes: 'Ports and PCIe lanes: show which devices use CPU or chipset lanes, whether the GPU or an NVMe drive loses lanes, and which port each device should use. Advice only; I decide what to move. Devices that matter:' },
 ];
 
 export function analysisPresetsFor(priority: OptimizationPriority) {

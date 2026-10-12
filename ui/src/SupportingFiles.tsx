@@ -37,10 +37,9 @@ export function SupportingFiles({ files, onFiles, onReady, onVision, disabled }:
   }
   function remove(id: string) { onFiles(files.filter(item => item.id !== id)); if (files.length === 1) setDirty(false); setReviewed(false); setError(''); }
   return <section className="supporting-files">
-    <h2>{t('Supporting reports and screenshots · optional ({count}/8)', { count: files.length })}</h2>
-    <p>{t('You can add exports from CPU-Z, GPU-Z, HWiNFO and other apps without opening or running them from NeuroTune. User-provided content, not verified measurements or proof that it comes from this PC.')}</p>
-    <label className="support-picker"><span>{t('Add reports or screenshots')}</span><input type="file" accept={supportAccept} multiple disabled={disabled || busy} onChange={event => { const selected = Array.from(event.target.files ?? []); event.target.value = ''; if (selected.length) void add(selected); }}/></label>
-    <p className="muted-copy">{t('Maximum 8 files, including 4 images. TXT/LOG/CSV/JSON/XML/HTML reports: source ≤512 KiB, 40,000 characters per file, 80,000 combined; no silent truncation. PNG/JPEG: source ≤20 MiB/20 megapixels, prepared as PNG without extra metadata, ≤1600 px per side and ≤768 KiB. Check that text remains readable after resizing. PDFs, archives and programs are not accepted.')}</p>
+    <h3>{t('Files for the AI · {count}/8', { count: files.length })}</h3>
+    <p className="muted-copy">{t('CPU-Z, GPU-Z or HWiNFO reports, a motherboard manual (PDF) or screenshots. Treated as user-provided, not as measurements.')}</p>
+    <label className="support-picker"><span>{t('Add files')}</span><input id="support-files-input" type="file" accept={supportAccept} multiple disabled={disabled || busy} onChange={event => { const selected = Array.from(event.target.files ?? []); event.target.value = ''; if (selected.length) void add(selected); }}/></label>
     {busy && <p role="status">{t('Preparing and checking attachments locally… Nothing sent to AI.')}</p>}
     {error && <p role="alert" className="error-text">{error}</p>}
     <div className="support-list">{files.map(item => <article className="support-item" key={item.id}>

@@ -112,10 +112,13 @@ describe('complete diagnosis lifecycle', () => {
       const html = render(priority);
       expect(html).toContain('Overall performance'); expect(html).toContain('System latency'); expect(html).toContain('Network optimization'); expect(html).toContain('System stability');
       expect(html).toContain('Windows privacy &amp; security');
-      expect(html).toContain(`value="${priority}" selected=""`); expect(html).toContain('does not apply tweaks');
+      expect(html).toContain(`value="${priority}" selected=""`); expect(html).toContain('Ports &amp; PCIe lanes'); expect(html).not.toContain('What the AI receives');
       expect(html).not.toContain('value="fps"'); expect(html).not.toContain('value="efficiency"');
     }
     expect(render('fps')).toContain('value="fps" selected=""'); expect(render('efficiency')).toContain('value="efficiency" selected=""');
+    const ports = render('hardwareLayout');
+    for (const text of ['What the AI receives', 'Motherboard manual (PDF)', 'Add manual', 'Rear panel photo', 'Devices that matter: 8 kHz mouse']) expect(ports).toContain(text);
+    expect(ports).toContain('id="support-files-input"');
   });
   it('audit mode skips every WPR/workload stage and persists independently of the selected focus', async () => {
     for (const priority of ['privacySecurity', 'balanced'] as const) {
@@ -126,7 +129,7 @@ describe('complete diagnosis lifecycle', () => {
       expect((requests.find(item => item.command === 'run-create')?.payload as { mode: string } | undefined)?.mode).toBe('auditOnly');
       expect((requests.find(item => item.command === 'scan')?.payload as { privacySecurityReadConsent: boolean } | undefined)?.privacySecurityReadConsent).toBe(true);
       const html = renderToStaticMarkup(<CompleteDiagnosis mode="auditOnly" goals={{ ...goals, priority }} onGoals={() => {}} onStart={() => {}} onCancel={() => {}} blocked={false}/>);
-      expect(html).toContain('Start AI audit'); expect(html).not.toContain('id="diagnosis-workload"'); expect(html).not.toContain('Seconds per trace');
+      expect(html).toContain('Start AI audit'); expect(html).not.toContain('id="diagnosis-workload"'); expect(html).not.toContain('Benchmark length');
     }
     const measured = harness();
     await measured.flow.execute({ ...input, goals: { ...goals, priority: 'privacySecurity' } });

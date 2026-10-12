@@ -115,9 +115,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .diagnosis-submit > p { margin: 0 0 16px; color: var(--muted-strong); font-size: 13px; line-height: 1.6; }
 .diagnosis-setup .form-grid { gap: 18px; }
 .diagnosis-setup .form-grid label { margin: 0; }
-.diagnosis-setup .workload-refresh { align-self: end; margin-bottom: 0; }
 .diagnosis-context > fieldset { margin-bottom: 24px; }
-.diagnosis-intro { margin: 0; max-width: 75ch; color: var(--muted-strong); font-size: 14px; line-height: 1.6; }
 .button-row, .form-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 button.primary, button.secondary, button.ghost { min-height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 15px; border-radius: 9px; font-weight: 600; font-size: 14px; cursor: pointer; transition: transform .12s ease, background .15s ease, border-color .15s ease; }
 button.primary { border: 1px solid var(--accent); background: var(--accent); color: var(--accent-contrast); box-shadow: 0 4px 12px var(--accent-shadow), inset 0 1px var(--surface-edge); }
@@ -481,7 +479,6 @@ html[data-motion='quiet'] :is(button, .brand-mark, .nav-item > svg, .icon-button
   .sidebar-foot { padding-inline: 0; text-align: center; }
   .choice-grid { grid-template-columns: minmax(0, 1fr); }
 }
-.supporting-files h2 { margin-top: 0; font-size: 20px; }
 .support-picker { display: grid; gap: 8px; margin: 18px 0; }
 .support-picker input { min-width: 0; max-width: 100%; color: var(--text); }
 .support-picker input::file-selector-button { min-height: 42px; margin-right: 12px; padding: 8px 12px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface-raised); color: var(--text); cursor: pointer; }
@@ -503,6 +500,27 @@ html[data-motion='quiet'] :is(button, .brand-mark, .nav-item > svg, .icon-button
 .diagnosis-blocked p { margin: 0 0 8px; }
 .diagnosis-blocked p:last-child { margin-bottom: 0; }
 .complete-diagnosis details, .investigation-budget { margin: 16px 0; }
+.diagnosis-steps { display: grid; gap: 20px; margin: 0; padding: 0; list-style: none; }
+.complete-diagnosis .diagnosis-steps h2 { display: flex; align-items: center; gap: 12px; }
+.step-index { display: inline-grid; place-items: center; width: 28px; height: 28px; border: 1px solid var(--accent-border); border-radius: 8px; background: var(--accent-soft); color: var(--accent-text); font-size: 14px; font-variant-numeric: tabular-nums; }
+.form-grid label > .select-with-action { display: flex; gap: 8px; margin: 0; }
+.select-with-action select { flex: 1; min-width: 0; }
+.select-with-action .icon-button { flex: none; width: 42px; height: auto; color: var(--text); }
+.duration-total { display: block; margin-top: 10px; color: var(--muted-strong); font-size: 13px; }
+.input-checklist { margin-bottom: 22px; padding: 16px 18px; border: 1px solid var(--accent-border); border-radius: 10px; background: var(--accent-soft); }
+.input-checklist h3 { margin: 0 0 12px; font-size: 14px; font-weight: 600; }
+.input-checklist ul { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.input-checklist li { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; gap: 12px; }
+.input-checklist li > svg { color: var(--muted); }
+.input-checklist li[data-done='true'] > svg { color: var(--success); }
+.input-checklist strong { display: block; font-size: 13px; font-weight: 600; }
+.input-checklist small { display: block; margin-top: 2px; color: var(--muted-strong); font-size: 12px; line-height: 1.5; }
+.input-checklist button { min-height: 34px; padding: 6px 12px; }
+.diagnosis-context .supporting-files { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border); }
+.supporting-files h3 { margin: 0 0 6px; font-size: 15px; font-weight: 600; }
+.context-details { padding-top: 16px; border-top: 1px solid var(--border); }
+.context-details summary { font-size: 14px; font-weight: 600; }
+.context-details .context-editor { margin-top: 12px; padding-top: 0; border-top: 0; }
 .investigation-budget label { display: flex; flex-direction: column; gap: 6px; margin: 14px 0; }
 
 @media (prefers-reduced-motion: reduce) {

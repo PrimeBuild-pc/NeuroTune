@@ -45,7 +45,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
     const mode = page.getByRole('group', { name: 'Investigation mode', exact: true });
     assert.equal(await mode.getByRole('radio', { name: /^Measured optimization/ }).isChecked(), true, 'A prompt preset must not change the investigation mode');
     assert.equal(await page.evaluate(() => window.requests.some(item => ['scan', 'defender-scan', 'diagnose'].includes(item.command))), false);
-    await page.getByRole('navigation').getByRole('button', { name: 'Settings', exact: true }).click(); await page.getByRole('group', { name: 'Section pages', exact: true }).getByRole('button', { name: 'Privacy & security', exact: true }).click();
+    await page.getByRole('navigation').getByRole('button', { name: 'Complete diagnosis', exact: true }).click(); await page.getByRole('group', { name: 'Section pages', exact: true }).getByRole('button', { name: 'Privacy & security', exact: true }).click();
     await page.getByRole('button', { name: 'Defender status', exact: true }).click();
     await page.getByRole('button', { name: /Read status and detections/ }).click();
     await page.getByText('No items reported in the summary: this does not certify a clean PC.', { exact: true }).waitFor();
