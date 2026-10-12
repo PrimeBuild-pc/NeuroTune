@@ -16,27 +16,36 @@ anything, and it never replaces the main AI.
 | CLM server with the reference head | `127.0.0.1:8700` | CPU torch, 75 MB head, `--no-ui` |
 | NeuroTune | your PC | Calls `POST /v1/systemone` on loopback only |
 
-Nothing is sent to a cloud service, there is no API key, and NeuroTune does not download or start anything: you do.
+Nothing is sent to a cloud service and there is no API key. NeuroTune does not download the stack: you install it once.
 
-## Install and run
+## Install
 
 ```powershell
 ./scripts/clm-stack.ps1 install   # about 9 GB; every download is SHA-256 pinned
-./scripts/clm-stack.ps1 start     # encoder + CLM, both on 127.0.0.1
-./scripts/clm-stack.ps1 status
-./scripts/clm-stack.ps1 stop      # frees the encoder's VRAM/RAM
 ```
 
-Then open Advanced tools → System One assistant, choose **CLM · local contrastive model** and enable it. If the server
-is stopped the assistant is skipped and the original evidence and main AI are used. The encoder is large: stop it
-before latency-sensitive gaming or measurement sessions.
+CLM is the default System One source: once installed it is used automatically (Advanced tools → System One assistant
+lets you switch to Rizzo Flow or OpenRouter, or turn it off). If it is not installed the assistant is skipped and the
+original evidence and main AI are used.
 
-`NEUROTUNE_CLM_URL` overrides the endpoint, but only loopback addresses are accepted.
+## When it runs
+
+NeuroTune starts the encoder and the CLM server **only for the classification that needs them** (after a measurement
+comparison, an evidence analysis or an applied change) and stops them as soon as the answer arrives. Both run in a
+Windows job object owned by the agent process, as a non-administrator, so they also end if NeuroTune closes, crashes
+or the request is cancelled. Classification holds the measurement lock, so the 9-10 GB encoder never sits in VRAM
+while a benchmark records. Loading takes a few seconds once the model file is in the OS cache.
+
+`start`/`stop`/`status` remain for manual use (for example the Pi router below). A stack you start yourself is reused
+and left running; stop it before gaming or measurement sessions.
+
+`NEUROTUNE_CLM_URL` overrides the endpoint, but only loopback addresses are accepted, and NeuroTune does not start a
+server for a custom endpoint.
 
 ## Safety and trust
 
 - Loopback only for NeuroTune and for the Pi router; the stack binds `127.0.0.1`.
-- The reference head is a `torch` pickle. It is only loaded after its SHA-256 matches the pin in the script.
+- The reference head is a `torch` pickle. The script verifies it at install and NeuroTune re-checks its SHA-256 before every start.
 - The upstream package declares vLLM, which does not exist on Windows. The stack installs it with `--no-deps` and the
   dependencies pinned in `scripts/clm-requirements.txt`; any OpenAI-compatible `/v1/embeddings` server can be the encoder.
 
@@ -56,8 +65,6 @@ before latency-sensitive gaming or measurement sessions.
 "no installed skill fits" as an explicit candidate, and prints `{covered, search, bestSkill, bestSkillProbability}`.
 It exits with code 2 when CLM is not running so the scout falls back to its own judgement.
 
-## Status of the previous sources
+## Other sources
 
-The Rizzo local model and the OpenRouter classifiers are still selectable so existing configurations keep working;
-new installations default to CLM. Removing them is a separate, mechanical change once CLM has proven itself on your
-hardware.
+Rizzo Flow (local, one-shot worker) and OpenRouter (cloud, separate key and consent) stay selectable as alternatives.

@@ -64,13 +64,38 @@ public sealed class PiAgentBridgeTests
     [TestMethod]
     public async Task Cancellation_stops_the_bundled_Pi_child_and_preserves_cancellation()
     {
+        RequireHelpers();
         using var stop = new CancellationTokenSource();
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var operation = PiAgentBridge.RunAsync(2, async _ => { started.SetResult(); await Task.Delay(Timeout.Infinite, stop.Token); return ""; },
             (_, _) => Task.FromResult(true), stop.Token);
-        await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        // Surface why Pi never asked for a turn instead of a bare timeout.
+        if (await Task.WhenAny(started.Task, operation, Task.Delay(TimeSpan.FromSeconds(30))) != started.Task)
+            Assert.Fail($"Pi did not request a turn: {(operation.IsFaulted ? operation.Exception!.InnerException : "still running")}");
         stop.Cancel();
         await Assert.ThrowsAsync<OperationCanceledException>(() => operation.WaitAsync(TimeSpan.FromSeconds(10)));
+    }
+
+    // The planner runs through the bundled Pi helper. An elevated host whose desktop refuses the filtered token (service-hosted
+    // CI runners) cannot start any helper, so probe once with a real one and report those tests as inconclusive there.
+    private static readonly Lazy<bool> HelpersAvailable = new(() =>
+    {
+        var environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in new[] { "SystemRoot", "WINDIR", "TEMP", "TMP" })
+            if (Environment.GetEnvironmentVariable(name) is { } value) environment[name] = value;
+        try
+        {
+            OptionalWorkerProcess.RunAsync(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe"),
+                ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "exit 0"], AppContext.BaseDirectory, "", environment, TimeSpan.FromMinutes(1), null, CancellationToken.None)
+                .GetAwaiter().GetResult();
+            return true;
+        }
+        catch (InvalidOperationException error) when (error.Message == OptionalWorkerProcess.TokenUnavailable) { return false; }
+    });
+    internal static bool CanStartHelpers => HelpersAvailable.Value;
+    internal static void RequireHelpers()
+    {
+        if (!CanStartHelpers) Assert.Inconclusive("Non-admin helpers cannot open this host's desktop (service-hosted runner).");
     }
 
     private static StreamReader Reader(string text) => new(new MemoryStream(Encoding.UTF8.GetBytes(text)));

@@ -515,6 +515,7 @@ public sealed class PlannerLoopTests
 
     private static (TcpListener Listener, Task Server, UserSettings Settings) StartServer(IReadOnlyList<Func<string, string>> responses, int statusCode = 200)
     {
+        PiAgentBridgeTests.RequireHelpers();
         var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         var server = Task.Run(async () =>
@@ -529,7 +530,7 @@ public sealed class PlannerLoopTests
                 await client.GetStream().WriteAsync(header);
                 await client.GetStream().WriteAsync(bytes);
             }
-        });
+        }).WaitAsync(TimeSpan.FromMinutes(1)); // A request that never arrives must fail the test, not hang the run.
         var settings = LlmClient.Defaults(LlmProvider.Local);
         settings.BaseUrl = $"http://127.0.0.1:{((IPEndPoint)listener.LocalEndpoint).Port}/v1";
         settings.Model = "test-model";
