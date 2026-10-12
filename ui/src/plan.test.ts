@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { planKindLabel, scriptArtifactFilename, selectActionIdsForProfile } from './plan';
+import { analysisPresetsFor, planKindLabel, scenarioProfiles, scriptArtifactFilename, selectActionIdsForProfile } from './plan';
+import { messages } from './i18n';
 import type { OptimizationAction, Recommendation } from './types';
 
 const actions: OptimizationAction[] = (['low', 'medium', 'high'] as const).map(risk => ({
@@ -60,5 +61,14 @@ describe('dynamic plan helpers', () => {
     expect(planKindLabel('externalResource')).toBe('Verified resource');
     expect(planKindLabel('updateNotice')).toBe('Official update notice');
     expect(scriptArtifactFilename('../../unsafe.ps1')).toBe('______unsafe_ps1.txt');
+  });
+  it('scenario profiles use current objectives, fit the notes field and are translated', () => {
+    const current = analysisPresetsFor('balanced').map(item => item.id);
+    expect(scenarioProfiles.map(item => item.id)).toEqual(['competitive', 'streaming', 'quiet']);
+    for (const item of scenarioProfiles) {
+      expect(current).toContain(item.priority);
+      expect(item.notes.length).toBeLessThanOrEqual(1000);
+      for (const text of [item.label, item.detail, item.notes]) expect(messages[text], text).toHaveLength(5);
+    }
   });
 });

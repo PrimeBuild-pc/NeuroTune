@@ -3,7 +3,7 @@ import { agent } from './agent';
 import { t } from './i18n';
 import { DiagnosisProgressPanel } from './components/DiagnosisProgressPanel';
 import { SupportingFiles } from './SupportingFiles';
-import { analysisPresetsFor } from './plan';
+import { analysisPresetsFor, scenarioProfiles } from './plan';
 import type { DiagnosisProgress } from './diagnosisFlow';
 import type { InvestigationMode, MeasurementWorkload, ScanResult, SupportingAttachment, TuningGoals } from './types';
 
@@ -45,6 +45,7 @@ export function CompleteDiagnosis({ goals, onGoals, onStart, progress, onCancel,
     <section className="section-card diagnosis-setup" hidden={section !== 'setup'}>
       <h2>{t('Objective and workload')}</h2>
       <fieldset disabled={blocked || loading} className="form-grid">
+        <ScenarioControl goals={goals} onGoals={onGoals}/>
         <label className="wide"><span id="diagnosis-priority">{t('Objective')}</span><select aria-labelledby="diagnosis-priority" aria-describedby="diagnosis-focus" value={goals.priority} onChange={event => onGoals({ ...goals, priority: event.target.value as TuningGoals['priority'] })}>{presets.map(item => <option key={item.id} value={item.id}>{t(item.label)}</option>)}</select><small id="diagnosis-focus">{t(presets.find(item => item.id === goals.priority)?.detail ?? '')} {t('The preset specializes the AI prompt: it does not apply tweaks, start scanners or grant permissions. Investigation mode and budget remain separate. Your notes specify what to improve and preserve.')}</small></label>
         <InvestigationModeControl mode={mode} onMode={onMode}/>
         {mode !== 'auditOnly' && <>
@@ -76,6 +77,20 @@ export function CompleteDiagnosis({ goals, onGoals, onStart, progress, onCancel,
     </section>
     {onSecurity && <div><button className="ghost" onClick={onSecurity}>{t('Windows security tools')}</button></div>}
   </div>;
+}
+
+function ScenarioControl({ goals, onGoals }: { goals: TuningGoals; onGoals: (value: TuningGoals) => void }) {
+  const id = useId();
+  const active = scenarioProfiles.find(item => item.priority === goals.priority && item.riskProfile === goals.riskProfile && t(item.notes) === goals.notes)?.id ?? 'custom';
+  return <fieldset className="mode-control wide">
+    <legend>{t('Scenario')}</legend>
+    <div className="choice-grid">
+      {scenarioProfiles.map(item => <label className="choice-option" key={item.id}><input type="radio" name={id} value={item.id} checked={active === item.id}
+        onChange={() => onGoals({ ...goals, priority: item.priority, riskProfile: item.riskProfile, notes: t(item.notes) })}/><span><strong>{t(item.label)}</strong><small>{t(item.detail)}</small></span></label>)}
+      <label className="choice-option"><input type="radio" name={id} value="custom" checked={active === 'custom'} readOnly/><span><strong>{t('Custom')}</strong><small>{t('Your own objective and notes below.')}</small></span></label>
+    </div>
+    <small>{t('A scenario only fills the objective, risk preset and notes below. Measurements, approval and rollback work the same.')}</small>
+  </fieldset>;
 }
 
 export function InvestigationModeControl({ mode, onMode }: { mode: InvestigationMode; onMode?: (mode: InvestigationMode) => void }) {
