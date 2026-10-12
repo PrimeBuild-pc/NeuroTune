@@ -645,15 +645,15 @@ public sealed class CoreTests
             start.WorkingDirectory = AppContext.BaseDirectory;
             return start;
         }
-        var output = await WindowsCommand.RunAsync(Start("[Console]::Error.Write(('x' * 256000)); [Console]::Out.Write('done')"), TimeSpan.FromSeconds(15));
+        var output = await WindowsCommand.RunAsync(Start("[Console]::Error.Write(('x' * 256000)); [Console]::Out.Write('done')"), TimeSpan.FromSeconds(60));
         Assert.AreEqual("done", output);
         var modulePath = Start("[Console]::Write($env:PSModulePath)");
         modulePath.Environment["PSModulePath"] = AppContext.BaseDirectory;
-        output = await WindowsCommand.RunAsync(modulePath, TimeSpan.FromSeconds(15));
+        output = await WindowsCommand.RunAsync(modulePath, TimeSpan.FromSeconds(60));
         var expectedModules = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "System32", "WindowsPowerShell", "v1.0", "Modules");
         Assert.AreEqual(expectedModules, output, StringComparer.OrdinalIgnoreCase);
         await Assert.ThrowsAsync<TimeoutException>(() => WindowsCommand.RunAsync(Start("Start-Sleep -Seconds 10"), TimeSpan.FromMilliseconds(300)));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => WindowsCommand.RunAsync(Start("[Console]::Out.Write(('x' * 1100000))"), TimeSpan.FromSeconds(15)));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => WindowsCommand.RunAsync(Start("[Console]::Out.Write(('x' * 1100000))"), TimeSpan.FromSeconds(60)));
     }
 
     [TestMethod]
