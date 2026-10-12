@@ -7,8 +7,8 @@ public static class ResponseLanguage
     public static string Normalize(string? language) => language switch
     {
         null => "en",
-        "en" or "zh-CN" or "ja" or "es" or "ru" => language,
-        _ => throw new InvalidOperationException("Unsupported response language. Use en, zh-CN, ja, es or ru.")
+        "en" or "zh-CN" or "ja" or "es" or "ru" or "it" => language,
+        _ => throw new InvalidOperationException("Unsupported response language. Use en, zh-CN, ja, es, ru or it.")
     };
 
     // Missing/null means the default; other JSON types must not become prompt text.
@@ -27,6 +27,7 @@ public static class ResponseLanguage
             "ja" => "Japanese (ja)",
             "es" => "Spanish (es)",
             "ru" => "Russian (ru)",
+            "it" => "Italian (it)",
             _ => "English (en)"
         };
         return $"APPLICATION-SELECTED RESPONSE LANGUAGE: {name}. Write human-readable prose in this language, including summaries, finding titles/assessments, recommendation explanations, audit assessments, questions and consent wording. " +
