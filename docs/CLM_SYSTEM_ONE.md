@@ -16,17 +16,23 @@ anything, and it never replaces the main AI.
 | CLM server with the reference head | `127.0.0.1:8700` | CPU torch, 75 MB head, `--no-ui` |
 | NeuroTune | your PC | Calls `POST /v1/systemone` on loopback only |
 
-Nothing is sent to a cloud service and there is no API key. NeuroTune does not download the stack: you install it once.
+Nothing is sent to a cloud service and there is no API key.
 
 ## Install
 
+From the app: Settings → Advanced tools (Expert mode) → System One assistant → **CLM** → enable it and confirm the install. NeuroTune
+downloads the pinned llama.cpp runtime, encoder and head (about 9 GB, each SHA-256 checked), creates a private Python
+environment with a pinned `uv` as a non-administrator helper, then proves the install with one real local
+classification before the assistant is enabled. Reserve 14 GiB of disk. Remove deletes all of it.
+
+The same steps are available from a terminal:
+
 ```powershell
-./scripts/clm-stack.ps1 install   # about 9 GB; every download is SHA-256 pinned
+./scripts/clm-stack.ps1 install
 ```
 
-CLM is the default System One source: once installed it is used automatically (Advanced tools → System One assistant
-lets you switch to Rizzo Flow or OpenRouter, or turn it off). If it is not installed the assistant is skipped and the
-original evidence and main AI are used.
+CLM is the default System One source: once installed it is used automatically. Rizzo Flow and OpenRouter remain
+selectable. If CLM is not installed the assistant is skipped and the original evidence and main AI are used.
 
 ## When it runs
 

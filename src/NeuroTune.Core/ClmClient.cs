@@ -40,12 +40,66 @@ internal static class ClmClient
 
     // Same layout and pins as scripts/clm-stack.ps1, which installs the stack.
     internal static string Root => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NeuroTune", "clm");
+    private const string EncoderUrl = "https://huggingface.co/Qwen/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q8_0.gguf";
+    private const string EncoderHash = "408b955510e196121c1c375201744783b5c9a43c7956d73fc78df54c66e883d6";
+    private const string HeadUrl = "https://huggingface.co/Contrastive-LM/CLM-v0.1-8B/resolve/main/CLM_v0.1-8B.pt";
     private const string HeadHash = "b2b4a8c9c2d39263eff78a351eb909a342ce9b3bf21a3f07c1d1bf15f1c4eda5";
+    private const string ClmCommit = "d5f9ef0fd9bde185df0ceaad4f4ecc6cfe8c34f6";
     private static string Server => Path.Combine(Root, "runtime", "llama-server.exe");
     private static string Encoder => Path.Combine(Root, "models", "Qwen3-8B-Q8_0.gguf");
     private static string Head => Path.Combine(Root, "heads", "CLM_v0.1-8B.pt");
     private static string Serve => Path.Combine(Root, "venv", "Scripts", "clm-serve.exe");
     internal static bool Installed => new[] { Server, Encoder, Head, Serve }.All(File.Exists);
+
+    // Same steps as scripts/clm-stack.ps1 install: every download is SHA-256 pinned, uv runs as a non-administrator helper,
+    // and the result is proven by one real classification before the assistant can be enabled.
+    internal static async Task InstallAsync(Action<string>? progress, CancellationToken cancellationToken)
+    {
+        if (!OperatingSystem.IsWindows() || System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture != System.Runtime.InteropServices.Architecture.X64)
+            throw new NotSupportedException("The local CLM stack currently supports Windows x64.");
+        foreach (var directory in new[] { Root, Path.Combine(Root, "models"), Path.Combine(Root, "heads") }) { Directory.CreateDirectory(directory); SystemOneService.CheckDirectory(directory); }
+        if (new DriveInfo(Path.GetPathRoot(Root)!).AvailableFreeSpace < 14L << 30) throw new IOException("Not enough free disk space: reserve 14 GiB for the local CLM stack.");
+        await SystemOneService.DownloadAsync(SystemOneService.RuntimeUrl, Path.Combine(Root, "runtime.zip"), SystemOneService.RuntimeHash, 128L << 20, progress, cancellationToken);
+        SystemOneService.ExtractZip(Path.Combine(Root, "runtime.zip"), Path.Combine(Root, "runtime"));
+        await SystemOneService.DownloadAsync(EncoderUrl, Encoder, EncoderHash, 10L << 30, progress, cancellationToken);
+        await SystemOneService.DownloadAsync(HeadUrl, Head, HeadHash, 256L << 20, progress, cancellationToken);
+        await SystemOneService.DownloadAsync(SystemOneService.UvUrl, Path.Combine(Root, "uv.zip"), SystemOneService.UvHash, 64L << 20, progress, cancellationToken);
+        SystemOneService.ExtractZip(Path.Combine(Root, "uv.zip"), Path.Combine(Root, "uv"));
+        var uv = Path.Combine(Root, "uv", "uv.exe");
+        if (!File.Exists(uv)) throw new IOException("The pinned uv archive did not contain uv.exe.");
+        var requirements = Path.Combine(Root, "requirements.txt");
+        using (var resource = typeof(ClmClient).Assembly.GetManifestResourceStream("NeuroTune.clm-requirements.txt") ?? throw new IOException("The embedded CLM requirements are missing."))
+        using (var file = File.Create(requirements)) await resource.CopyToAsync(file, cancellationToken);
+        var environment = HelperEnvironment();
+        environment["UV_CACHE_DIR"] = Path.Combine(Root, "cache"); environment["UV_PYTHON_INSTALL_DIR"] = Path.Combine(Root, "python");
+        environment["UV_PYTHON_PREFERENCE"] = "only-managed"; environment["UV_NO_PROGRESS"] = "1";
+        var python = Path.Combine(Root, "venv", "Scripts", "python.exe");
+        progress?.Invoke("Creating a private Python 3.12 environment for CLM as a non-administrator…");
+        if (!File.Exists(python)) await OptionalWorkerProcess.RunAsync(uv, ["venv", "--python", "3.12.12", Path.Combine(Root, "venv")], Root, "", environment, TimeSpan.FromMinutes(10), progress, cancellationToken);
+        progress?.Invoke("Installing pinned CLM dependencies (CPU torch, about 300 MB)…");
+        await OptionalWorkerProcess.RunAsync(uv, ["pip", "install", "--python", python, "--requirement", requirements, "--extra-index-url", "https://download.pytorch.org/whl/cpu"],
+            Root, "", environment, TimeSpan.FromMinutes(30), progress, cancellationToken);
+        await OptionalWorkerProcess.RunAsync(uv, ["pip", "install", "--python", python, "--no-deps", $"https://github.com/Contrastive-LM/CLM/archive/{ClmCommit}.zip"],
+            Root, "", environment, TimeSpan.FromMinutes(10), progress, cancellationToken);
+        if (!Installed) throw new IOException("The CLM installation finished without all of its files.");
+        progress?.Invoke("Verifying the installation with one real local classification…");
+        using (await StartAsync(progress, cancellationToken))
+        {
+            var answer = await DecideAsync("Local CLM installation check: frequent DPC latency spikes from a network driver.", cancellationToken);
+            ParseAdvisory(answer, "installation", [], 0, (_, _) => false);
+        }
+        progress?.Invoke("CLM installed and verified. The model is unloaded until the next analysis.");
+    }
+
+    private static Dictionary<string, string> HelperEnvironment()
+    {
+        var environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in new[] { "SystemRoot", "WINDIR", "USERPROFILE", "LOCALAPPDATA", "APPDATA", "TEMP", "TMP" })
+            if (Environment.GetEnvironmentVariable(name) is { } value) environment[name] = value;
+        environment["PATH"] = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "System32");
+        environment["PYTHONUTF8"] = "1"; environment["HF_HUB_OFFLINE"] = "1";
+        return environment;
+    }
 
     // Loads the ~9-10 GB encoder only for the classification that needs it, so it never sits in VRAM during
     // benchmarks. The returned job kills both servers when disposed or when this agent process exits; null means
@@ -59,11 +113,7 @@ internal static class ClmClient
         if (SystemOneService.FileHash(Head) != HeadHash) // The head is a torch pickle: never let clm-serve load an unverified one.
             throw new InvalidOperationException("The CLM head does not match its pinned SHA-256; reinstall with scripts/clm-stack.ps1 install.");
         progress?.Invoke("System One · CLM: loading the local model for this analysis; it is unloaded right after.");
-        var environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var name in new[] { "SystemRoot", "WINDIR", "USERPROFILE", "LOCALAPPDATA", "APPDATA", "TEMP", "TMP" })
-            if (Environment.GetEnvironmentVariable(name) is { } value) environment[name] = value;
-        environment["PATH"] = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "System32");
-        environment["PYTHONUTF8"] = "1"; environment["HF_HUB_OFFLINE"] = "1";
+        var environment = HelperEnvironment();
         var job = OptionalWorkerProcess.NewJob();
         try
         {
