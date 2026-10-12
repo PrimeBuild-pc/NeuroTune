@@ -529,7 +529,7 @@ public sealed class PlannerLoopTests
                 await client.GetStream().WriteAsync(header);
                 await client.GetStream().WriteAsync(bytes);
             }
-        });
+        }).WaitAsync(TimeSpan.FromMinutes(1)); // A request that never arrives must fail the test, not hang the run.
         var settings = LlmClient.Defaults(LlmProvider.Local);
         settings.BaseUrl = $"http://127.0.0.1:{((IPEndPoint)listener.LocalEndpoint).Port}/v1";
         settings.Model = "test-model";
