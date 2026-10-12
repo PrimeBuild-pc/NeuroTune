@@ -350,6 +350,34 @@ public sealed class PlannerLoopTests
     }
 
     [TestMethod]
+    public async Task Hardware_layout_receives_the_device_topology_in_the_first_prompt_without_executable_actions()
+    {
+        var requested = new List<string>();
+        var (listener, server, settings) = StartServer(new Func<string, string>[]
+        {
+            request =>
+            {
+                using var body = JsonDocument.Parse(request);
+                var prompt = body.RootElement.GetProperty("messages")[0].GetProperty("content").GetString()!;
+                Assert.Contains("PORTS AND PCIE LANES", prompt);
+                Assert.Contains("GPU Gen4 x8", prompt);
+                Assert.MatchesRegex(@"investigation:device-topology:[a-f0-9]+:turn0", prompt);
+                Assert.MatchesRegex(@"EXECUTION CAPABILITIES[^\n]*\n\s*\[\]", prompt);
+                return """{"kind":"diagnosis","diagnosis":{"summary":"GPU runs at x8","findings":[],"recommendations":[],"consentQuestion":"Move the drive?"}}""";
+            }
+        });
+        using (listener)
+        {
+            var outcome = await new LlmClient(new OptimizationCatalog()).PlanAsync(new SystemProfile { Cpu = "CPU" }, new TuningGoals { Priority = OptimizationPriority.HardwareLayout }, settings, null,
+                investigate: (request, cancellation) => { requested.Add(request.ToolId); return Task.FromResult<IReadOnlyDictionary<string, string>>(new Dictionary<string, string> { ["investigation:" + request.ToolId] = "GPU Gen4 x8" }); });
+            await server;
+            Assert.IsFalse(outcome.UsedLocalFallback);
+            CollectionAssert.AreEqual(new[] { "device-topology" }, requested);
+        }
+    }
+
+    [TestMethod]
+    [DataRow(OptimizationPriority.HardwareLayout, "PORTS AND PCIE LANES")]
     [DataRow(OptimizationPriority.Balanced, "OVERALL PERFORMANCE")]
     [DataRow(OptimizationPriority.SystemLatency, "SYSTEM LATENCY")]
     [DataRow(OptimizationPriority.NetworkLatency, "NETWORK OPTIMIZATION")]

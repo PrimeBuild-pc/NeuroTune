@@ -102,7 +102,7 @@ public sealed class LlmClient
         var localConflicts = ConflictAnalyzer.Analyze(profile, goals);
         var resources = _artifactCatalog.All.ToDictionary(item => item.Id, StringComparer.OrdinalIgnoreCase);
         var updateNotices = _updateAdvisor.Analyze(profile).ToDictionary(item => item.Id, StringComparer.OrdinalIgnoreCase);
-        var availableActions = _catalog.All.Where(_ => mode != InvestigationMode.AuditOnly)
+        var availableActions = _catalog.All.Where(_ => mode != InvestigationMode.AuditOnly && goals.Priority != OptimizationPriority.HardwareLayout)
             .Where(action => action.Inspect().CanApply).OrderBy(action => action.Id, StringComparer.Ordinal).ToList();
         var originalActionIds = settings.Provider == LlmProvider.DeepSeek
             ? availableActions.Select((action, index) => (Reference: $"a{index + 1:D4}", action.Id))
@@ -142,6 +142,12 @@ public sealed class LlmClient
         var stage = "Pi agent startup";
         try
         {
+            // The port/lane plan has no user turn to ask for the topology, so the model receives it with the first prompt.
+            if (goals.Priority == OptimizationPriority.HardwareLayout)
+            {
+                stage = "device topology";
+                await CollectAsync(new("device-topology", "Preloaded for the ports and PCIe lanes objective."), 0);
+            }
             Console.Error.WriteLine("Pi agent · investigating with the selected provider and registered read-only tools.");
             await PiAgentBridge.RunAsync(settings.InvestigationMaxTurns, GenerateAsync, HandleAsync, cancellationToken);
             return completed ?? new(LocalFallback(localConflicts), audit, "planner-turn-limit", true, additionalEvidence);
@@ -172,6 +178,19 @@ public sealed class LlmClient
             return await SendPromptAsync(settings, apiKey, prompt, cancellationToken, supporting);
         }
 
+        async Task CollectAsync(InvestigationRequest request, int turnNumber)
+        {
+            Console.Error.WriteLine($"AI read-only follow-up · {request.ToolId}: {ProfileSanitizer.Redact(request.Question)}");
+            var observation = await investigate(request, cancellationToken);
+            var collected = observation.ToDictionary(fact => $"{fact.Key}:{investigationId}:turn{turnNumber}", fact => ProfileSanitizer.Redact(fact.Value), StringComparer.Ordinal);
+            var expanded = AppendInvestigationEvidence(evidenceFacts, collected);
+            if (!MeasureEvidence(expanded).FitsSinglePass) throw new InvalidOperationException("Read-only follow-up exceeds the evidence budget.");
+            evidenceFacts = expanded;
+            foreach (var fact in collected) { provided.Add(fact.Key, fact.Value); additionalEvidence.Add(fact.Key, fact.Value); }
+            audit.Add(new(turnNumber, "requestInvestigation", collected.Keys.ToList(), true,
+                ProfileSanitizer.Redact(request.Question)[..Math.Min(500, ProfileSanitizer.Redact(request.Question).Length)]));
+        }
+
         async Task<bool> HandleAsync(int turnNumber, string content)
         {
             var originalEvidenceIds = modelEvidenceIds?.ToDictionary(item => item.Value, item => item.Key, StringComparer.Ordinal);
@@ -182,16 +201,7 @@ public sealed class LlmClient
             if (plannerTurn.Kind == PlannerTurnKind.RequestInvestigation)
             {
                 stage = "read-only follow-up";
-                var request = plannerTurn.Investigation!;
-                Console.Error.WriteLine($"AI read-only follow-up · {request.ToolId}: {ProfileSanitizer.Redact(request.Question)}");
-                var observation = await investigate(request, cancellationToken);
-                var collected = observation.ToDictionary(fact => $"{fact.Key}:{investigationId}:turn{turnNumber}", fact => ProfileSanitizer.Redact(fact.Value), StringComparer.Ordinal);
-                var expanded = AppendInvestigationEvidence(evidenceFacts, collected);
-                if (!MeasureEvidence(expanded).FitsSinglePass) throw new InvalidOperationException("Read-only follow-up exceeds the evidence budget.");
-                evidenceFacts = expanded;
-                foreach (var fact in collected) { provided.Add(fact.Key, fact.Value); additionalEvidence.Add(fact.Key, fact.Value); }
-                audit.Add(new(turnNumber, "requestInvestigation", collected.Keys.ToList(), true,
-                    ProfileSanitizer.Redact(request.Question)[..Math.Min(500, ProfileSanitizer.Redact(request.Question).Length)]));
+                await CollectAsync(plannerTurn.Investigation!, turnNumber);
                 return false;
             }
             if (plannerTurn.Kind == PlannerTurnKind.RequestEvidence)
@@ -319,6 +329,7 @@ public sealed class LlmClient
         OptimizationPriority.PrivacySecurity => "WINDOWS PRIVACY AND SECURITY: investigate data collection and security posture as separate sections, not performance gains. Inspect optional versus required diagnostics, advertising ID, tailored experiences, speech/input personalization, activity/cloud search, location/app permissions and documented Recall policies only where supported. Registry absence is not disabled, a policy value is not proof of effective behavior or observed network traffic; qualify build, edition, user versus device scope and management overrides. Do not promise zero telemetry: diagnostic-data-off is edition-qualified and does not cover every connected service. Preserve user-required features and explain trade-offs, supported Settings paths, verification and reversal. Preserve Defender, Firewall, SmartScreen, Windows Update, tamper protection and core isolation; do not disable security cloud protection/sample submission as an automatic privacy tweak. Request bounded privacy/security status and Defender detection summaries; unsupported scanner or file requests become optional manual follow-ups. Antivirus passive/unavailable/stale status is not absence of threats. Distinguish scanner-reported detections from suspicious persistence/signature metadata; unsigned or unfamiliar software is not malware and no detections does not certify a clean PC. Never infer infection from an installed tool alone. Quick/full scans may remediate and use network/cloud under existing antivirus policy: require separate explicit user consent, not a read-only request. Recommend Windows Security Protection history for user-managed remediation; do not generate generic deletion, security bypass, arbitrary exclusions or automatic download/EULA/VirusTotal actions. Autoruns and Sigcheck are optional official-source manual follow-ups, not installed/executed tools. No change is valid; finish with uncertainty and urgent protective guidance when evidence warrants it.",
         OptimizationPriority.CompromiseReview => "COMPROMISE AND VULNERABILITY REVIEW: look for exposure and indicators of compromise as hypotheses, never as a verdict. Start from protections (Defender, firewall, hardening settings), then investigate persistence (startup, scheduled tasks, services including unquoted or user-writable image paths, WMI event subscriptions), network exposure (listening ports with owning process names, remote-access settings, hosts-file and proxy tampering), account counts and patch level, requesting the matching read-only tools. An inventory item, an unusual port or a missing registry value is not proof of malware or a vulnerability; legitimate software commonly produces all of them, and no hashes, signatures, memory or network traffic are inspected. Qualify each finding with what was and was not observed and never present the absence of findings as a clean PC. Do not recommend deleting files, killing processes or disabling security features: propose manual verification steps, supported reversible hardening settings with verification and reversal, and official resources. Executable changes remain limited to registered reversible actions after separate consent.",
         OptimizationPriority.Stability => "SYSTEM STABILITY: prioritize reproducible crashes, freezes, device resets, recurring errors and data-integrity risks before marginal performance gains. Investigate device/driver health, recent System event IDs/sources/times, storage health metadata, memory/commit pressure, firmware/tuning context and thermal/power uncertainty. A warning, driver age, clean snapshot or installed tuning app does not prove a root cause, instability, an active overclock or a stable system. Do not automatically reset settings or disable recovery mechanisms. Separate urgent protective advice, reversible diagnostic isolation and longer user-approved validation; no stress test, firmware write, download or repair is an automatic tool.",
+        OptimizationPriority.HardwareLayout => "PORTS AND PCIE LANES: the device-topology observation is already provided; there is no user to ask, so finish in this investigation using it, the scan and any supplied files. Map each PCIe endpoint (GPU, NVMe, network, capture, USB controllers) to CPU or chipset lanes and compare its negotiated link with maxLink. A width below maxLink on a GPU or NVMe is possible lane sharing or a slot limit: cross-check any supplied motherboard manual excerpt (M.2/PCIe sharing tables, block diagram, rear-panel layout) before naming a slot. A lower PCIe generation on an idle GPU is normal power saving, not a fault. When every slot is in use and no width is lost, recommend nothing; when lanes are shared, only report the trade-off (for example GPU at x8 because an M.2 slot is populated) and leave the decision to the user. For USB, identify latency-sensitive input (mouse, keyboard, controllers), audio interfaces, cameras and capture devices from kinds, names and the user's notes, which controller (CPU or chipset) and external hubs each uses, and propose a concrete port plan: input devices directly on a CPU-attached controller without hubs, audio and capture on a different controller from high-polling input, storage and low-priority devices (UPS, RGB, dongles) on the chipset or hubs. firmwarePanel is often missing or wrong: with a manual excerpt or a rear-panel photo, name ports by their printed labels and positions; otherwise describe them by controller and port and explain how to identify them physically (move one device and see where it reappears in Device Manager). Gains from moving USB devices are usually small; present them as suggestions to measure, not guarantees. This objective is advice only: no executable capability, firmware setting or physical change is applied by NeuroTune.",
         OptimizationPriority.Fps => "LEGACY FRAME-RATE FOCUS: prioritize sustained gaming throughput and frame-time consistency for the specified workload. Distinguish CPU/GPU limits and measurement availability; scheduling traces are not FPS or 1% lows. Explain image-quality, latency, energy and stability trade-offs and require representative frame measurements before claiming gains.",
         OptimizationPriority.Efficiency => "LEGACY EFFICIENCY FOCUS: prioritize useful work per unit of energy, battery life, sustained performance, thermals and noise. Configuration and indirect ACPI readings do not establish measured power or temperature benefits. Seek available workload evidence and propose controlled validation while explaining responsiveness and throughput trade-offs; do not automatically select a power plan.",
         _ => throw new InvalidOperationException("Unknown analysis objective.")
