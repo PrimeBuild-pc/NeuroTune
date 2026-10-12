@@ -12,6 +12,17 @@ const analysisPresets: Array<{ id: OptimizationPriority; label: string; detail: 
   { id: 'efficiency', label: 'Efficiency (legacy)', detail: 'Keep the saved run’s energy focus; it is not converted to another objective.', legacy: true },
 ];
 
+// One-click starting points. They only fill the objective, risk preset and notes for the AI; approval, baselines and
+// rollback are unchanged, and every field stays editable.
+export const scenarioProfiles: Array<{ id: string; label: string; detail: string; priority: OptimizationPriority; riskProfile: RiskProfile; notes: string }> = [
+  { id: 'competitive', label: 'Competitive gaming', detail: 'Lowest, most consistent latency. Balanced risk.', priority: 'systemLatency', riskProfile: 'balanced',
+    notes: 'Competitive gaming: lowest and most consistent latency and frame times. Keep anti-cheat, Windows security, stability and image clarity intact.' },
+  { id: 'streaming', label: 'Streaming & recording', detail: 'Smooth game and encoder, no dropped frames. Low-risk changes only.', priority: 'balanced', riskProfile: 'safe',
+    notes: 'Streaming or recording while gaming: smooth frame times for the game and the encoder, no dropped frames, stable upload. Keep audio devices, capture tools, network stability and security intact.' },
+  { id: 'quiet', label: 'Quiet & efficient', detail: 'Less power, heat, fan noise and background work. Low-risk changes only.', priority: 'balanced', riskProfile: 'safe',
+    notes: 'Quiet and efficient: reduce power draw, heat, fan noise and background activity while keeping everyday responsiveness acceptable. Keep security, updates and stability intact.' },
+];
+
 export function analysisPresetsFor(priority: OptimizationPriority) {
   return analysisPresets.filter(item => !item.legacy || item.id === priority).map(item => ({ ...item, label: t(item.label), detail: t(item.detail) }));
 }
