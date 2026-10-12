@@ -13,6 +13,7 @@
   <ItemGroup>
     <EmbeddedResource Include="Data\component-baselines.v1.json" />
     <EmbeddedResource Include="system-one-worker.py" />
+    <EmbeddedResource Include="..\..\scripts\clm-requirements.txt" LogicalName="NeuroTune.clm-requirements.txt" />
     <Content Include="..\..\ui\src-tauri\agent\pi\*" Link="pi\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <InternalsVisibleTo Include="NeuroTune.Tests" />
     <PackageReference Include="System.Management" Version="8.0.0" />

@@ -49,6 +49,17 @@ binaries. Earlier alpha tags/assets remain unchanged.
   guided path showing the current step and a single "Next step" action, and a
   Simple/Expert switch that hides rarely used technical controls by default.
 - **Italian** interface and AI response language.
+- **Install CLM from the app:** pinned, SHA-256 checked downloads, a private
+  Python environment created by a non-administrator helper, and one real local
+  classification before the assistant is enabled. Remove deletes all of it.
+- **Before/after report:** export a readable, script-free HTML page with the
+  measurement conditions, applied changes and measured differences.
+- **Scenario profiles:** Competitive gaming, Streaming & recording and Quiet &
+  efficient fill the objective, risk preset and notes in one click; approval,
+  baselines and rollback are unchanged.
+- **Live FPS:** while a game is recorded, a display-only panel shows FPS, 1% low
+  and frame-time P99 from the game's DirectX presents. It never enters reports
+  or decisions; Vulkan/OpenGL games may not report.
 - **Model failure guidance:** rate limits, missing credits, unavailable models,
   upstream errors, unusable output and timeouts name the model and say how to
   recover, without echoing provider text or retrying automatically.
