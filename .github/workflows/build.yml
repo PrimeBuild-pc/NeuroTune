@@ -35,6 +35,9 @@ jobs:
       - run: dotnet restore
       - run: dotnet format NeuroTune.sln --verify-no-changes --no-restore
       - run: dotnet build --configuration Release --no-restore
+      - name: Let non-admin test helpers read the build output
+        # Files written by the elevated runner are owned by Administrators; helpers run with that group deny-only.
+        run: icacls tests\NeuroTune.Tests\bin /grant "${env:USERNAME}:(OI)(CI)RX" /T /Q
       - run: dotnet test --configuration Release --no-build --blame-hang-timeout 10m
       - name: Block known NuGet vulnerabilities (including transitive packages)
         shell: pwsh
