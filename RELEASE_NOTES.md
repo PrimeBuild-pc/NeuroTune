@@ -7,7 +7,9 @@
   values and keys that did not exist before. The agent `apply` request accepts them as `Parametric: [{ Kind,
   Parameters }]`; the diagnosis does not propose them yet (F3).
 - **Journal schema v4** stores each record's kind and parameters; v3 journals remain readable.
-- Protected targets (security, boot, autostart, Defender except exclusions) are refused per kind; see `SECURITY.md`.
+- Protected targets (credentials, code integrity, raw autostart keys, boot-critical services, Defender except
+  exclusions) are refused per kind; see `SECURITY.md`. VBS/Memory Integrity, startup apps and ordinary or automatic
+  services can be turned off, with separate confirmation for High-risk changes.
 - Elevated tests use isolated targets (test key, service, task, BCD store, QoS policy, IFEO entry). Real NIC and
   Defender writes are tested only in a VM, opted in with `NEUROTUNE_TEST_NETADAPTER` / `NEUROTUNE_TEST_DEFENDER`.
 
