@@ -35,8 +35,8 @@ public static class SystemOneService
         var options = LoadOptions();
         var installed = InstalledSize() == options.Size && File.Exists(Python) && File.Exists(Path.Combine(Root, "model.gguf"));
         var hasKey = !string.IsNullOrWhiteSpace(new SettingsService().LoadSecret(OpenRouterCredentialId));
-        var ready = options.Source == "clm" ? ClmClient.Reachable() : options.Source != "local" ? options.CloudConsent && hasKey && !string.IsNullOrWhiteSpace(options.Model) : installed;
-        var detail = options.Source == "clm" ? (ready ? "Local CLM (Contrastive Language Model) server reachable on this PC. Sampled context stays on loopback; no cloud, API key or NeuroTune-managed download." : "Local CLM server not reachable. Start it with scripts/clm-stack.ps1; NeuroTune does not start or download it.")
+        var ready = options.Source == "clm" ? ClmClient.Installed || ClmClient.Reachable() : options.Source != "local" ? options.CloudConsent && hasKey && !string.IsNullOrWhiteSpace(options.Model) : installed;
+        var detail = options.Source == "clm" ? (ready ? "Local CLM (Contrastive Language Model) on this PC. NeuroTune loads it only while classifying results and unloads it right after, so it never occupies VRAM during measurements; it also stops when NeuroTune closes. No cloud or API key." : "Local CLM not installed. Install it once with scripts/clm-stack.ps1 install (about 9 GB); NeuroTune does not download it.")
             : options.Source == "openRouterFree" ? "Optional free cloud classifier via openrouter/free: zero-price router randomly selects an available compatible free model. Separate cloud consent and API key required; sampled context leaves this PC. Rate limits, availability and latency vary. No local install or paid/local fallback; not Rizzo scoring."
             : options.Source == "openRouter" ? "Optional cloud classifier via OpenRouter: token-based API usage, not local Rizzo scoring. Only sampled context is sent; no automatic local/provider fallback."
             : installed ? "One-shot local worker; exits and unloads after each analysis. No background server." : "Optional component not installed. No model download or inference until explicitly requested.";
@@ -46,7 +46,7 @@ public static class SystemOneService
     {
         ValidateOptions(options);
         if (options.Enabled && options.Source == "local" && InstalledSize() != options.Size) throw new InvalidOperationException("Install the selected optional model before enabling it.");
-        if (options.Enabled && options.Source == "clm" && !ClmClient.Reachable(refresh: true)) throw new InvalidOperationException("The local CLM server is not reachable. Start it with scripts/clm-stack.ps1, then enable the assistant.");
+        if (options.Enabled && options.Source == "clm" && !ClmClient.Installed && !ClmClient.Reachable(refresh: true)) throw new InvalidOperationException("The local CLM stack is not installed. Install it once with scripts/clm-stack.ps1 install, then enable the assistant.");
         if (options.Enabled && options.Source is "openRouter" or "openRouterFree" && (string.IsNullOrWhiteSpace(options.Model) || string.IsNullOrWhiteSpace(new SettingsService().LoadSecret(OpenRouterCredentialId))))
             throw new InvalidOperationException("Save a separate OpenRouter API key and choose the optional classifier model before enabling it.");
         Directory.CreateDirectory(Root); CheckDirectory(Root);
@@ -142,6 +142,7 @@ public static class SystemOneService
                     if (MeasurementService.HasActiveRecording()) throw new InvalidOperationException("Optional classification skipped while recording.");
                     if (status.Source == "clm")
                     {
+                        using var stack = ClmClient.StartAsync(progress, cancellationToken).GetAwaiter().GetResult();
                         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken); deadline.CancelAfter(TimeSpan.FromSeconds(30));
                         progress?.Invoke("System One · CLM: classifying sampled context on the local CLM server; nothing leaves this PC.");
                         var answer = ClmClient.DecideAsync(context, deadline.Token).GetAwaiter().GetResult();
@@ -165,7 +166,7 @@ public static class SystemOneService
                     var output = InvokeAsync(context.Length > 12000 ? context[..12000] : context, new(status.Enabled, status.Size, status.Device), progress, cancellationToken).GetAwaiter().GetResult();
                     result = ParseAdvisory(output, phase, facts?.Keys.ToList() ?? [], watch.Elapsed.TotalSeconds);
                 });
-                progress?.Invoke(status.Source == "local" ? "System One unloaded. Its classification is advisory, not an execution decision." : "Optional OpenRouter classification complete; no local model was loaded.");
+                progress?.Invoke(status.Source is "local" or "clm" ? "System One unloaded. Its classification is advisory, not an execution decision." : "Optional OpenRouter classification complete; no local model was loaded.");
                 return result;
             }, cancellationToken);
         }
@@ -233,7 +234,7 @@ public static class SystemOneService
     }
     private static SystemOneOptions LoadOptions()
     {
-        if (!File.Exists(OptionsPath)) return new(false, Source: "clm");
+        if (!File.Exists(OptionsPath)) return new(true, Source: "clm"); // Used only once the local stack is installed.
         try { return ParseOptions(File.ReadAllText(OptionsPath)); }
         catch (Exception error) when (error is JsonException or ArgumentException or IOException) { return new(false); }
     }

@@ -38,6 +38,50 @@ internal static class ClmClient
         }
     }
 
+    // Same layout and pins as scripts/clm-stack.ps1, which installs the stack.
+    internal static string Root => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NeuroTune", "clm");
+    private const string HeadHash = "b2b4a8c9c2d39263eff78a351eb909a342ce9b3bf21a3f07c1d1bf15f1c4eda5";
+    private static string Server => Path.Combine(Root, "runtime", "llama-server.exe");
+    private static string Encoder => Path.Combine(Root, "models", "Qwen3-8B-Q8_0.gguf");
+    private static string Head => Path.Combine(Root, "heads", "CLM_v0.1-8B.pt");
+    private static string Serve => Path.Combine(Root, "venv", "Scripts", "clm-serve.exe");
+    internal static bool Installed => new[] { Server, Encoder, Head, Serve }.All(File.Exists);
+
+    // Loads the ~9-10 GB encoder only for the classification that needs it, so it never sits in VRAM during
+    // benchmarks. The returned job kills both servers when disposed or when this agent process exits; null means
+    // a server the user started (scripts/clm-stack.ps1 start) is already answering and stays theirs.
+    internal static async Task<IDisposable?> StartAsync(Action<string>? progress, CancellationToken cancellationToken)
+    {
+        if (Reachable(refresh: true)) return null;
+        if (!Installed) throw new InvalidOperationException("The local CLM stack is not installed. Install it once with scripts/clm-stack.ps1 install.");
+        if (Endpoint.Port != 8700) throw new InvalidOperationException("NEUROTUNE_CLM_URL points to a server NeuroTune does not manage; start it yourself.");
+        SystemOneService.CheckDirectory(Root);
+        using (var stream = File.OpenRead(Head)) // The head is a torch pickle: never let clm-serve load an unverified one.
+            if (Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream)).ToLowerInvariant() != HeadHash)
+                throw new InvalidOperationException("The CLM head does not match its pinned SHA-256; reinstall with scripts/clm-stack.ps1 install.");
+        progress?.Invoke("System One · CLM: loading the local model for this analysis; it is unloaded right after.");
+        var environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in new[] { "SystemRoot", "WINDIR", "USERPROFILE", "LOCALAPPDATA", "APPDATA", "TEMP", "TMP" })
+            if (Environment.GetEnvironmentVariable(name) is { } value) environment[name] = value;
+        environment["PATH"] = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "System32");
+        environment["PYTHONUTF8"] = "1"; environment["HF_HUB_OFFLINE"] = "1";
+        var job = OptionalWorkerProcess.NewJob();
+        try
+        {
+            OptionalWorkerProcess.StartInJob(job, Server, ["-m", Encoder, "--embedding", "--pooling", "last", "-c", "2048", "-b", "2048", "-ub", "2048",
+                "--host", "127.0.0.1", "--port", "8090", "-ngl", "99", "--alias", "qwen3-8b"], Root, environment);
+            OptionalWorkerProcess.StartInJob(job, Serve, ["--host", "127.0.0.1", "--port", "8700", "--emb-url", "http://127.0.0.1:8090/v1/embeddings",
+                "--emb-model", "qwen3-8b", "--ckpt", Head, "--no-download", "--no-ui"], Root, environment);
+            for (var waited = 0; !Reachable(refresh: true); waited++)
+            {
+                if (waited >= 180) throw new TimeoutException("The local CLM server did not become ready within 3 minutes.");
+                await Task.Delay(1000, cancellationToken);
+            }
+            return job;
+        }
+        catch { job.Dispose(); throw; }
+    }
+
     internal static bool IsLoopback(Uri uri) => uri.Scheme is "http" or "https" && string.IsNullOrEmpty(uri.UserInfo) &&
         uri.Host is "127.0.0.1" or "localhost" or "[::1]" or "::1";
 
