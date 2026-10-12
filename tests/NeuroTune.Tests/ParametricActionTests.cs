@@ -97,7 +97,7 @@ public sealed class ParametricActionTests
     [TestMethod]
     [DataRow("HKLM", @"SAM\SAM\Domains", "F")]
     [DataRow("HKLM", @"SYSTEM\ControlSet001\Control\Lsa", "RunAsPPL")]
-    [DataRow("HKLM", @"SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios", "Enabled")]
+    [DataRow("HKLM", @"SYSTEM\CurrentControlSet\Control\CI\Config", "VulnerableDriverBlocklistEnable")]
     [DataRow("HKLM", @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Run", "x")]
     [DataRow("HKCU", @"Software\Microsoft\Windows\CurrentVersion\RunOnce", "x")]
     [DataRow("HKCU", @"Software\Classes\CLSID\{00000000-0000-0000-0000-000000000000}\InprocServer32", "")]
@@ -139,7 +139,8 @@ public sealed class ParametricActionTests
             ("ifeo.perf", """{"Exe":"game.exe","Name":"CpuPriorityClass","Value":4}"""),
             ("ifeo.perf", """{"Exe":"C:\\game.exe","Name":"CpuPriorityClass","Value":3}"""),
             ("bcd.option", """{"Element":"useplatformclock","Value":"Yes"}"""),
-            ("bcd.option", """{"Element":"hypervisorlaunchtype","Value":"Off"}"""),
+            ("bcd.option", """{"Element":"hypervisorlaunchtype","Value":"Disabled"}"""),
+            ("service.start-type", """{"Name":"Winmgmt","StartType":"Disabled"}"""),
             ("qos.policy", """{"Exe":"game.exe","Dscp":64}"""),
             ("file.ini", """{"Path":"C:\\Windows\\win.ini","Section":"a","Key":"b","Value":"c"}"""),
             ("file.json", """{"Path":"C:\\Users\\..\\Windows\\x.json","Key":"a","Value":1}"""),
@@ -148,6 +149,21 @@ public sealed class ParametricActionTests
             ("device.disable", """{"Slug":"not-a-device"}""")
         })
             Assert.ThrowsExactly<InvalidOperationException>(() => ParametricActions.Create(kind, json), $"{kind} {json}");
+    }
+
+    [TestMethod]
+    public void Vbs_startup_apps_and_ordinary_services_are_allowed_as_confirmed_writes()
+    {
+        foreach (var name in new[] { "EnableVirtualizationBasedSecurity", "RequirePlatformSecurityFeatures" })
+            Assert.AreEqual(RiskLevel.High, Create("registry.set", new { Hive = "HKLM", Path = @"SYSTEM\CurrentControlSet\Control\DeviceGuard", Name = name, Type = "DWord", Value = "0" }).Risk);
+        Assert.AreEqual(RiskLevel.High, Create("registry.set", new
+        {
+            Hive = "HKLM", Path = @"SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity", Name = "Enabled", Type = "DWord", Value = "0"
+        }).Risk);
+        Assert.AreEqual(RiskLevel.High, Create("bcd.option", new { Element = "hypervisorlaunchtype", Value = "off" }).Risk);
+        foreach (var service in new[] { "SysMain", "WSearch", "DiagTrack", "Spooler", "wuauserv", "Dnscache", "AudioEndpointBuilder" })
+            Assert.AreEqual(RiskLevel.High, Create("service.start-type", new { Name = service, StartType = "Disabled" }).Risk);
+        Assert.AreEqual(RiskLevel.Medium, Create("service.start-type", new { Name = "SysMain", StartType = "Manual" }).Risk);
     }
 
     [TestMethod]
@@ -362,7 +378,7 @@ public sealed class ParametricActionTests
             WindowsCommand.Run("bcdedit.exe", "/createstore", store);
             var entry = System.Text.RegularExpressions.Regex.Match(WindowsCommand.Run("bcdedit.exe", "/store", store, "/create", "/d", "NeuroTuneTest", "/application", "osloader"),
                 @"\{[0-9a-fA-F-]{36}\}").Value;
-            foreach (var parameters in new[] { new ParametricActions.BcdParameters("disabledynamictick", "yes"), new("tscsyncpolicy", "Enhanced") })
+            foreach (var parameters in new[] { new ParametricActions.BcdParameters("disabledynamictick", "yes"), new("tscsyncpolicy", "Enhanced"), new("hypervisorlaunchtype", "Off") })
             {
                 var action = ParametricActions.BcdOption(parameters, store, entry);
                 RoundTrip(action, () => ParametricActions.BcdOption(parameters, store, entry));

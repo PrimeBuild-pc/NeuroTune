@@ -100,7 +100,7 @@ internal static class ParametricActions
     [
         @"HKLM\SAM", @"HKLM\SECURITY", @"HKLM\BCD00000000",
         @"HKLM\SYSTEM\CurrentControlSet\Control\Lsa", @"HKLM\SYSTEM\CurrentControlSet\Control\CI",
-        @"HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard", @"HKLM\SYSTEM\CurrentControlSet\Control\SecurityProviders",
+        @"HKLM\SYSTEM\CurrentControlSet\Control\SecurityProviders",
         @"HKLM\SYSTEM\CurrentControlSet\Control\SafeBoot", @"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\AppCertDlls",
         @"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\KnownDLLs", @"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment",
         @"HKLM\SYSTEM\CurrentControlSet\Services\SharedAccess",
@@ -402,13 +402,13 @@ internal static class ParametricActions
     internal sealed record ServiceParameters(string Name, string StartType);
     internal sealed record ServiceState(int Start, bool Delayed, bool Running);
 
+    // Only services Windows cannot boot or sign in without, Winmgmt (NeuroTune reads and verifies through WMI) and
+    // Defender/firewall (F7 owns Defender). Every other service, including automatic ones, can be changed.
     private static IEnumerable<string> CriticalServices() =>
     [
-        "RpcSs", "RpcEptMapper", "DcomLaunch", "LSM", "BFE", "mpssvc", "WinDefend", "WdNisSvc", "WdNisDrv", "WdFilter", "WdBoot",
-        "Sense", "SecurityHealthService", "wscsvc", "SgrmBroker", "SamSs", "EventLog", "PlugPlay", "Power", "ProfSvc",
-        "BrokerInfrastructure", "CoreMessagingRegistrar", "SystemEventsBroker", "StateRepository", "Schedule", "Winmgmt",
-        "CryptSvc", "gpsvc", "KeyIso", "VaultSvc", "UserManager", "Dhcp", "Dnscache", "nsi", "AppIDSvc", "EFS", "TrustedInstaller",
-        "msiserver", "Netlogon", "LanmanWorkstation", "TokenBroker", "camsvc", "AudioEndpointBuilder"
+        "RpcSs", "RpcEptMapper", "DcomLaunch", "LSM", "BrokerInfrastructure", "CoreMessagingRegistrar", "SystemEventsBroker",
+        "StateRepository", "PlugPlay", "Power", "ProfSvc", "SamSs", "UserManager", "gpsvc", "Winmgmt", "BFE", "mpssvc",
+        "WinDefend", "WdNisSvc", "WdNisDrv", "WdFilter", "WdBoot", "Sense", "SecurityHealthService", "wscsvc", "SgrmBroker"
     ];
 
     private static OptimizationAction ServiceStartType(ServiceParameters parameters)
@@ -689,7 +689,8 @@ internal static class ParametricActions
         ["x2apicpolicy"] = ["Enable", "Disable"],
         ["quietboot"] = ["Yes", "No"],
         ["bootux"] = ["Disabled", "Basic", "Standard"],
-        ["bootmenupolicy"] = ["Legacy", "Standard"]
+        ["bootmenupolicy"] = ["Legacy", "Standard"],
+        ["hypervisorlaunchtype"] = ["Off", "Auto"]
     };
 
     internal static OptimizationAction BcdOption(BcdParameters parameters, string? store = null, string entry = "{current}")
@@ -713,7 +714,9 @@ internal static class ParametricActions
         }
         string? ReadState(string state) => Canonical(JsonSerializer.Deserialize<string?>(state));
         return Build("bcd.option", parameters, parameters.Value is null ? $"Remove boot option {element}" : $"Boot option {element} = {parameters.Value}",
-            "Boot", RiskLevel.High, true, $"bcd:{element}", "Changes the boot configuration after restart",
+            "Boot", RiskLevel.High, true, $"bcd:{element}", element == "hypervisorlaunchtype"
+                ? "Off stops the Windows hypervisor after restart: VBS, Memory Integrity, Credential Guard, WSL2, Hyper-V and Windows Sandbox stop working, and anti-cheats that require them refuse to start"
+                : "Changes the boot configuration after restart",
             () => Current() is var current && string.Equals(current, parameters.Value, StringComparison.OrdinalIgnoreCase)
                 ? ActionAvailability.Applied(current ?? "Not set") : ActionAvailability.Ready(current ?? "Not set"),
             () => JsonSerializer.Serialize(Canonical(Current())), () => Set(parameters.Value), state => Set(ReadState(state)),
