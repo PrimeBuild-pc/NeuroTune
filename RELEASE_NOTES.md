@@ -44,6 +44,11 @@ binaries. Earlier alpha tags/assets remain unchanged.
   after, inside a kill-on-close job, so it never occupies VRAM during
   measurements and stops when NeuroTune closes. Rizzo Flow and OpenRouter stay
   selectable.
+- **Simpler interface:** five sidebar sections (Overview, Complete diagnosis,
+  Measurements, Changes & restore, Settings) with the other pages as tabs, a
+  guided path showing the current step and a single "Next step" action, and a
+  Simple/Expert switch that hides rarely used technical controls by default.
+- **Italian** interface and AI response language.
 - **Model failure guidance:** rate limits, missing credits, unavailable models,
   upstream errors, unusable output and timeouts name the model and say how to
   recover, without echoing provider text or retrying automatically.

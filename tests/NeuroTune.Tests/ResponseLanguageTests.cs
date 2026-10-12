@@ -14,6 +14,7 @@ public sealed class ResponseLanguageTests
     [DataRow("ja", "ja", "Japanese (ja)")]
     [DataRow("es", "es", "Spanish (es)")]
     [DataRow("ru", "ru", "Russian (ru)")]
+    [DataRow("it", "it", "Italian (it)")]
     public void Supported_languages_and_default_are_explicit(string? language, string expected, string name)
     {
         Assert.AreEqual(expected, ResponseLanguage.Normalize(language));
@@ -65,6 +66,7 @@ public sealed class ResponseLanguageTests
     [DataRow("ja", "サポートされる変更はありません")]
     [DataRow("es", "No hay cambios compatibles")]
     [DataRow("ru", "Нет поддерживаемых изменений")]
+    [DataRow("it", "Nessuna modifica supportata")]
     public async Task Mocked_planner_turns_preserve_identifiers_evidence_schema_and_safety(string? language, string prose)
     {
         const string nativeId = "audit:privacy.fixture";
@@ -169,6 +171,7 @@ public sealed class ResponseLanguageTests
     [DataRow("ja", "Japanese (ja)")]
     [DataRow("es", "Spanish (es)")]
     [DataRow("ru", "Russian (ru)")]
+    [DataRow("it", "Italian (it)")]
     public async Task Mocked_comparison_explanation_cannot_change_metrics_decision_or_authority(string? language, string name)
     {
         var comparison = new MeasurementComparison { Metrics = [new("measurement:test:cpu", 10, 11, 10, ComparisonOutcome.Inconclusive)], Recommendation = ComparisonDecision.Rollback };
