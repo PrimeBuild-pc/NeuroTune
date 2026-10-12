@@ -65,10 +65,8 @@ const url = process.env.UI_PREVIEW_URL || 'http://127.0.0.1:4173/';
         const form = page.locator('.complete-diagnosis');
         await form.getByRole('combobox', { name: 'Running game / workload', exact: true }).selectOption('42');
         await form.getByRole('textbox', { name: 'Improve / preserve', exact: true }).fill('Preserve this draft');
-        await form.getByRole('group', { name: 'Seconds per trace', exact: true }).getByRole('radio', { name: '30 s', exact: true }).check();
-        const sections = form.getByRole('group', { name: 'Diagnosis sections', exact: true });
-        await sections.getByRole('button', { name: /^Supporting files/ }).click();
-        await form.getByLabel('Add reports or screenshots', { exact: true }).setInputFiles({ name: 'context.txt', mimeType: 'text/plain', buffer: Buffer.from('Mock user context, not verified evidence.') });
+        await form.getByRole('group', { name: 'Benchmark length', exact: true }).getByRole('radio', { name: '30 s', exact: true }).check();
+        await form.getByLabel('Add files', { exact: true }).setInputFiles({ name: 'context.txt', mimeType: 'text/plain', buffer: Buffer.from('Mock user context, not verified evidence.') });
         const consent = form.getByRole('checkbox', { name: 'I reviewed the previews and authorize sending this content to the main provider when I start diagnosis.', exact: true });
         await consent.check();
         await page.getByRole('button', { name: 'Quick Settings', exact: true }).click();
@@ -93,11 +91,9 @@ const url = process.env.UI_PREVIEW_URL || 'http://127.0.0.1:4173/';
         assert.equal(await page.locator('html').getAttribute('data-theme'), 'dark');
         await nav.getByRole('button', { name: 'Complete diagnosis', exact: true }).click();
         assert.equal(await consent.isChecked(), true, 'Appearance navigation preserves draft consent');
-        await sections.getByRole('button', { name: 'Diagnosis setup', exact: true }).click();
         assert.equal(await form.getByRole('combobox', { name: 'Running game / workload', exact: true }).inputValue(), '42');
         assert.equal(await form.getByRole('radio', { name: '30 s', exact: true }).isChecked(), true);
         assert.equal(await form.getByRole('textbox', { name: 'Improve / preserve', exact: true }).inputValue(), 'Preserve this draft');
-        await sections.getByRole('button', { name: /^Supporting files/ }).click();
         await nav.getByRole('button', { name: 'AI provider', exact: true }).click();
         await page.getByLabel('Model', { exact: true }).fill('another-model');
         await nav.getByRole('button', { name: 'Complete diagnosis', exact: true }).click();
@@ -156,7 +152,7 @@ const url = process.env.UI_PREVIEW_URL || 'http://127.0.0.1:4173/';
       } else {
         const targets = [
           ['provider', 'Connection'], ['provider', 'AI investigation budget'],
-          ['scan', 'Diagnosis setup'], ['scan', 'Optional context'], ['scan', 'Supporting files'],
+          ['scan', null],
           ['security', 'Privacy & AI'], ['security', 'Defender status'], ['security', 'User-approved Defender scan'], ['security', 'Manual tools'],
           ['tools', 'BIOS / UEFI inspection'], ['tools', 'System One assistant'], ['tools', 'Custom power plans'], ['tools', 'Optional low-level telemetry'],
           ['settings', null],

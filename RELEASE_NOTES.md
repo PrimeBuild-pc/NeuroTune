@@ -60,6 +60,19 @@ binaries. Earlier alpha tags/assets remain unchanged.
 - **Live FPS:** while a game is recorded, a display-only panel shows FPS, 1% low
   and frame-time P99 from the game's DirectX presents. It never enters reports
   or decisions; Vulkan/OpenGL games may not report.
+- **Ports & PCIe lanes objective (advice only):** a new `device-topology` reader
+  maps GPU, NVMe, network and USB controllers to CPU or chipset lanes,
+  negotiated versus maximum PCIe link, and each USB device's controller, port
+  path and firmware-declared panel (no serials or instance IDs). It reaches the
+  model with the first prompt; no executable action is offered. The setup asks
+  up front for the motherboard manual: PDFs are read locally and only the
+  M.2/PCIe/USB/rear-panel pages are sent, as editable text.
+- **Clearer diagnosis setup:** three numbered steps (Goal, Measurement, Context
+  for the AI) instead of tabs, with files always visible; "Seconds per trace" is
+  now "Benchmark length" with the total recording time spelled out. Privacy &
+  security (Defender status, user-approved scan, manual tools) moved from
+  Settings to a tab of Complete diagnosis, and "Privacy & security check" and
+  "Compromise check" joined the scenario presets.
 - **Model failure guidance:** rate limits, missing credits, unavailable models,
   upstream errors, unusable output and timeouts name the model and say how to
   recover, without echoing provider text or retrying automatically.

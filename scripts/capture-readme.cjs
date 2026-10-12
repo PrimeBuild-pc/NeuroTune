@@ -55,7 +55,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
     await page.getByRole('navigation').getByRole('button', { name: 'Complete diagnosis', exact: true }).click();
     await page.getByRole('group', { name: 'Investigation mode', exact: true }).waitFor();
     await page.screenshot({ path: path.join(output, 'neurotune-diagnosis.png') });
-    await page.getByRole('navigation').getByRole('button', { name: 'Settings', exact: true }).click(); await page.getByRole('group', { name: 'Section pages', exact: true }).getByRole('button', { name: 'Privacy & security', exact: true }).click();
+    await page.getByRole('navigation').getByRole('button', { name: 'Complete diagnosis', exact: true }).click(); await page.getByRole('group', { name: 'Section pages', exact: true }).getByRole('button', { name: 'Privacy & security', exact: true }).click();
     await page.getByRole('heading', { name: 'Privacy & security', exact: true }).first().waitFor();
     await page.screenshot({ path: path.join(output, 'neurotune-security.png') });
     assert.deepEqual(errors, []);

@@ -2,7 +2,39 @@ import type { SupportingAttachment } from './types';
 import { t } from './i18n';
 
 export const supportLimits = { files: 8, images: 4, reportBytes: 512 * 1024, reportCharacters: 40_000, combinedReportCharacters: 80_000, sourceImageBytes: 20 * 1024 * 1024, imageBytes: 768 * 1024, imageSide: 1600 };
-export const supportAccept = '.txt,.log,.csv,.json,.xml,.html,.htm,.png,.jpg,.jpeg';
+export const supportAccept = '.txt,.log,.csv,.json,.xml,.html,.htm,.pdf,.png,.jpg,.jpeg';
+const manualSourceBytes = 64 * 1024 * 1024;
+// Pages about lane sharing, slots and ports; the rest of a 100+ page manual would not fit the report budget.
+const manualTerms = /\bM\.2\b|PCI[_ -]?E|\blanes?\b|\bshar(?:e|es|ed|ing)\b|bandwidth|bifurcat|back panel|rear (?:panel|i\/o)|i\/o (?:panel|shield)|block diagram|\bUSB\b|type-?c|\bSATA\b|chipset|\bx(?:16|8|4)\b|\bGen ?[3-5]\b/gi;
+
+export function selectManualPages(pages: string[], budget = supportLimits.reportCharacters): string {
+  const scored = pages.map((text, index) => ({ page: index + 1, text, score: text.match(manualTerms)?.length ?? 0 })).filter(item => item.score > 1);
+  const header = (selected: number[]) => `Motherboard manual excerpt: pages ${selected.join(', ')} of ${pages.length}, selected locally by keywords (M.2, PCIe lanes, USB, rear panel). Other pages omitted.\n`;
+  const render = (selected: typeof scored) => header(selected.map(item => item.page)) + selected.map(item => `[page ${item.page}]\n${item.text}`).join('\n');
+  let chosen: typeof scored = [];
+  for (const item of [...scored].sort((a, b) => b.score - a.score)) {
+    const next = [...chosen, item].sort((a, b) => a.page - b.page);
+    if (render(next).length <= budget) chosen = next;
+  }
+  if (!chosen.length) throw new Error(t('No pages about M.2, PCIe or USB ports were found. If the PDF is scanned, add screenshots of those pages instead.'));
+  return render(chosen);
+}
+
+async function manualText(bytes: Uint8Array): Promise<string> {
+  const [pdfjs, worker] = await Promise.all([import('pdfjs-dist'), import('pdfjs-dist/build/pdf.worker.min.mjs?url')]);
+  pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
+  const task = pdfjs.getDocument({ data: bytes, enableXfa: false, disableFontFace: true });
+  try {
+    const document = await task.promise;
+    const pages: string[] = [];
+    for (let number = 1; number <= Math.min(document.numPages, 600); number++) {
+      const content = await (await document.getPage(number)).getTextContent();
+      pages.push(content.items.map(item => 'str' in item ? item.str + (item.hasEOL ? '\n' : ' ') : '').join('')
+        .replace(/[\u0000-\u0008\u000B-\u001F\u007F-\u009F]/g, ' ').replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n').trim());
+    }
+    return selectManualPages(pages);
+  } finally { await task.destroy(); }
+}
 export function validateSupportList(files: SupportingAttachment[]) {
   if (files.length > supportLimits.files || files.filter(item => item.kind === 'image').length > supportLimits.images) throw new Error(t('Maximum 8 files, including 4 screenshots.'));
   if (files.filter(item => item.kind === 'report').reduce((sum, item) => sum + item.content.length, 0) > supportLimits.combinedReportCharacters) throw new Error(t('Combined reports exceed 80,000 characters; select smaller excerpts.'));
@@ -56,7 +88,12 @@ export function imageDimensions(bytes: Uint8Array): { width: number; height: num
 export async function prepareSupportingFile(file: File): Promise<SupportingAttachment> {
   const extension = file.name.split('.').pop()?.toLowerCase();
   const image = ['png', 'jpg', 'jpeg'].includes(extension ?? '');
-  if (!image && !['txt', 'log', 'csv', 'json', 'xml', 'html', 'htm'].includes(extension ?? '')) throw new Error(t('Use TXT/LOG/CSV/JSON/XML/HTML reports or PNG/JPEG screenshots. PDF, executables and archives are not supported.'));
+  if (extension === 'pdf') {
+    if (file.size > manualSourceBytes) throw new Error(t('PDF manual exceeds 64 MiB.'));
+    if (file.name.length > 115 || /[\\/:]/.test(file.name) || invalidControl(file.name)) throw new Error(t('Use a short filename without path characters.'));
+    return { id: crypto.randomUUID(), name: `${file.name}.txt`, kind: 'report', contentType: 'text/plain', content: await manualText(new Uint8Array(await file.arrayBuffer())), sha256: '' };
+  }
+  if (!image && !['txt', 'log', 'csv', 'json', 'xml', 'html', 'htm'].includes(extension ?? '')) throw new Error(t('Use TXT/LOG/CSV/JSON/XML/HTML reports, a PDF manual or PNG/JPEG screenshots. Executables and archives are not supported.'));
   if (file.name.length > 120 || (/[\\/:]/.test(file.name) || invalidControl(file.name))) throw new Error(t('Use a short filename without path characters.'));
   if (file.size > (image ? supportLimits.sourceImageBytes : supportLimits.reportBytes)) throw new Error(image ? t('Screenshot source exceeds 20 MiB.') : t('Report source exceeds 512 KiB.'));
   const bytes = new Uint8Array(await file.arrayBuffer());
