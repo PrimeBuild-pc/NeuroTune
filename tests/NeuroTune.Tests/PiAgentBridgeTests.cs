@@ -64,6 +64,7 @@ public sealed class PiAgentBridgeTests
     [TestMethod]
     public async Task Cancellation_stops_the_bundled_Pi_child_and_preserves_cancellation()
     {
+        RequireHelpers();
         using var stop = new CancellationTokenSource();
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var operation = PiAgentBridge.RunAsync(2, async _ => { started.SetResult(); await Task.Delay(Timeout.Infinite, stop.Token); return ""; },
@@ -73,6 +74,12 @@ public sealed class PiAgentBridgeTests
             Assert.Fail($"Pi did not request a turn: {(operation.IsFaulted ? operation.Exception!.InnerException : "still running")}");
         stop.Cancel();
         await Assert.ThrowsAsync<OperationCanceledException>(() => operation.WaitAsync(TimeSpan.FromSeconds(10)));
+    }
+
+    // The planner runs through the bundled Pi helper, which an elevated host can only start on a visible desktop.
+    internal static void RequireHelpers()
+    {
+        if (!OptionalWorkerProcess.CanStartHelpers) Assert.Inconclusive("Non-admin helpers need an interactive desktop; this elevated host runs as a service.");
     }
 
     private static StreamReader Reader(string text) => new(new MemoryStream(Encoding.UTF8.GetBytes(text)));

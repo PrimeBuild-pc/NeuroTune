@@ -515,6 +515,7 @@ public sealed class PlannerLoopTests
 
     private static (TcpListener Listener, Task Server, UserSettings Settings) StartServer(IReadOnlyList<Func<string, string>> responses, int statusCode = 200)
     {
+        PiAgentBridgeTests.RequireHelpers();
         var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         var server = Task.Run(async () =>
