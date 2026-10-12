@@ -68,7 +68,9 @@ public sealed class PiAgentBridgeTests
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var operation = PiAgentBridge.RunAsync(2, async _ => { started.SetResult(); await Task.Delay(Timeout.Infinite, stop.Token); return ""; },
             (_, _) => Task.FromResult(true), stop.Token);
-        await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        // Surface why Pi never asked for a turn instead of a bare timeout.
+        if (await Task.WhenAny(started.Task, operation, Task.Delay(TimeSpan.FromSeconds(30))) != started.Task)
+            Assert.Fail($"Pi did not request a turn: {(operation.IsFaulted ? operation.Exception!.InnerException : "still running")}");
         stop.Cancel();
         await Assert.ThrowsAsync<OperationCanceledException>(() => operation.WaitAsync(TimeSpan.FromSeconds(10)));
     }
