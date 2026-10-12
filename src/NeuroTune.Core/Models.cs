@@ -258,6 +258,8 @@ public sealed class PerformanceSnapshot
 public sealed class ActionRecord
 {
     public string ActionId { get; set; } = "";
+    public string? Kind { get; set; }
+    public string? Parameters { get; set; }
     public string OriginalState { get; set; } = "";
     public string? RecoveryTarget { get; set; }
     public bool Attempted { get; set; }
@@ -269,7 +271,8 @@ public sealed class ActionRecord
 public sealed class OperationManifest
 {
     public List<SystemOneAdvisory> SystemOneAdvisories { get; set; } = [];
-    public int SchemaVersion { get; set; } = 3;
+    // v4 adds parametric records (Kind + Parameters); v3 journals stay readable.
+    public int SchemaVersion { get; set; } = 4;
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid? OptimizationRunId { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;

@@ -80,7 +80,7 @@ Prepared report text and file names/hashes are retained in the normal run eviden
 
 | Control | Actual boundary |
 |---|---|
-| Registered capabilities | Only existing `ActionId` implementations enter `OptimizationEngine.ApplyAsync`. Guidance, generated scripts and external resources remain review-only. Unsupported BIOS writes/GPU IRQ candidates have no adapter. |
+| Registered capabilities | Only existing `ActionId` implementations and the typed parametric primitives of `ParametricActions` enter `OptimizationEngine.ApplyAsync`. A parametric action is rebuilt from its journaled kind + parameters and refuses forbidden targets before capture. Guidance, generated scripts and external resources remain review-only. Unsupported BIOS writes/GPU IRQ candidates have no adapter. |
 | Live availability | Action-specific state/access/prerequisites are inspected again before execution. Descriptive supported-build/hardware metadata is **not** a universal compatibility matrix or proof of benefit. |
 | Approval and identity | Apply belongs to a persisted run and matches its approved IDs. High-risk actions require separate confirmation. Risk presets select, never authorize a write. |
 | Recovery/backup | Verified restore point, original-state snapshots, Registry exports and an operation journal remain mandatory. Failure leads to verified rollback or visible recovery. |
