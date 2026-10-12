@@ -4,31 +4,10 @@ import type { MeasurementComparison, MeasurementSession } from '../types';
 import { CaptureCountdown } from '../LatencyDetails';
 import './MeasurementCompare.css';
 import { analysisPresetsFor } from '../plan';
+import { comparisonReportHtml, downloadFile, metricName } from '../report';
 
-function saveMeasurementReport(session: MeasurementSession) {
-  const url = URL.createObjectURL(new Blob([JSON.stringify(session, null, 2)], { type: 'application/json' }));
-  const link = document.createElement('a');
-  link.href = url; link.download = `NeuroTune-${session.label}-${session.id}.json`; link.click();
-  URL.revokeObjectURL(url);
-}
-
-function metricName(id: string) {
-  const key = id.replace(/^comparison:[^:]+:/, '').replace(/:median_delta_percent$/, '');
-  const labels: Record<string, string> = {
-    'interrupt:system:worst_module_p99_us': 'Worst driver interrupt P99',
-    'fault:system:count': 'Hard pagefault count',
-    'fault:system:worst_process_p99_us': 'Worst hard pagefault P99',
-    'target:worst_thread_ready_p99_us': 'Worst target Ready Time P99',
-    'target:migrations': 'Target thread migrations',
-    'frames:average_fps': 'Average FPS', 'frames:one_percent_low_fps': '1% low',
-    'frames:p99_ms': 'Frame-time P99', 'frames:stutter_count': 'Stutters',
-  };
-  return { name: labels[key] ? t(labels[key]) : key.replace(/^interrupt:/, '').replace(/:worst_core_p99_us$/, ' · P99'),
-    unit: key.endsWith('_us') ? 'µs' : key.endsWith('_ms') ? 'ms' : key.endsWith('_fps') ? 'FPS' : '' };
-}
-
-export function MeasurementCompare({ sessions, baselineIds, candidateIds, comparison, busy, locked, captureBlocked, restartPending, onSelect, onCapture, onCompare, onAnalyze }: {
-  sessions: MeasurementSession[]; baselineIds: string[]; candidateIds: string[]; comparison?: MeasurementComparison;
+export function MeasurementCompare({ sessions, baselineIds, candidateIds, comparison, changes, busy, locked, captureBlocked, restartPending, onSelect, onCapture, onCompare, onAnalyze }: {
+  sessions: MeasurementSession[]; baselineIds: string[]; candidateIds: string[]; comparison?: MeasurementComparison; changes?: string[];
   busy: boolean; locked: boolean; captureBlocked: boolean; restartPending: boolean;
   onSelect: (side: 'baseline' | 'candidate', id: string) => void;
   onCapture: (baseline: MeasurementSession) => void; onCompare: () => void; onAnalyze: (id: string) => void;
@@ -56,7 +35,7 @@ export function MeasurementCompare({ sessions, baselineIds, candidateIds, compar
             <div><dt>{t('Longest ISR')}</dt><dd>{Math.max(0, ...report.interrupts.filter(item => item.kind.toLowerCase() === 'isr').map(item => item.distribution.maxMicroseconds)).toFixed(2)} <small>µs</small></dd></div>
             <div><dt>{t('Events lost')}</dt><dd>{report.quality.eventsLost}</dd></div>
             <div><dt>{t('Hard pagefault count')}</dt><dd>{session.hardFaultsEnabled ? (report.hardFaults ?? []).reduce((total, item) => total + item.resolution.count, 0) : t('Unavailable')}</dd></div>
-          </>}</dl><button className="ghost" disabled={busy || Boolean(recording)} onClick={() => { if (window.confirm(t('Save this local report as JSON? Process and driver names may be sensitive. Review it before sharing.'))) saveMeasurementReport(session); }}><Download size={15} aria-hidden="true"/>{t('Save report as JSON')}</button></> : <p className="compare-placeholder">{session ? t('The captured trace must be analyzed before a result exists.') : side === 'baseline' ? t('Choose the saved baseline from diagnosis or capture one below.') : t('No gain is assumed. The new result appears only after capture and analysis.')}</p>}
+          </>}</dl><button className="ghost" disabled={busy || Boolean(recording)} onClick={() => { if (window.confirm(t('Save this local report as JSON? Process and driver names may be sensitive. Review it before sharing.'))) downloadFile(JSON.stringify(session, null, 2), 'application/json', `NeuroTune-${session.label}-${session.id}.json`); }}><Download size={15} aria-hidden="true"/>{t('Save report as JSON')}</button></> : <p className="compare-placeholder">{session ? t('The captured trace must be analyzed before a result exists.') : side === 'baseline' ? t('Choose the saved baseline from diagnosis or capture one below.') : t('No gain is assumed. The new result appears only after capture and analysis.')}</p>}
         {session?.state === 'captured' && <button className="secondary" disabled={busy || Boolean(recording)} onClick={() => onAnalyze(session.id)}>{t('Analyze')}</button>}
         {side === 'candidate' && <button className="primary" disabled={busy || Boolean(recording) || baseline?.state !== 'completed' || !baseline?.report?.quality.isValid || captureBlocked || restartPending || locked && baseline?.systemWide === true} onClick={() => baseline && onCapture(baseline)}><Timer size={16} aria-hidden="true"/>{t('Record after measurement')}</button>}
       </div>;
@@ -66,6 +45,7 @@ export function MeasurementCompare({ sessions, baselineIds, candidateIds, compar
     <div className="button-row"><button className="secondary" disabled={busy || Boolean(recording) || !canCompare || restartPending} onClick={onCompare}><GitCompareArrows size={16} aria-hidden="true"/>{t('Calculate comparison')}</button><small>{t('Results are local observations, not guaranteed performance gains.')}</small></div>
     {comparison && <div className="compare-result" role="status"><strong>{comparison.rejectionReasons.length ? t('Comparison rejected') : comparison.diagnosticOnly ? t('Diagnostic differences · not a benchmark verdict') : comparison.level === 'repeated' ? t('Repeated comparison') : t('Exploratory comparison')}</strong><p>{comparison.recommendationReason}</p>
       {comparison.rejectionReasons.length > 0 ? <ul>{comparison.rejectionReasons.map(reason => <li key={reason}>{reason}</li>)}</ul> : <table><caption className="sr-only">{t('Measured differences')}</caption><thead><tr><th>{t('Metric')}</th><th>{t('Change')}</th><th>{t('Interpretation')}</th></tr></thead><tbody>{comparison.metrics.map(metric => <tr key={metric.evidenceId}><th scope="row">{metricName(metric.evidenceId).name}</th><td>{metric.baselineMedian === 0 && metric.candidateMedian !== 0 ? '—' : `${metric.deltaPercent.toFixed(1)}%`}</td><td className={comparison.diagnosticOnly ? '' : metric.outcome}>{comparison.diagnosticOnly ? metric.candidateMedian < metric.baselineMedian ? t('Lower observed value') : metric.candidateMedian > metric.baselineMedian ? t('Higher observed value') : t('Unchanged') : t(metric.outcome === 'improvement' ? 'Improvement' : metric.outcome === 'regression' ? 'Regression' : 'Inconclusive')}</td></tr>)}</tbody></table>}
+      <button className="ghost" onClick={() => { if (window.confirm(t('Save a readable before/after report as HTML? It contains measurement conditions and process names; review it before sharing.'))) downloadFile(comparisonReportHtml(comparison, sessions, changes), 'text/html', `NeuroTune-before-after-${comparison.id}.html`); }}><Download size={15} aria-hidden="true"/>{t('Export before/after report')}</button>
     </div>}
   </section>;
 }
