@@ -56,9 +56,8 @@ internal static class ClmClient
         if (!Installed) throw new InvalidOperationException("The local CLM stack is not installed. Install it once with scripts/clm-stack.ps1 install.");
         if (Endpoint.Port != 8700) throw new InvalidOperationException("NEUROTUNE_CLM_URL points to a server NeuroTune does not manage; start it yourself.");
         SystemOneService.CheckDirectory(Root);
-        using (var stream = File.OpenRead(Head)) // The head is a torch pickle: never let clm-serve load an unverified one.
-            if (Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream)).ToLowerInvariant() != HeadHash)
-                throw new InvalidOperationException("The CLM head does not match its pinned SHA-256; reinstall with scripts/clm-stack.ps1 install.");
+        if (SystemOneService.FileHash(Head) != HeadHash) // The head is a torch pickle: never let clm-serve load an unverified one.
+            throw new InvalidOperationException("The CLM head does not match its pinned SHA-256; reinstall with scripts/clm-stack.ps1 install.");
         progress?.Invoke("System One · CLM: loading the local model for this analysis; it is unloaded right after.");
         var environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var name in new[] { "SystemRoot", "WINDIR", "USERPROFILE", "LOCALAPPDATA", "APPDATA", "TEMP", "TMP" })

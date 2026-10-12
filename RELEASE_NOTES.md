@@ -27,7 +27,17 @@ binaries. Earlier alpha tags/assets remain unchanged.
   is identification-level for a normal elevated process, so Pi and the optional
   workers could not start (Win32 1346) and every diagnosis silently used the
   local fallback. Helpers now run with a LUA-filtered, medium-integrity copy of
-  NeuroTune's own token (Administrators deny-only, privileges removed).
+  NeuroTune's own token (Administrators deny-only, privileges removed). If the
+  desktop refuses that token, helpers are declined cleanly and the diagnosis
+  uses the local fallback with a clear reason.
+- **Fixed: rollback within 24 hours of a restore point.** Windows silently
+  skips a restore point requested within its default 24-hour window, so a
+  rollback right after Apply (or an Apply after Windows Update made one) could
+  never verify its point. NeuroTune lifts that limit for its own call only and
+  restores the previous setting.
+- **Fixed: device rollback before a restart.** A Device Manager disable that
+  needs a restart is invisible until reboot; rollback now re-enables every
+  device that was enabled before, so it is not disabled on the next boot.
 - **Local CLM as the default System One assistant:** classification runs on
   this PC through `scripts/clm-stack.ps1 install` (about 9 GB). NeuroTune loads
   the encoder only for the classification that needs it and unloads it right

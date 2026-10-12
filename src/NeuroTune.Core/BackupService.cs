@@ -44,27 +44,50 @@ public sealed class BackupService
     {
         try
         {
-            using var restore = new ManagementClass(@"\\localhost\root\default", "SystemRestore", new ObjectGetOptions());
-            using var parameters = restore.GetMethodParameters("CreateRestorePoint");
-            parameters["Description"] = description;
-            parameters["RestorePointType"] = 0;
-            parameters["EventType"] = 100;
-            using var result = restore.InvokeMethod("CreateRestorePoint", parameters, null);
-            var returnValue = Convert.ToUInt32(result?["ReturnValue"] ?? uint.MaxValue);
-            if (returnValue != 0) throw new InvalidOperationException($"Windows error code {returnValue}");
-
-            for (var attempt = 0; attempt < 20; attempt++)
-            {
-                if (RestorePointExists(description)) return description;
-                Thread.Sleep(500);
-            }
-            throw new InvalidOperationException("Windows accepted the request but the restore point was not found");
+            // Windows silently skips a restore point created within 24 h of the previous one (the default frequency), so
+            // a rollback right after Apply would never find its point. Lift the limit for this one call only.
+            using var key = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64)
+                .CreateSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore", writable: true);
+            return WithoutCreationLimit(key, () => CreateVerifiedRestorePoint(description));
         }
         catch (Exception exception)
         {
             throw new InvalidOperationException(
                 $"A verified restore point could not be created ({exception.Message}). Enable System Protection and try again.", exception);
         }
+    }
+
+    internal static T WithoutCreationLimit<T>(RegistryKey key, Func<T> create)
+    {
+        const string name = "SystemRestorePointCreationFrequency";
+        var previous = key.GetValue(name);
+        var kind = previous is null ? RegistryValueKind.DWord : key.GetValueKind(name);
+        key.SetValue(name, 0, RegistryValueKind.DWord);
+        try { return create(); }
+        finally
+        {
+            if (previous is null) key.DeleteValue(name, throwOnMissingValue: false);
+            else key.SetValue(name, previous, kind);
+        }
+    }
+
+    private static string CreateVerifiedRestorePoint(string description)
+    {
+        using var restore = new ManagementClass(@"\\localhost\root\default", "SystemRestore", new ObjectGetOptions());
+        using var parameters = restore.GetMethodParameters("CreateRestorePoint");
+        parameters["Description"] = description;
+        parameters["RestorePointType"] = 0;
+        parameters["EventType"] = 100;
+        using var result = restore.InvokeMethod("CreateRestorePoint", parameters, null);
+        var returnValue = Convert.ToUInt32(result?["ReturnValue"] ?? uint.MaxValue);
+        if (returnValue != 0) throw new InvalidOperationException($"Windows error code {returnValue}");
+
+        for (var attempt = 0; attempt < 20; attempt++)
+        {
+            if (RestorePointExists(description)) return description;
+            Thread.Sleep(500);
+        }
+        throw new InvalidOperationException("Windows accepted the request but the restore point was not found");
     }
 
     public void Save(OperationManifest manifest)
