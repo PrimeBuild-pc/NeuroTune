@@ -177,6 +177,7 @@ public sealed class SystemOneTests
     }
     private static bool WorkerTokenUnavailable()
     {
+        if (!PiAgentBridgeTests.CanStartHelpers) return true;
         try
         {
             using var token = OptionalWorkerProcess.NonAdminToken();

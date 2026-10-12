@@ -76,10 +76,26 @@ public sealed class PiAgentBridgeTests
         await Assert.ThrowsAsync<OperationCanceledException>(() => operation.WaitAsync(TimeSpan.FromSeconds(10)));
     }
 
-    // The planner runs through the bundled Pi helper, which an elevated host can only start on a visible desktop.
+    // The planner runs through the bundled Pi helper. An elevated host whose desktop refuses the filtered token (service-hosted
+    // CI runners) cannot start any helper, so probe once with a real one and report those tests as inconclusive there.
+    private static readonly Lazy<bool> HelpersAvailable = new(() =>
+    {
+        var environment = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in new[] { "SystemRoot", "WINDIR", "TEMP", "TMP" })
+            if (Environment.GetEnvironmentVariable(name) is { } value) environment[name] = value;
+        try
+        {
+            OptionalWorkerProcess.RunAsync(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe"),
+                ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", "exit 0"], AppContext.BaseDirectory, "", environment, TimeSpan.FromMinutes(1), null, CancellationToken.None)
+                .GetAwaiter().GetResult();
+            return true;
+        }
+        catch (InvalidOperationException error) when (error.Message == OptionalWorkerProcess.TokenUnavailable) { return false; }
+    });
+    internal static bool CanStartHelpers => HelpersAvailable.Value;
     internal static void RequireHelpers()
     {
-        if (!OptionalWorkerProcess.CanStartHelpers) Assert.Inconclusive("Non-admin helpers need an interactive desktop; this elevated host runs as a service.");
+        if (!CanStartHelpers) Assert.Inconclusive("Non-admin helpers cannot open this host's desktop (service-hosted runner).");
     }
 
     private static StreamReader Reader(string text) => new(new MemoryStream(Encoding.UTF8.GetBytes(text)));
