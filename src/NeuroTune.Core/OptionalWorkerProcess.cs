@@ -81,6 +81,13 @@ internal static class OptionalWorkerProcess
                     async Task<string> InteractAsync()
                     {
                         try { return await interact!(stdout, writer, deadline.Token); }
+                        catch (Exception error) when (error is InvalidOperationException or IOException && !deadline.IsCancellationRequested)
+                        {
+                            // A worker that quits early usually says why on stderr; keep a short tail instead of a bare protocol error.
+                            job.Dispose();
+                            var said = await Task.WhenAny(errors, Task.Delay(2000)) == errors && errors.IsCompletedSuccessfully ? errors.Result.Trim() : "";
+                            throw new InvalidOperationException(said.Length == 0 ? error.Message : $"{error.Message} Worker said: {said[^Math.Min(600, said.Length)..]}", error);
+                        }
                         catch { job.Dispose(); throw; }
                         finally { writer.Close(); }
                     }
