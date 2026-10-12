@@ -20,8 +20,9 @@ export type NavigationItem = { id: Page; label: string; icon: LucideIcon };
 // Five sections in the sidebar; the remaining pages are tabs inside the section that owns them.
 const sections: Page[] = ['overview', 'scan', 'measurements', 'review', 'settings'];
 const sectionTabs: Partial<Record<Page, { page: Page; label: string; expert?: boolean }[]>> = {
+  scan: [{ page: 'scan', label: 'Complete diagnosis' }, { page: 'security', label: 'Privacy & security' }],
   review: [{ page: 'review', label: 'Review changes' }, { page: 'activity', label: 'Activity & restore' }],
-  settings: [{ page: 'settings', label: 'General' }, { page: 'provider', label: 'AI provider' }, { page: 'security', label: 'Privacy & security' },
+  settings: [{ page: 'settings', label: 'General' }, { page: 'provider', label: 'AI provider' },
     { page: 'tools', label: 'Advanced tools', expert: true }, { page: 'advanced', label: 'Local evidence', expert: true }],
 };
 function sectionOf(page: Page): Page {
