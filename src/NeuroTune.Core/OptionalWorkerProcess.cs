@@ -130,6 +130,9 @@ internal static class OptionalWorkerProcess
     internal static SafeFileHandle? NonAdminToken()
     {
         if (!LogService.IsAdministrator()) return null;
+        // Outside a visible window station (a service session, e.g. a CI runner) the filtered token cannot open the
+        // desktop and every helper dies in user32 with 0xC0000142. Refuse cleanly instead.
+        if (!InteractiveWindowStation()) throw new InvalidOperationException(TokenUnavailable);
         // TOKEN_ASSIGN_PRIMARY | TOKEN_DUPLICATE | TOKEN_QUERY | TOKEN_ADJUST_DEFAULT.
         Check(OpenProcessToken(GetCurrentProcess(), 0x8B, out var original));
         using (original)
@@ -167,6 +170,12 @@ internal static class OptionalWorkerProcess
             catch { token.Dispose(); throw; }
         }
     }
+    internal static bool CanStartHelpers => !LogService.IsAdministrator() || InteractiveWindowStation();
+    private static bool InteractiveWindowStation()
+    {
+        var flags = new UserObjectFlags();
+        return GetUserObjectInformation(GetProcessWindowStation(), 1, ref flags, Marshal.SizeOf<UserObjectFlags>(), out _) && (flags.Flags & 1) != 0; // UOI_FLAGS, WSF_VISIBLE.
+    }
     private static async Task<string> Drain(StreamReader reader, Action<string>? progress, CancellationToken cancellationToken)
     {
         var text = new StringBuilder(); var buffer = new char[4096];
@@ -185,6 +194,9 @@ internal static class OptionalWorkerProcess
     private static void Check(bool success) { if (!success) throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not start/control the non-admin optional worker."); }
 
     [StructLayout(LayoutKind.Sequential)] private struct SecurityAttributes { public int Length; public IntPtr Descriptor; [MarshalAs(UnmanagedType.Bool)] public bool Inherit; }
+    [StructLayout(LayoutKind.Sequential)] private struct UserObjectFlags { [MarshalAs(UnmanagedType.Bool)] public bool Inherit; [MarshalAs(UnmanagedType.Bool)] public bool Reserved; public uint Flags; }
+    [DllImport("user32.dll")] private static extern IntPtr GetProcessWindowStation();
+    [DllImport("user32.dll", SetLastError = true)] private static extern bool GetUserObjectInformation(IntPtr handle, int index, ref UserObjectFlags info, int length, out int needed);
     [StructLayout(LayoutKind.Sequential)] private struct MandatoryLabel { public IntPtr Sid; public uint Attributes; }
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] private struct StartupInfo { public int Size; public string? Reserved, Desktop, Title; public uint X, Y, Width, Height, XCount, YCount, Fill, Flags; public short Show, ReservedSize; public IntPtr ReservedPointer, Input, Output, Error; }
     [StructLayout(LayoutKind.Sequential)] private struct StartupInfoEx { public StartupInfo Info; public IntPtr Attributes; }
