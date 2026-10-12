@@ -58,6 +58,7 @@ try
         "rollback" => await Rollback(Read<RollbackRequest>(input), catalog, backup),
         "measurement-workloads" => new MeasurementService().Workloads(),
         "measurement-live" => await new PerformanceSnapshotService().CollectProcessorsAsync(),
+        "measurement-fps-live" => LiveFps(Read<LiveFrameRateRequest>(input)),
         "measurement-driver-details" => DriverInspection.Read(Read<DriverInspectionRequest>(input).Module),
         "firmware-read" => FirmwareInspection.Read(Read<FirmwareReadRequest>(input).ReadConsent),
         "scewin-inspect" => ScewinService.Inspect(Read<ScewinDirectoryRequest>(input).Directory),
@@ -321,6 +322,12 @@ async Task<string> ExplainMeasurement(MeasurementExplanationAgentRequest request
     var settings = service.Load();
     var key = await Credential(service, settings);
     return await new LlmClient(actionCatalog).ExplainComparisonAsync(comparison, request.Goals, settings, key, language: language);
+}
+
+object? LiveFps(LiveFrameRateRequest request)
+{
+    LiveFrameRate.Run(request, Console.Error.WriteLine);
+    return null;
 }
 
 object? DeleteMeasurement(MeasurementIdRequest request)
