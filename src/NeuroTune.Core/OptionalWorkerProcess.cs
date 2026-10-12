@@ -84,9 +84,10 @@ internal static class OptionalWorkerProcess
                         catch (Exception error) when (error is InvalidOperationException or IOException && !deadline.IsCancellationRequested)
                         {
                             // A worker that quits early usually says why on stderr; keep a short tail instead of a bare protocol error.
+                            var exit = process.WaitForExit(500) ? $" Worker exit code 0x{process.ExitCode:X8}." : "";
                             job.Dispose();
                             var said = await Task.WhenAny(errors, Task.Delay(2000)) == errors && errors.IsCompletedSuccessfully ? errors.Result.Trim() : "";
-                            throw new InvalidOperationException(said.Length == 0 ? error.Message : $"{error.Message} Worker said: {said[^Math.Min(600, said.Length)..]}", error);
+                            throw new InvalidOperationException(error.Message + exit + (said.Length == 0 ? "" : $" Worker said: {said[^Math.Min(600, said.Length)..]}"), error);
                         }
                         catch { job.Dispose(); throw; }
                         finally { writer.Close(); }
