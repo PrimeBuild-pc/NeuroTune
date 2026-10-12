@@ -158,7 +158,11 @@ public sealed class ParametricActionTests
             Assert.AreEqual(RiskLevel.High, Create("registry.set", new { Hive = "HKLM", Path = @"SYSTEM\CurrentControlSet\Control\DeviceGuard", Name = name, Type = "DWord", Value = "0" }).Risk);
         Assert.AreEqual(RiskLevel.High, Create("registry.set", new
         {
-            Hive = "HKLM", Path = @"SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity", Name = "Enabled", Type = "DWord", Value = "0"
+            Hive = "HKLM",
+            Path = @"SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity",
+            Name = "Enabled",
+            Type = "DWord",
+            Value = "0"
         }).Risk);
         Assert.AreEqual(RiskLevel.High, Create("bcd.option", new { Element = "hypervisorlaunchtype", Value = "off" }).Risk);
         foreach (var service in new[] { "SysMain", "WSearch", "DiagTrack", "Spooler", "wuauserv", "Dnscache", "AudioEndpointBuilder" })
@@ -174,7 +178,10 @@ public sealed class ParametricActionTests
         Assert.ThrowsExactly<InvalidOperationException>(() => catalog.Get(action.Id));
         var record = new ActionRecord
         {
-            ActionId = action.Id, Kind = action.Kind, Parameters = action.Parameters, Attempted = true,
+            ActionId = action.Id,
+            Kind = action.Kind,
+            Parameters = action.Parameters,
+            Attempted = true,
             OriginalState = """{"Value":{"Exists":false,"Kind":0,"Value":null},"MissingKeys":1}"""
         };
         Assert.AreEqual(action.Id, catalog.ResolveRollback(record).Id);
@@ -186,7 +193,10 @@ public sealed class ParametricActionTests
         Assert.ThrowsExactly<InvalidOperationException>(() => catalog.ResolveRollback(record));
         Assert.ThrowsExactly<InvalidOperationException>(() => catalog.ResolveRollback(new ActionRecord
         {
-            ActionId = "gaming.game-mode", Parameters = "{}", Attempted = true, OriginalState = """{"Exists":false,"Kind":0,"Value":null}"""
+            ActionId = "gaming.game-mode",
+            Parameters = "{}",
+            Attempted = true,
+            OriginalState = """{"Exists":false,"Kind":0,"Value":null}"""
         }));
 
         Assert.AreSame(catalog.AddParametric(action.Kind!, action.Parameters!), catalog.Get(action.Id));
@@ -232,7 +242,11 @@ public sealed class ParametricActionTests
         var catalog = new OptimizationCatalog(includeDynamic: false);
         var parametric = catalog.AddParametric("registry.set", JsonSerializer.Serialize(new
         {
-            Hive = "HKCU", Path = @"Software\Microsoft\GameBar", Name = "AutoGameModeEnabled", Type = "DWord", Value = "1"
+            Hive = "HKCU",
+            Path = @"Software\Microsoft\GameBar",
+            Name = "AutoGameModeEnabled",
+            Type = "DWord",
+            Value = "1"
         }));
         Assert.ThrowsExactly<InvalidOperationException>(() => OptimizationCatalog.ValidateSelection([parametric, catalog.Get("gaming.game-mode")]));
     }
@@ -295,7 +309,11 @@ public sealed class ParametricActionTests
             // "Turn off hard disk after" (seconds): full range even in tweaker plans that pin processor settings.
             RoundTrip(Create("powercfg.setting", new
             {
-                Subgroup = "0012ee47-9041-4b5d-9b77-535fba8b1442", Setting = "6738e2c4-e8a5-4a42-b16a-e040e769756e", Ac = 1234u, Dc = 4321u, Scheme = scheme
+                Subgroup = "0012ee47-9041-4b5d-9b77-535fba8b1442",
+                Setting = "6738e2c4-e8a5-4a42-b16a-e040e769756e",
+                Ac = 1234u,
+                Dc = 4321u,
+                Scheme = scheme
             }));
         }
         finally { WindowsCommand.Run("powercfg.exe", "/delete", scheme.ToString("D")); }
