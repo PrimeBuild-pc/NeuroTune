@@ -69,7 +69,10 @@ public static partial class DeviceTopology
         }).ToList();
         return new
         {
-            pci, pciTruncated = pciNodes.Count > 40, usb, usbTruncated = usbNodes.Count > 60,
+            pci,
+            pciTruncated = pciNodes.Count > 40,
+            usb,
+            usbTruncated = usbNodes.Count > 60,
             limitation = "attach is inferred from PCI topology (AMD: behind the chipset upstream switch; Intel: bus-0 device 0x12 or higher is the PCH), not a board-specific slot map. " +
                 "Idle GPUs often negotiate a lower PCIe generation to save power; a narrower width than maxLink is the reliable lane-sharing signal. " +
                 "firmwarePanel is the motherboard's ACPI _PLD declaration and is frequently missing or wrong; null means not declared, and no USB speed is read. " +
@@ -89,7 +92,13 @@ public static partial class DeviceTopology
     // ACPI _PLD revision 2: bit 64 user-visible, bits 67-69 panel.
     internal static string? Panel(byte[]? pld) => pld is not { Length: >= 16 } ? null : (pld[8] & 1) == 0 ? "internal" : ((pld[8] >> 3) & 7) switch
     {
-        0 => "top", 1 => "bottom", 2 => "left", 3 => "right", 4 => "front", 5 => "back", _ => null,
+        0 => "top",
+        1 => "bottom",
+        2 => "left",
+        3 => "right",
+        4 => "front",
+        5 => "back",
+        _ => null,
     };
 
     internal static string? Link(uint? speed, uint? width) => speed is > 0 and < 16 && width is > 0 and <= 32 ? $"Gen{speed} x{width}" : null;
