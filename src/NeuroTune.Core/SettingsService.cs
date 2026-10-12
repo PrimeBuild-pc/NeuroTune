@@ -81,7 +81,7 @@ public sealed class SettingsService
         return settings;
     }
 
-    private static void AtomicWrite(string path, string content)
+    internal static void AtomicWrite(string path, string content)
     {
         var temporary = path + ".tmp";
         File.WriteAllText(temporary, content);

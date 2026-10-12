@@ -50,7 +50,7 @@ public static class SystemOneService
         if (options.Enabled && options.Source is "openRouter" or "openRouterFree" && (string.IsNullOrWhiteSpace(options.Model) || string.IsNullOrWhiteSpace(new SettingsService().LoadSecret(OpenRouterCredentialId))))
             throw new InvalidOperationException("Save a separate OpenRouter API key and choose the optional classifier model before enabling it.");
         Directory.CreateDirectory(Root); CheckDirectory(Root);
-        AtomicWrite(OptionsPath, JsonSerializer.Serialize(options));
+        SettingsService.AtomicWrite(OptionsPath, JsonSerializer.Serialize(options));
         return Status();
     }
     public static SystemOneStatus Configure(SystemOneConfigureRequest request)
@@ -116,12 +116,12 @@ public static class SystemOneService
         await DownloadAsync(model.Url, Path.Combine(Root, "model.gguf"), model.Hash, 6L << 30, progress, cancellationToken);
         using var resource = typeof(SystemOneService).Assembly.GetManifestResourceStream("NeuroTune.system-one-worker.py") ?? throw new IOException("The embedded model adapter is missing.");
         using var reader = new StreamReader(resource);
-        AtomicWrite(Path.Combine(Root, "worker.py"), await reader.ReadToEndAsync(cancellationToken));
+        SettingsService.AtomicWrite(Path.Combine(Root, "worker.py"), await reader.ReadToEndAsync(cancellationToken));
         progress?.Invoke("Verifying the installed interpreter, runtime and typed-decision adapter with a real local smoke test…");
         var smoke = await InvokeAsync("Local adapter installation check; no system changes requested.", options, null, cancellationToken);
         ParseAdvisory(smoke, "installation", [], 0);
         var hashes = new[] { uv, Python, Path.Combine(Root, "runtime", "llama.dll"), Path.Combine(Root, "worker.py") }.ToDictionary(file => Path.GetFileName(file)!, FileHash);
-        AtomicWrite(Path.Combine(Root, "installed.json"), JsonSerializer.Serialize(new { revision = Revision, size = options.Size, hashes }));
+        SettingsService.AtomicWrite(Path.Combine(Root, "installed.json"), JsonSerializer.Serialize(new { revision = Revision, size = options.Size, hashes }));
         progress?.Invoke("Installation verified. The local model has exited and released its process resources.");
         return Configure(options);
     }
@@ -291,8 +291,7 @@ public static class SystemOneService
     private static (string Url, string Hash) Model(string size) => size == "4b"
         ? ("https://huggingface.co/rizzoaiacademy/rizzo-flow/resolve/55633c8cbd2b826bd3eefdeb05310450996649df/spark-x2.5-4b-rizzo-flow-lora-q8_0.gguf", "dbec3c89d33984772324e65a8ed56b48e958e301b856cb870a7c1b385d01691a")
         : ("https://huggingface.co/rizzoaiacademy/rizzo-flow-1.7b/resolve/532e1586cc60787375ec7d86a5a302deb9a1adec/spark-x2.5-1.7b-rizzo-flow-lora-q8_0.gguf", "685403da9c62e0745cb77817ee2d66418e3ce85002ef403cf2680481e22bf16d");
-    private static string FileHash(string file) { using var stream = File.OpenRead(file); return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant(); }
-    private static void AtomicWrite(string file, string text) { File.WriteAllText(file + ".tmp", text, new UTF8Encoding(false)); File.Move(file + ".tmp", file, true); }
+    internal static string FileHash(string file) { using var stream = File.OpenRead(file); return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant(); }
     internal static void CheckDirectory(string directory)
     {
         for (var current = new DirectoryInfo(directory); current is not null; current = current.Parent)
