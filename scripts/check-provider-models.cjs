@@ -30,7 +30,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
     });
     await page.goto(process.env.UI_PREVIEW_URL || 'http://127.0.0.1:4173/');
     await page.locator('#startup').waitFor({ state: 'detached' });
-    await page.getByRole('navigation').getByRole('button', { name: 'AI provider', exact: true }).click();
+    await page.getByRole('navigation').getByRole('button', { name: 'Settings', exact: true }).click(); await page.getByRole('group', { name: 'Section pages', exact: true }).getByRole('button', { name: 'AI provider', exact: true }).click();
     const catalog = page.getByLabel('Available models', { exact: true });
     const manual = page.getByLabel('Model', { exact: true });
     assert.equal(await catalog.isDisabled(), true);

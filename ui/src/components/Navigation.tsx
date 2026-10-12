@@ -17,11 +17,24 @@ function motionAllowed() {
 
 export type Page = 'overview' | 'provider' | 'scan' | 'advanced' | 'measurements' | 'review' | 'activity' | 'settings' | 'security' | 'tools';
 export type NavigationItem = { id: Page; label: string; icon: LucideIcon };
-const groups: { label: string; pages: Page[] }[] = [
-  { label: 'Workspace', pages: ['overview', 'scan', 'review', 'activity'] },
-  { label: 'Diagnostics', pages: ['measurements', 'advanced', 'tools'] },
-  { label: 'Preferences', pages: ['provider', 'security', 'settings'] },
-];
+// Five sections in the sidebar; the remaining pages are tabs inside the section that owns them.
+const sections: Page[] = ['overview', 'scan', 'measurements', 'review', 'settings'];
+const sectionTabs: Partial<Record<Page, { page: Page; label: string; expert?: boolean }[]>> = {
+  review: [{ page: 'review', label: 'Review changes' }, { page: 'activity', label: 'Activity & restore' }],
+  settings: [{ page: 'settings', label: 'General' }, { page: 'provider', label: 'AI provider' }, { page: 'security', label: 'Privacy & security' },
+    { page: 'tools', label: 'Advanced tools', expert: true }, { page: 'advanced', label: 'Local evidence', expert: true }],
+};
+function sectionOf(page: Page): Page {
+  return sections.find(section => sectionTabs[section]?.some(tab => tab.page === page)) ?? page;
+}
+
+export function SectionTabs({ page, onPage, expert, disabled }: { page: Page; onPage: (page: Page) => void; expert: boolean; disabled: boolean }) {
+  const tabs = sectionTabs[sectionOf(page)]?.filter(tab => expert || !tab.expert || tab.page === page);
+  if (!tabs || tabs.length < 2) return null;
+  return <div className="section-switcher section-tabs" role="group" aria-label={t('Section pages')}>
+    {tabs.map(tab => <button key={tab.page} aria-pressed={tab.page === page} disabled={disabled} onClick={() => onPage(tab.page)}>{t(tab.label)}</button>)}
+  </div>;
+}
 
 export function Navigation({ items, page, onPage, disabled, quiet }: {
   items: NavigationItem[]; page: Page; onPage: (page: Page) => void; disabled: boolean; quiet: boolean;
@@ -47,7 +60,7 @@ export function Navigation({ items, page, onPage, disabled, quiet }: {
   // CSS cannot cancel Motion's JS layout animations. Unmount the moving indicator when quiet/reduced.
   const animate = useSyncExternalStore(subscribeMotion, motionAllowed, () => false) && !quiet;
   function itemButton(item: NavigationItem) {
-    const active = page === item.id;
+    const active = sectionOf(page) === item.id;
     return <button key={item.id} data-page={item.id} disabled={disabled} title={t(item.label)} aria-label={t(item.label)} aria-current={active ? 'page' : undefined} className={`nav-item${active ? ' active' : ''}`} onClick={() => onPage(item.id)}>
       {active && (animate
         ? <motion.div className="nav-active-background" layoutId="active-navigation" initial={false} transition={{ duration: .22, ease: [.2, .8, .2, 1] }} aria-hidden="true"/>
@@ -56,12 +69,6 @@ export function Navigation({ items, page, onPage, disabled, quiet }: {
     </button>;
   }
   return <LayoutGroup id="main-navigation"><nav ref={navRef} aria-label={t('Main navigation')}>
-    {groups.map(group => {
-      const entries = group.pages.flatMap(id => items.filter(item => item.id === id));
-      return entries.length ? <div className="nav-group" role="group" aria-label={t(group.label)} key={group.label}>
-        <span className="nav-group-label" aria-hidden="true">{t(group.label)}</span>
-        {entries.map(itemButton)}
-      </div> : null;
-    })}
+    <div className="nav-group">{sections.flatMap(id => items.filter(item => item.id === id)).map(itemButton)}</div>
   </nav></LayoutGroup>;
 }
