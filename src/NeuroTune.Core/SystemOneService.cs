@@ -19,8 +19,10 @@ public static class SystemOneService
 {
     internal const string Revision = "b9ba007ee4d2928bbab5b1d8bfe9009c3696b6de";
     private const string SourceHash = "1d593250b6d78d442217a418cf779a975fedb57192570f867c6ca0e873de2c00";
-    private const string UvHash = "5d223efa0bf00208c3853246af09420419dfbd352536aa6bb8163d6170e23890";
-    private const string RuntimeHash = "4259a1dda3ef3fcfd8b007a16329d5bdcef07da8f5f95fddd85ff2954263f01a";
+    internal const string UvUrl = "https://github.com/astral-sh/uv/releases/download/0.12.21/uv-x86_64-pc-windows-msvc.zip";
+    internal const string UvHash = "5d223efa0bf00208c3853246af09420419dfbd352536aa6bb8163d6170e23890";
+    internal const string RuntimeUrl = "https://github.com/ggml-org/llama.cpp/releases/download/b11081/llama-b11081-bin-win-vulkan-x64.zip";
+    internal const string RuntimeHash = "4259a1dda3ef3fcfd8b007a16329d5bdcef07da8f5f95fddd85ff2954263f01a";
     private static readonly string Root = Path.Combine(SettingsService.DataDirectory, "system-one");
     private static readonly HttpClient Http = new(new HttpClientHandler { AllowAutoRedirect = true }) { Timeout = Timeout.InfiniteTimeSpan };
     private static readonly string[] Domains = ["memory", "drivers", "network", "power", "software", "unknown"];
@@ -36,11 +38,13 @@ public static class SystemOneService
         var installed = InstalledSize() == options.Size && File.Exists(Python) && File.Exists(Path.Combine(Root, "model.gguf"));
         var hasKey = !string.IsNullOrWhiteSpace(new SettingsService().LoadSecret(OpenRouterCredentialId));
         var ready = options.Source == "clm" ? ClmClient.Installed || ClmClient.Reachable() : options.Source != "local" ? options.CloudConsent && hasKey && !string.IsNullOrWhiteSpace(options.Model) : installed;
-        var detail = options.Source == "clm" ? (ready ? "Local CLM (Contrastive Language Model) on this PC. NeuroTune loads it only while classifying results and unloads it right after, so it never occupies VRAM during measurements; it also stops when NeuroTune closes. No cloud or API key." : "Local CLM not installed. Install it once with scripts/clm-stack.ps1 install (about 9 GB); NeuroTune does not download it.")
+        var detail = options.Source == "clm" ? (ready ? "Local CLM (Contrastive Language Model) on this PC. NeuroTune loads it only while classifying results and unloads it right after, so it never occupies VRAM during measurements; it also stops when NeuroTune closes. No cloud or API key." : "Local CLM not installed. Install it here (about 9 GB of pinned, SHA-256 verified downloads) or with scripts/clm-stack.ps1 install.")
             : options.Source == "openRouterFree" ? "Optional free cloud classifier via openrouter/free: zero-price router randomly selects an available compatible free model. Separate cloud consent and API key required; sampled context leaves this PC. Rate limits, availability and latency vary. No local install or paid/local fallback; not Rizzo scoring."
             : options.Source == "openRouter" ? "Optional cloud classifier via OpenRouter: token-based API usage, not local Rizzo scoring. Only sampled context is sent; no automatic local/provider fallback."
             : installed ? "One-shot local worker; exits and unloads after each analysis. No background server." : "Optional component not installed. No model download or inference until explicitly requested.";
-        return new(options.Enabled && ready, installed, options.Size, options.Device, Root, detail, Directory.Exists(Root), options.Source, options.Model, hasKey);
+        var clm = options.Source == "clm";
+        return new(options.Enabled && ready, clm ? ClmClient.Installed : installed, options.Size, options.Device, clm ? ClmClient.Root : Root, detail,
+            Directory.Exists(clm ? ClmClient.Root : Root), options.Source, options.Model, hasKey);
     }
     public static SystemOneStatus Configure(SystemOneOptions options)
     {
@@ -68,7 +72,7 @@ public static class SystemOneService
     public static async Task<SystemOneStatus> InstallAsync(SystemOneOptions options, Action<string>? progress = null, CancellationToken cancellationToken = default)
     {
         ValidateOptions(options);
-        if (!options.Enabled || options.Source != "local") throw new InvalidOperationException("Explicit local-model installation consent is required.");
+        if (!options.Enabled || options.Source is not ("local" or "clm")) throw new InvalidOperationException("Explicit local-model installation consent is required.");
         if (!OperatingSystem.IsWindows() || RuntimeInformation.ProcessArchitecture != Architecture.X64) throw new NotSupportedException("The managed optional runtime currently supports Windows x64.");
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(TimeSpan.FromHours(3));
@@ -78,7 +82,8 @@ public static class SystemOneService
             MeasurementService.WithCaptureMutex(() =>
             {
                 if (MeasurementService.HasActiveRecording()) throw new InvalidOperationException("Stop/cancel the recording before installing System One.");
-                result = InstallCoreAsync(options, progress, deadline.Token).GetAwaiter().GetResult();
+                if (options.Source == "clm") { ClmClient.InstallAsync(progress, deadline.Token).GetAwaiter().GetResult(); result = Configure(options); }
+                else result = InstallCoreAsync(options, progress, deadline.Token).GetAwaiter().GetResult();
             });
             return result!;
         }, deadline.Token);
@@ -100,12 +105,12 @@ public static class SystemOneService
         }
         VerifySourceFiles();
         var uv = Path.Combine(Root, "uv", "uv.exe");
-        await DownloadAsync("https://github.com/astral-sh/uv/releases/download/0.12.21/uv-x86_64-pc-windows-msvc.zip", Path.Combine(Root, "uv.zip"), UvHash, 64L << 20, progress, cancellationToken);
+        await DownloadAsync(UvUrl, Path.Combine(Root, "uv.zip"), UvHash, 64L << 20, progress, cancellationToken);
         ExtractZip(Path.Combine(Root, "uv.zip"), Path.Combine(Root, "uv"));
         if (!File.Exists(uv)) throw new IOException("The pinned uv archive did not contain uv.exe.");
         progress?.Invoke("Installing a private Python 3.12.12 environment and locked Rizzo dependencies as a non-administrator…");
         await OptionalWorkerProcess.RunAsync(uv, ["sync", "--locked", "--no-dev", "--no-editable", "--python", "3.12.12", "--directory", Project], Root, "", EnvironmentForWorker(), TimeSpan.FromMinutes(15), progress, cancellationToken);
-        await DownloadAsync("https://github.com/ggml-org/llama.cpp/releases/download/b11081/llama-b11081-bin-win-vulkan-x64.zip", Path.Combine(Root, "runtime.zip"), RuntimeHash, 128L << 20, progress, cancellationToken);
+        await DownloadAsync(RuntimeUrl, Path.Combine(Root, "runtime.zip"), RuntimeHash, 128L << 20, progress, cancellationToken);
         ExtractZip(Path.Combine(Root, "runtime.zip"), Path.Combine(Root, "runtime"));
         if (!File.Exists(Path.Combine(Root, "runtime", "llama.dll")))
         {
@@ -275,7 +280,8 @@ public static class SystemOneService
     }
     public static SystemOneStatus Remove()
     {
-        MeasurementService.WithCaptureMutex(() => { if (MeasurementService.HasActiveRecording()) throw new InvalidOperationException("Stop/cancel the recording before removing the optional component."); if (Directory.Exists(Root)) { CheckDirectory(Root); Directory.Delete(Root, true); } });
+        var root = LoadOptions().Source == "clm" ? ClmClient.Root : Root;
+        MeasurementService.WithCaptureMutex(() => { if (MeasurementService.HasActiveRecording()) throw new InvalidOperationException("Stop/cancel the recording before removing the optional component."); if (Directory.Exists(root)) { CheckDirectory(root); Directory.Delete(root, true); } });
         return Status();
     }
     private static Dictionary<string, string> EnvironmentForWorker()
@@ -312,7 +318,7 @@ public static class SystemOneService
             else { Directory.CreateDirectory(Path.GetDirectoryName(destination)!); if (File.Exists(destination) && new FileInfo(destination).Attributes.HasFlag(FileAttributes.ReparsePoint)) throw new IOException("Linked runtime file."); entry.ExtractToFile(destination, true); }
         }
     }
-    private static async Task DownloadAsync(string url, string destination, string expectedHash, long maximum, Action<string>? progress, CancellationToken cancellationToken)
+    internal static async Task DownloadAsync(string url, string destination, string expectedHash, long maximum, Action<string>? progress, CancellationToken cancellationToken)
     {
         CheckDirectory(Path.GetDirectoryName(destination)!);
         if (File.Exists(destination) && FileHash(destination) == expectedHash) return;
