@@ -113,6 +113,19 @@ public sealed class DeviceControlTests
     }
 
     [TestMethod]
+    public void Rollback_from_a_new_agent_process_re_enables_a_restart_pending_device()
+    {
+        var machine = new FakeMachine { ExitCode = 3010 };
+        machine.Devices[@"ACPI\PNP0000\0"] = ("Programmable interrupt controller", "System", 0);
+        var snapshot = ActionFor("programmable-interrupt-controller", machine.Host).Capture();
+        ActionFor("programmable-interrupt-controller", machine.Host).Apply();
+        Assert.AreEqual(0, machine.Devices[@"ACPI\PNP0000\0"].Problem, "A 3010 disable stays invisible until reboot.");
+        machine.ExitCode = 0;
+        ActionFor("programmable-interrupt-controller", machine.Host).Restore(snapshot);
+        Assert.AreEqual(@"/enable-device ACPI\PNP0000\0", machine.Commands.Last());
+    }
+
+    [TestMethod]
     public void Inspect_refuses_missing_devices_non_admin_guards_and_critical_children()
     {
         var machine = new FakeMachine();

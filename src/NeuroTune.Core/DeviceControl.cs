@@ -156,10 +156,11 @@ internal static partial class DeviceControl
         {
             var current = host.Enumerate();
             var known = candidate.Match(current).Select(device => device.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            // Enable even devices that still look enabled: a restart-pending disable (3010) from an earlier agent process
+            // is invisible until reboot, and enabling an enabled device is a no-op.
             foreach (var item in ParseSnapshot(state).Devices.Where(item => item.Enabled && known.Contains(item.Id)))
             {
                 var device = current.First(entry => entry.Id.Equals(item.Id, StringComparison.OrdinalIgnoreCase));
-                if (!device.Disabled && !pending.Contains(device.Id)) continue;
                 var code = host.Pnputil("/enable-device", item.Id);
                 if (code is not (0 or 3010)) throw new InvalidOperationException($"Windows could not re-enable {device.Name} (pnputil exit {code}).");
             }
