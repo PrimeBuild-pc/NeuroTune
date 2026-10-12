@@ -16,25 +16,25 @@ const goals: TuningGoals = { priority: 'privacySecurity', riskProfile: 'balanced
 const placeholders = (value: string) => [...value.matchAll(/\{(\w+)\}/g)].map(match => match[1]).sort();
 afterEach(() => { setLanguage('en'); vi.unstubAllGlobals(); });
 
-describe('five-language interface without permission or evidence changes', () => {
+describe('six-language interface without permission or evidence changes', () => {
   it('defaults to English, validates selection, persists it and formats only templates', () => {
-    expect(getLanguage()).toBe('en'); expect(languages.map(item => item.id)).toEqual(['en', 'zh-CN', 'ja', 'es', 'ru']);
-    expect(isLanguage('it')).toBe(false);
+    expect(getLanguage()).toBe('en'); expect(languages.map(item => item.id)).toEqual(['en', 'zh-CN', 'ja', 'es', 'ru', 'it']);
+    expect(isLanguage('fr')).toBe(false);
     const storage = new Map<string, string>();
     vi.stubGlobal('localStorage', { getItem: (key: string) => storage.get(key), setItem: (key: string, value: string) => storage.set(key, value) });
     setLanguage('es'); expect(getLanguage()).toBe('es'); expect(storage.get('neurotune.language')).toBe('es');
     expect(t('Privacy & security')).toBe(messages['Privacy & security'][2]);
     expect(t('Unknown native ID: {value}', { value: 'audit:privacy.test<script>' })).toBe('Unknown native ID: audit:privacy.test<script>');
     expect(t('Untouched {missing}')).toBe('Untouched {missing}');
-    expect(() => setLanguage('it' as never)).toThrow('Unsupported language'); expect(getLanguage()).toBe('es');
+    expect(() => setLanguage('fr' as never)).toThrow('Unsupported language'); expect(getLanguage()).toBe('es');
     vi.stubGlobal('localStorage', { setItem: () => { throw Error('Blocked storage'); } });
     setLanguage('ja'); expect(getLanguage()).toBe('ja');
   });
 
-  it('provides four real translations for every catalog key with exact placeholders', () => {
+  it('provides five real translations for every catalog key with exact placeholders', () => {
     const seen = new Map<string, readonly string[]>();
     for (const catalog of [appMessages, diagnosisMessages, reportMessages, toolMessages]) for (const [source, translations] of Object.entries(catalog)) {
-      expect(translations, source).toHaveLength(4);
+      expect(translations, source).toHaveLength(5);
       seen.set(source, translations);
       for (const translated of translations) {
         expect(translated.trim(), source).not.toBe('');
@@ -70,7 +70,7 @@ describe('five-language interface without permission or evidence changes', () =>
       expect(html).toContain('&lt;script&gt;user text&lt;/script&gt;'); expect(html).not.toContain('<script>');
       expect(html).toContain('<fieldset disabled=""'); expect(html).not.toContain('id="diagnosis-workload"');
       expect(html).toContain(renderToStaticMarkup(<span>{t('Start AI audit · no changes')}</span>).slice(6, -7));
-      expect(html).not.toMatch(/Avvia|Diagnosi completa|sicurezza Windows|Annulla/);
+      if (id !== 'it') expect(html).not.toMatch(/Avvia|Diagnosi completa|sicurezza Windows|Annulla/);
     }
   });
 });

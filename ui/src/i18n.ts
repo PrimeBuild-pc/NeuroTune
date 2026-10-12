@@ -10,9 +10,10 @@ export const languages = [
   { id: 'ja', label: '日本語' },
   { id: 'es', label: 'Español' },
   { id: 'ru', label: 'Русский' },
+  { id: 'it', label: 'Italiano' },
 ] as const;
 export type Language = typeof languages[number]['id'];
-export type Messages = Record<string, readonly [string, string, string, string]>;
+export type Messages = Record<string, readonly [string, string, string, string, string]>;
 export const messages: Messages = { ...appMessages, ...diagnosisMessages, ...reportMessages, ...toolMessages };
 const storageKey = 'neurotune.language';
 const listeners = new Set<() => void>();

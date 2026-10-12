@@ -80,7 +80,7 @@
     <td valign="top"><h3>06 · Audit without applying tweaks</h3><p>Choose Advisory audit separately: local evidence, consented investigation and a report. No workload benchmark or Apply. Defender scans require their own approval.</p></td>
   </tr>
   <tr>
-    <td valign="top"><h3>07 · A focused Windows interface</h3><p>Tauri 2 + React 19, light/dark/system appearance, reduced-motion support and quiet capture periods. English, Simplified Chinese, Japanese, Spanish and Russian UI.</p></td>
+    <td valign="top"><h3>07 · A focused Windows interface</h3><p>Tauri 2 + React 19, light/dark/system appearance, reduced-motion support and quiet capture periods. Five-section navigation with a guided path (diagnose → measure before → choose → apply → measure after → keep or undo) and a Simple/Expert switch. English, Simplified Chinese, Japanese, Spanish, Russian and Italian UI.</p></td>
     <td valign="top"><h3>08 · Source-visible by design</h3><p>MIT-licensed code, registered actions and documented limits. No arbitrary model-generated command execution, generic BIOS writer or automatic security-disable shortcut.</p></td>
   </tr>
 </table>
