@@ -23,6 +23,7 @@ import type {
 } from './types';
 import { Navigation, SectionTabs, type NavigationItem, type Page } from './components/Navigation';
 import { JourneyBar } from './components/JourneyBar';
+import { LiveFps } from './components/LiveFps';
 import { setExpert, useExpert } from './expert';
 import { Overview } from './components/Overview';
 import { Metric } from './components/Metric';
@@ -885,6 +886,7 @@ export function MeasurementsPage({ actions = [], evidenceIds, onEvidenceIds, opt
       </fieldset>
       <div className="button-row">{active ? <><button className="primary" disabled={Boolean(busy)} onClick={() => void stopCapture()}><Timer size={16}/>{t("Stop")}</button><button className="secondary" disabled={Boolean(busy)} onClick={() => void cancelCapture()}><X size={16}/>{t("Cancel & delete")}</button><CaptureCountdown startedAt={active.recordingStartedAtUtc} durationSeconds={active.durationSeconds}/></> : <button className="primary" disabled={(!systemWide && !selectedProcessId) || !conditions.trim() || Boolean(busy) || loading || runComparison && !['baselinePending', 'baselineReady', 'candidatePending'].includes(optimizationRun!.state)} onClick={() => void start()}>{busy ? <LoaderCircle size={16} className="spin"/> : <Timer size={16}/>} {busy ? t("Operation in progress…") : t("Start measurement")}</button>}</div>
     </section>
+    {active && !active.systemWide && active.processId > 0 && <LiveFps processId={active.processId} seconds={active.durationSeconds + 30}/>}
     <LiveProcessorTimes recording={Boolean(active)}/>
 
     <MeasurementHistory sessions={sessions} focusedId={focused?.id} compareIds={compareIds} evidenceIds={evidenceIds} busy={Boolean(busy)} loading={loading}

@@ -44,6 +44,7 @@ const COMMANDS: &[&str] = &[
     "rollback",
     "measurement-workloads",
     "measurement-live",
+    "measurement-fps-live",
     "measurement-driver-details",
     "firmware-read",
     "scewin-inspect",
@@ -296,7 +297,12 @@ fn run_agent(
 fn is_cancellable(command: &str) -> bool {
     matches!(
         command,
-        "scan" | "diagnose" | "measurement-analyze" | "measurement-explain" | "system-one-install"
+        "scan"
+            | "diagnose"
+            | "measurement-analyze"
+            | "measurement-explain"
+            | "measurement-fps-live"
+            | "system-one-install"
     )
 }
 
