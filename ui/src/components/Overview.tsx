@@ -30,18 +30,6 @@ export function Overview({ hasProvider, scan, history, coreState, onProvider, on
       <Metric icon={ScanLine} label={t('System profile')} value={scan ? t('Ready') : t('Not scanned')}/>
       <Metric icon={RotateCcw} label={t('Recoverable operations')} value={String(history.filter(item => item.actions.some(action => action.applied && !action.rolledBack)).length)}/>
     </div>
-    <section className="overview-workflow">
-      <div className="section-heading"><h3>{t('A visible boundary at every step')}</h3></div>
-      <div className="steps">
-        <Step number="01" title="Start complete diagnosis" text="Choose objectives and a running workload; collection and traces run automatically."/>
-        <Step number="02" title="AI investigation" text="Your model interprets evidence, challenges heuristics and requests safe follow-ups."/>
-        <Step number="03" title="Review the final plan" text="Choose some, all executable interventions, or none. Manual proposals remain visible."/>
-        <Step number="04" title="Back up and apply" text="A verified restore point and per-action journal are mandatory."/>
-      </div>
-    </section>
   </div>;
 }
 
-function Step({ number, title, text }: { number: string; title: string; text: string }) {
-  return <article><span>{number}</span><strong>{t(title)}</strong><p>{t(text)}</p></article>;
-}

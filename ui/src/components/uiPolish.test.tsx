@@ -2,12 +2,14 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { Bot, CircleGauge, Timer } from 'lucide-react';
 import { describe, expect, it } from 'vitest';
 import { DiagnosisProgressPanel } from './DiagnosisProgressPanel';
-import { Navigation } from './Navigation';
+import { Navigation, SectionTabs } from './Navigation';
+import { JourneyBar } from './JourneyBar';
+import { journeyStep } from '../journey';
 import { NeuralVisualizer } from './NeuralVisualizer';
 import { Overview } from './Overview';
 import { InvestigationModeControl } from '../CompleteDiagnosis';
 import { MeasurementHistory } from './MeasurementHistory';
-import type { MeasurementSession } from '../types';
+import type { MeasurementSession, OptimizationRun } from '../types';
 import type { DiagnosisStage } from '../diagnosisFlow';
 
 describe('UI polish preserves truthful, accessible states', () => {
@@ -29,7 +31,7 @@ describe('UI polish preserves truthful, accessible states', () => {
     const html = renderToStaticMarkup(<Navigation items={[{ id: 'measurements', label: 'Measurements', icon: Timer }]} page="measurements" onPage={() => {}} disabled={false} quiet/>);
     expect(html).toContain('class="nav-group"');
     expect(html).not.toContain('<details');
-    expect(html).toContain('aria-label="Diagnostics"');
+    expect(html).toContain('aria-current="page"');
     expect(html).toContain('title="Measurements"');
   });
   it('keeps radio groups independent when a retained diagnosis and local evidence coexist', () => {
@@ -56,15 +58,30 @@ describe('UI polish preserves truthful, accessible states', () => {
   it('keeps navigation labels and disabled/current semantics even with a static quiet indicator', () => {
     const html = renderToStaticMarkup(<Navigation items={[
       { id: 'overview', label: 'Overview', icon: CircleGauge },
-      { id: 'provider', label: 'AI provider', icon: Bot },
+      { id: 'settings', label: 'Settings', icon: Bot },
       { id: 'measurements', label: 'Measurements', icon: Timer },
+      { id: 'provider', label: 'AI provider', icon: Bot },
     ]} page="provider" onPage={() => {}} disabled quiet/>);
+    // Provider is a tab inside Settings: the section is current and the tab itself is not a sidebar entry.
     expect(html.match(/aria-current="page"/g)).toHaveLength(1);
+    expect(html).toMatch(/data-page="settings"[^>]*aria-current="page"/);
     expect(html.match(/nav-active-background/g)).toHaveLength(1);
-    expect(html).toContain('aria-label="AI provider"');
+    expect(html).not.toContain('aria-label="AI provider"');
     expect(html).toContain('disabled=""');
-    expect(html).toContain('Diagnostics');
     expect(html).not.toContain('<summary');
     expect(html).not.toContain('transform:');
+  });
+  it('shows section tabs, hides expert-only tabs in simple mode and maps run states to the guided path', () => {
+    const simple = renderToStaticMarkup(<SectionTabs page="provider" onPage={() => {}} expert={false} disabled={false}/>);
+    expect(simple).toContain('AI provider'); expect(simple).not.toContain('Advanced tools');
+    expect(renderToStaticMarkup(<SectionTabs page="tools" onPage={() => {}} expert={false} disabled={false}/>)).toContain('Advanced tools');
+    expect(renderToStaticMarkup(<SectionTabs page="provider" onPage={() => {}} expert disabled={false}/>)).toContain('Local evidence');
+    expect(renderToStaticMarkup(<SectionTabs page="overview" onPage={() => {}} expert disabled={false}/>)).toBe('');
+    const run = (state: OptimizationRun['state'], mode?: OptimizationRun['mode']) => ({ id: 'r', state, mode, requiresRecovery: false, goals: {} as never, evidenceFacts: {}, baselineSessionIds: [], candidateSessionIds: [], approvedActionIds: [] });
+    expect([journeyStep(), journeyStep(run('baselinePending')), journeyStep(run('baselineReady')), journeyStep(run('applying')), journeyStep(run('candidatePending')), journeyStep(run('decisionPending')), journeyStep(run('completed')), journeyStep(run('failed'))])
+      .toEqual([0, 1, 2, 3, 4, 5, 6, 0]);
+    expect(journeyStep(run('completed', 'auditOnly'))).toBe(2);
+    const bar = renderToStaticMarkup(<JourneyBar run={run('baselineReady')} next={{ label: 'Review changes', onClick: () => {} }}/>);
+    expect(bar.match(/class="done"/g)).toHaveLength(2); expect(bar).toContain('aria-current="step"'); expect(bar).toContain('Next step: Review changes');
   });
 });
