@@ -512,7 +512,7 @@ function App() {
       return;
     }
     const highRisk = planActions.filter(action => selected.has(action.id) && action.risk === 'high').length;
-    const parametric = diagnosis?.recommendations.filter(item => item.actionKind && selected.has(item.actionId)).map(item => ({ kind: item.actionKind, parameters: item.parameters })) ?? [];
+    const parametric = diagnosis?.recommendations.filter(item => item.kind === 'executableAction' && item.actionKind && selected.has(item.actionId)).map(item => ({ kind: item.actionKind, parameters: item.parameters })) ?? [];
     if (!selected.size || !window.confirm(t('Apply {count} selected changes after creating a verified restore point?', { count: selected.size }))) return;
     if (highRisk && !window.confirm(t('Separate high-risk confirmation: apply {count} HIGH RISK action(s)? Review evidence, side effects, and rollback notes before continuing.', { count: highRisk }))) return;
     const result = await run('Creating backups and applying verified changes…', () =>

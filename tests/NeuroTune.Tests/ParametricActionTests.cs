@@ -465,8 +465,9 @@ public sealed class ParametricActionTests
         var refused = items[2];
         Assert.AreEqual(PlanRecommendationKind.ManualGuidance, refused.Kind);
         Assert.AreEqual("invalidParameters", refused.ExecutionIssue);
-        Assert.AreEqual("", refused.ActionId + refused.ActionKind);
-        Assert.IsNull(refused.Parameters);
+        Assert.AreEqual("", refused.ActionId);
+        Assert.AreEqual("registry.set", refused.ActionKind); // Shown for review only.
+        Assert.IsFalse(PlanSelectionPolicy.Evaluate(refused, RiskProfile.Aggressive, catalog).Preselected);
         Assert.IsNull(Registry.CurrentUser.OpenSubKey(path), "Parsing must not write.");
     }
 }
