@@ -389,7 +389,7 @@ async Task<OperationManifest> Apply(ApplyRequest request, OptimizationCatalog ac
     var actionIds = request.ActionIds.Concat((request.Parametric ?? [])
         .Select(item => actionCatalog.AddParametric(item.Kind, item.Parameters.GetRawText()).Id))
         .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-    if (run.State == OptimizationRunState.BaselineReady)
+    if (run.State is OptimizationRunState.BaselinePending or OptimizationRunState.BaselineReady)
         run = runService.Approve(run.Id, actionIds, request.HighRiskConfirmed, actionCatalog);
     else if (run.State == OptimizationRunState.Approved)
     {
@@ -484,14 +484,20 @@ async Task<object?> Rollback(RollbackRequest request, OptimizationCatalog action
         var run = runService.Load(linkedRunId);
         if (run.OperationId != manifest.Id || manifest.OptimizationRunId != run.Id)
             throw new InvalidOperationException("The operation does not belong to this optimization run.");
-        runService.BeginRollback(linkedRunId);
+        // A single-item rollback keeps the run open; the whole operation moves the run to RollingBack as before.
+        if (request.ActionIds is not { Count: > 0 } || manifest.Actions.All(action => !(action.Attempted || action.Applied) || action.RolledBack ||
+            request.ActionIds.Contains(action.ActionId, StringComparer.OrdinalIgnoreCase)))
+            runService.BeginRollback(linkedRunId);
+        else if (run.State is not (OptimizationRunState.RestartPending or OptimizationRunState.CandidatePending or OptimizationRunState.DecisionPending))
+            throw new InvalidOperationException("Single items can be restored only while the run is waiting for measurement or a decision.");
     }
     else if (request.RunId is not null)
         throw new InvalidOperationException("This legacy operation is not linked to an optimization run.");
     try
     {
-        await new OptimizationEngine(actionCatalog, backupService).RollbackAsync(manifest);
-        if (manifest.OptimizationRunId is { } completedRunId) runService.RecordRollbackCompleted(completedRunId);
+        await new OptimizationEngine(actionCatalog, backupService).RollbackAsync(manifest, request.ActionIds);
+        if (manifest.OptimizationRunId is { } completedRunId && runService.Load(completedRunId).State == OptimizationRunState.RollingBack)
+            runService.RecordRollbackCompleted(completedRunId);
     }
     catch (Exception exception)
     {
@@ -507,7 +513,7 @@ sealed record DiagnoseRequest(SystemProfile? Profile, TuningGoals? Goals, List<G
     List<SupportingAttachment>? Attachments = null, bool ImagesConfirmed = false, JsonElement Language = default);
 sealed record MeasurementExplanationAgentRequest(MeasurementCompareRequest Comparison, TuningGoals Goals, JsonElement Language = default);
 sealed record ApplyRequest(List<string> ActionIds, bool HighRiskConfirmed, Guid RunId, List<ParametricActionRequest>? Parametric = null);
-sealed record RollbackRequest(Guid OperationId, Guid? RunId = null);
+sealed record RollbackRequest(Guid OperationId, Guid? RunId = null, List<string>? ActionIds = null);
 sealed record ScanRequest(bool OptionalTelemetryConsent, bool FirmwareReadConsent = false, bool PrivacySecurityReadConsent = false);
 sealed record RunCreateRequest(SystemProfile? Profile, TuningGoals? Goals, List<Guid>? MeasurementSessionIds = null,
     List<SupportingAttachment>? Attachments = null, bool ImagesConfirmed = false, InvestigationMode Mode = InvestigationMode.MeasuredOptimization);

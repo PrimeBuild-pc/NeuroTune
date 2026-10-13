@@ -122,7 +122,7 @@ public sealed class BackupService
             manifest.Actions is null || manifest.Actions.Count > 100 || manifest.SystemOneAdvisories is null ||
             manifest.SystemOneAdvisories.Count > 100 || manifest.RestorePoint is null || manifest.RestorePoint.Length > 300 ||
             manifest.Status is not ("Preparing" or "Backup completed" or "Applying" or "Completed" or "Error — automatic rollback" or
-                "Error — rollback incomplete" or "Error — rollback completed" or "Rolling back" or "Rollback incomplete" or "Rollback completed") ||
+                "Error — rollback incomplete" or "Error — rollback completed" or "Rolling back" or "Rollback incomplete" or "Rollback completed" or "Partially rolled back") ||
             manifest.Error?.Length > 16_384 || manifest.Actions.Any(record => record is null) ||
             manifest.Actions.Select(record => record.ActionId).Distinct(StringComparer.OrdinalIgnoreCase).Count() != manifest.Actions.Count ||
             manifest.Actions.Sum(record => (long)(record.OriginalState?.Length ?? 0)) > 4 * 1024 * 1024 ||
@@ -131,7 +131,8 @@ public sealed class BackupService
         if (manifest.Status is "Preparing" or "Backup completed" && manifest.Actions.Count != 0 ||
             manifest.Status == "Completed" && (manifest.Actions.Count == 0 || manifest.Actions.Any(record => !record.Applied || record.RolledBack)) ||
             manifest.Status is "Rollback completed" or "Error — rollback completed" && manifest.HasPendingRollback ||
-            manifest.Status is "Rollback incomplete" or "Error — rollback incomplete" && !manifest.HasPendingRollback)
+            manifest.Status is "Rollback incomplete" or "Error — rollback incomplete" && !manifest.HasPendingRollback ||
+            manifest.Status == "Partially rolled back" && (!manifest.HasPendingRollback || manifest.Actions.All(record => !record.RolledBack)))
             throw new InvalidOperationException("The operation status does not match its records.");
         var expected = Path.Combine(_storage.DirectoryPath, $"{manifest.CreatedAt.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture)}-{manifest.Id:N}");
         if (!Path.GetFullPath(manifest.DirectoryPath).Equals(expected, StringComparison.OrdinalIgnoreCase))

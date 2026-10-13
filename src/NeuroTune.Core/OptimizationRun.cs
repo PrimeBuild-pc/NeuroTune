@@ -77,12 +77,13 @@ public static class OptimizationRunStateMachine
         (OptimizationRunState.Scanned, OptimizationRunState.Hypothesizing) => true,
         (OptimizationRunState.Hypothesizing, OptimizationRunState.ProposalReady or OptimizationRunState.Failed) => true,
         (OptimizationRunState.ProposalReady, OptimizationRunState.BaselinePending or OptimizationRunState.BaselineReady or OptimizationRunState.Completed or OptimizationRunState.Failed) => true,
-        (OptimizationRunState.BaselinePending, OptimizationRunState.BaselineReady or OptimizationRunState.Failed) => true,
+        // v2: measurements are context, not a gate; approval and Keep no longer require a Baseline or a comparison.
+        (OptimizationRunState.BaselinePending, OptimizationRunState.BaselineReady or OptimizationRunState.Approved or OptimizationRunState.Failed) => true,
         (OptimizationRunState.BaselineReady, OptimizationRunState.Approved or OptimizationRunState.Failed) => true,
         (OptimizationRunState.Approved, OptimizationRunState.Applying or OptimizationRunState.Failed) => true,
         (OptimizationRunState.Applying, OptimizationRunState.RestartPending or OptimizationRunState.CandidatePending or OptimizationRunState.RollingBack or OptimizationRunState.RecoveryRequired or OptimizationRunState.Failed) => true,
         (OptimizationRunState.RestartPending, OptimizationRunState.CandidatePending or OptimizationRunState.RollingBack or OptimizationRunState.RecoveryRequired) => true,
-        (OptimizationRunState.CandidatePending, OptimizationRunState.Evaluating or OptimizationRunState.RollingBack or OptimizationRunState.RecoveryRequired) => true,
+        (OptimizationRunState.CandidatePending, OptimizationRunState.Evaluating or OptimizationRunState.Completed or OptimizationRunState.RollingBack or OptimizationRunState.RecoveryRequired) => true,
         (OptimizationRunState.Evaluating, OptimizationRunState.DecisionPending or OptimizationRunState.RollingBack or OptimizationRunState.RecoveryRequired) => true,
         (OptimizationRunState.DecisionPending, OptimizationRunState.Completed or OptimizationRunState.RollingBack or OptimizationRunState.RecoveryRequired) => true,
         (OptimizationRunState.Completed, OptimizationRunState.RollingBack) => true,
@@ -236,7 +237,7 @@ public sealed class OptimizationRunService
     });
 
     public OptimizationRun Approve(Guid id, IEnumerable<string> actionIds, bool highRiskConfirmed,
-        OptimizationCatalog catalog) => Advance(id, OptimizationRunState.BaselineReady,
+        OptimizationCatalog catalog) => Advance(id, [OptimizationRunState.BaselinePending, OptimizationRunState.BaselineReady],
         OptimizationRunState.Approved, "User approved selected capabilities", run =>
         {
             if (run.Mode == InvestigationMode.AuditOnly || run.Diagnosis is null)
@@ -298,10 +299,10 @@ public sealed class OptimizationRunService
     {
         ArgumentNullException.ThrowIfNull(comparison);
         var run = LoadExpected(id, OptimizationRunState.CandidatePending);
-        if (comparison.DiagnosticOnly || comparison.Level != ComparisonLevel.Repeated || comparison.RejectionReasons.Count > 0 || comparison.Metrics.Count == 0 ||
+        if (comparison.DiagnosticOnly || comparison.RejectionReasons.Count > 0 || comparison.Metrics.Count == 0 ||
             !SameIds(comparison.BaselineSessionIds, run.BaselineSessionIds) ||
             !SameIds(comparison.CandidateSessionIds, run.CandidateSessionIds))
-            throw new InvalidOperationException("A quality-valid repeated 3+3 comparison matching this optimization run is required.");
+            throw new InvalidOperationException("A quality-valid comparison matching this optimization run is required.");
         run.Comparison = comparison;
         Move(run, OptimizationRunState.Evaluating, "Valid Baseline/Candidate comparison recorded");
         Move(run, OptimizationRunState.DecisionPending, "Comparison is ready for an explicit Keep or Rollback decision");
@@ -309,7 +310,7 @@ public sealed class OptimizationRunService
         return run;
     });
 
-    public OptimizationRun Keep(Guid id) => Advance(id, OptimizationRunState.DecisionPending,
+    public OptimizationRun Keep(Guid id) => Advance(id, [OptimizationRunState.DecisionPending, OptimizationRunState.CandidatePending],
         OptimizationRunState.Completed, "User kept the measured candidate", run => run.Decision = OptimizationRunDecision.Keep);
 
     public OptimizationRun BeginRollback(Guid id) => WithLock(() =>
@@ -386,9 +387,13 @@ public sealed class OptimizationRunService
     }
 
     private OptimizationRun Advance(Guid id, OptimizationRunState expected, OptimizationRunState next,
+        string reason, Action<OptimizationRun>? update = null) => Advance(id, [expected], next, reason, update);
+
+    private OptimizationRun Advance(Guid id, OptimizationRunState[] expected, OptimizationRunState next,
         string reason, Action<OptimizationRun>? update = null) => WithLock(() =>
     {
-        var run = LoadExpected(id, expected);
+        var run = LoadCore(id);
+        if (!expected.Contains(run.State)) run = LoadExpected(id, expected[0]); // Reuses the existing state error.
         update?.Invoke(run);
         Move(run, next, reason);
         Save(run);

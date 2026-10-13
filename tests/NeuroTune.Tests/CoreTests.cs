@@ -597,6 +597,25 @@ public sealed class CoreTests
     }
 
     [TestMethod]
+    public void A_partial_rollback_status_needs_both_restored_and_still_applied_items()
+    {
+        var root = Path.Combine(AppContext.BaseDirectory, $"partial-rollback-{Guid.NewGuid():N}");
+        try
+        {
+            var service = new BackupService(root);
+            static ActionRecord Record(string id, bool rolledBack) => new()
+            { ActionId = id, OriginalState = "{\"Exists\":true,\"Kind\":4,\"Value\":\"0\"}", Attempted = true, Applied = true, RolledBack = rolledBack };
+            var manifest = new OperationManifest { Status = "Partially rolled back", Actions = [Record("gaming.game-mode", true), Record("gaming.game-dvr-off", false)] };
+            manifest.DirectoryPath = Path.Combine(root, $"{manifest.CreatedAt:yyyyMMdd-HHmmss}-{manifest.Id:N}");
+            service.Save(manifest);
+            Assert.AreEqual("Partially rolled back", service.Load(manifest.Id)!.Status);
+            manifest.Actions[0].RolledBack = false;
+            Assert.ThrowsExactly<InvalidOperationException>(() => service.Save(manifest));
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+
+    [TestMethod]
     public void Invalid_operation_schema_is_rejected_before_persisting_a_journal()
     {
         var directory = Path.Combine(AppContext.BaseDirectory, $"security-backup-{Guid.NewGuid():N}");
