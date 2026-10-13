@@ -1,4 +1,10 @@
-# Unreleased — v2 F9 (part 1): game packages
+# Unreleased — v2 F7: Defender
+
+- Defender exclusions (`defender.exclusion`) stay until you roll them back, like any journaled change.
+- While Microsoft Defender real-time protection is off (and Defender is the active antivirus), a persistent banner
+  reminds you and opens Windows Security; it is rechecked whenever the window regains focus.
+
+# v2 F9 (part 1): game packages
 
 - `games/*.json` for Fortnite, Counter-Strike 2, VALORANT, Apex Legends and Call of Duty/Warzone: executables,
   launchers, config files and formats, competitive settings, anti-cheat limits (for example Vanguard needs TPM and
