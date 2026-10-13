@@ -1,3 +1,13 @@
+# Unreleased — v2 F5: AMD Radeon settings
+
+- New typed write `amd.setting` and reader `amd-3d` through AMD ADLX, called directly on the driver's
+  `amdadlx64.dll` (System32): Anti-Lag, Chill, Boost, Radeon Image Sharpening, Enhanced Sync, Wait for Vertical
+  Refresh mode, Frame Rate Target Control (on/off and FPS) and Morphological AA. Global settings of the first AMD GPU;
+  rollback writes the captured value back.
+- Tested on an RX 6950 XT (driver 32.0.21045.5002, ADLX 1.4): reads, and write/restore round trips of MLAA and
+  V-Sync mode. Two ADLX calls at the same time deadlocked, so NeuroTune makes one call at a time.
+- The ADLX SDK license (object code only, no open-source use) is not yet granted; no SDK file is in this repository.
+
 # Unreleased — v2 F9: web search
 
 - Planner turns can search the web: the provider's own search on Anthropic, OpenRouter and ChatGPT, or Tavily when you
