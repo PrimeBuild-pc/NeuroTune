@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analysisPresetsFor, planKindLabel, scenarioProfiles, scriptArtifactFilename, selectActionIdsForProfile } from './plan';
+import { analysisPresetsFor, planKindLabel, scenarioProfiles, scriptArtifactFilename, selectActionIdsForProfile, withParametricActions } from './plan';
 import { messages } from './i18n';
 import type { OptimizationAction, Recommendation } from './types';
 
@@ -52,6 +52,15 @@ describe('dynamic plan helpers', () => {
     const manual = { ...recommendations[0], kind: 'manualGuidance' as const, actionId: 'action.low' };
     for (const profile of ['safe', 'balanced', 'aggressive'] as const)
       expect(selectActionIdsForProfile(actions, [manual], profile)).toEqual([]);
+  });
+
+  it('lists each validated typed proposal once so presets and apply can select it', () => {
+    const typed = { ...recommendations[2], id: 'typed', actionId: 'registry.set.abc', actionKind: 'registry.set', actionSummary: 'Set HKCU value X = 1', risk: 'medium' as const };
+    const listed = withParametricActions(actions, [typed, { ...typed, id: 'duplicate' }, recommendations[0]]);
+    expect(listed.map(action => action.id)).toEqual([...actions.map(action => action.id), 'registry.set.abc']);
+    expect(listed.at(-1)).toMatchObject({ name: 'Set HKCU value X = 1', risk: 'medium', availability: { canApply: true } });
+    expect(selectActionIdsForProfile(listed, [typed], 'balanced')).toEqual(['registry.set.abc']);
+    expect(selectActionIdsForProfile(listed, [typed], 'safe')).toEqual([]);
   });
 
   it('labels every item kind and creates inert text filenames', () => {

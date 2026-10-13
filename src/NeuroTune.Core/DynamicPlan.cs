@@ -36,6 +36,9 @@ public sealed class PlanRecommendation
     public bool RequiresRestart { get; set; }
     public List<SourceReference> SourceReferences { get; set; } = [];
     public string ActionId { get; set; } = "";
+    public string ActionKind { get; set; } = ""; // Typed write primitive; NeuroTune derives ActionId from it and Parameters.
+    public System.Text.Json.JsonElement? Parameters { get; set; }
+    public string ActionSummary { get; set; } = ""; // Local only: the exact write the validated primitive performs.
     public string ResourceId { get; set; } = "";
     public string UpdateId { get; set; } = "";
     public string ScriptLanguage { get; set; } = "";

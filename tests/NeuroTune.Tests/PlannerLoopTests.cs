@@ -383,7 +383,8 @@ public sealed class PlannerLoopTests
     [DataRow(OptimizationPriority.NetworkLatency, "NETWORK OPTIMIZATION")]
     [DataRow(OptimizationPriority.Stability, "SYSTEM STABILITY")]
     [DataRow(OptimizationPriority.PrivacySecurity, "WINDOWS PRIVACY AND SECURITY")]
-    [DataRow(OptimizationPriority.Fps, "LEGACY FRAME-RATE FOCUS")]
+    [DataRow(OptimizationPriority.Fps, "COMPETITIVE FPS")]
+    [DataRow(OptimizationPriority.Streaming, "STREAMING AND RECORDING")]
     [DataRow(OptimizationPriority.Efficiency, "LEGACY EFFICIENCY FOCUS")]
     public async Task Selected_focus_specializes_every_turn_without_changing_goals_tools_or_write_authority(OptimizationPriority priority, string marker)
     {
