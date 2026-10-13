@@ -1,5 +1,5 @@
 import { formatDate, getLanguage, t } from './i18n';
-import type { MeasurementComparison, MeasurementSession } from './types';
+import type { BiosChecklistItem, MeasurementComparison, MeasurementSession } from './types';
 
 export function metricName(id: string) {
   const key = id.replace(/^comparison:[^:]+:/, '').replace(/:median_delta_percent$/, '');
@@ -39,6 +39,15 @@ ${changes.length ? `<h2>${escape(t('Changes applied'))}</h2><ul>${changes.map(ch
 <h2>${escape(t('After measurement'))}</h2><ul>${side(comparison.candidateSessionIds)}</ul>
 ${rows ? `<h2>${escape(t('Measured differences'))}</h2><table><thead><tr><th>${escape(t('Metric'))}</th><th>${escape(t('Before'))}</th><th>${escape(t('After'))}</th><th>${escape(t('Change'))}</th><th>${escape(t('Interpretation'))}</th></tr></thead><tbody>${rows}</tbody></table>` : ''}
 </body></html>`;
+}
+
+// Same self-contained format, so the checklist can be opened on a phone while the PC is in the firmware setup.
+export function biosChecklistHtml(items: BiosChecklistItem[]) {
+  const rows = items.map(item => `<tr><th>${escape(item.setting)}</th><td>${escape(item.value)}</td><td>${escape(item.menuPath)}</td><td>${escape(item.reason)}</td><td>${escape(t(item.source === 'general' ? 'Unverified (general knowledge)' : item.source === 'scewin' ? 'From the BIOS dump' : 'From the manual'))}</td></tr>`).join('');
+  return `<!doctype html><html lang="${escape(getLanguage())}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+<title>${escape(t('BIOS checklist'))}</title><style>body{font:15px/1.5 system-ui,sans-serif;margin:16px;color:#1b1d26}table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid #ddd;padding:6px;text-align:left;vertical-align:top}</style></head><body>
+<h1>${escape(t('BIOS checklist'))}</h1><p>${escape(t('NeuroTune changes nothing in the BIOS. After EXPO/PBO/Curve Optimizer, run a stability test (for example OCCT or TM5) before measuring.'))}</p>
+<table><tbody>${rows}</tbody></table></body></html>`;
 }
 
 export function downloadFile(content: string, type: string, filename: string) {

@@ -29,6 +29,26 @@ public static class FirmwareInspection
             IsMsiBoard(board) ? GuidanceUrl(board) : "");
     }
 
+    // F8: read-only check after the user changed firmware settings; what Windows cannot observe is said explicitly.
+    public static Dictionary<string, string> VerifyAfterRestart()
+    {
+        var read = Read(true).Facts;
+        var facts = read.Where(item => item.Key.StartsWith("DIMM ", StringComparison.Ordinal) || item.Key is "Memory profile assessment" or "Firmware virtualization (Windows-observed)")
+            .ToDictionary(item => item.Key, item => item.Value);
+        try
+        {
+            var bar = WindowsCommand.Run("nvidia-smi.exe", "--query-gpu=name,memory.total", "--format=csv,noheader");
+            facts["Resizable BAR (NVIDIA)"] = bar.Trim() + "; check BAR1 size with nvidia-smi -q -d MEMORY (BAR1 near the VRAM size means ReBAR is on)";
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception or IOException or TimeoutException)
+        { facts["Resizable BAR"] = "Not observable here: check GPU-Z or the vendor control panel"; }
+        facts["C-states, ASPM, ErP, PBO"] = "Not observable from Windows; confirm them in the firmware setup";
+        return facts;
+    }
+
+    // The UI asks for confirmation first; five seconds lets the agent answer before Windows closes it.
+    public static string RestartIntoSetup() => WindowsCommand.Run("shutdown.exe", "/r", "/fw", "/t", "5");
+
     internal static string SetupStatus(string board, string systemModel)
     {
         if (new[] { "virtual machine", "vmware", "virtualbox", "qemu", "kvm", "hyper-v" }

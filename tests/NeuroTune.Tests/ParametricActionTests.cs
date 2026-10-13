@@ -453,6 +453,21 @@ public sealed class ParametricActionTests
     }
 
     [TestMethod]
+    public void Bios_checklist_drops_forbidden_settings_and_marks_uncited_sources_unverified()
+    {
+        BiosChecklistItem Item(string setting, string source = "general", params string[] evidence) =>
+            new() { Setting = setting, Value = "Enabled", MenuPath = "OC > Memory", Reason = "test", Source = source, EvidenceIds = [.. evidence] };
+        var items = LlmClient.NormalizeBiosChecklist([
+            Item("EXPO profile", "scewin", "firmware:dump"), Item("Resizable BAR", "manual", "unknown:id"), Item("Global C-state Control"),
+            Item("ErP Ready"), Item("SVM Mode"), Item("Secure Boot"), Item("AMD fTPM switch"), Item("Intel PTT"), Item("DRAM Voltage"),
+            Item("tCL"), Item("Memory Timings")
+        ], new Dictionary<string, string> { ["firmware:dump"] = "EXPO=Disabled" }, null);
+        CollectionAssert.AreEqual(new[] { "EXPO profile", "Resizable BAR", "Global C-state Control", "ErP Ready", "SVM Mode" }, items.Select(item => item.Setting).ToArray());
+        Assert.AreEqual("scewin", items[0].Source);
+        Assert.AreEqual("general", items[1].Source); // Cited evidence was not provided.
+    }
+
+    [TestMethod]
     public void Planner_prompt_teaches_primitives_and_targets_only_when_writes_are_possible()
     {
         string Prompt(OptimizationPriority priority, InvestigationMode mode) => LlmClient.BuildPlannerPrompt(new TuningGoals { Priority = priority },
