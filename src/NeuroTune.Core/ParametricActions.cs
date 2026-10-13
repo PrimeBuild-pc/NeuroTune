@@ -58,6 +58,25 @@ internal static class ParametricActions
         { throw new InvalidOperationException($"Invalid {kind} parameters: {exception.Message}", exception); }
     }
 
+    // Planner-facing summary of every primitive; keep it next to the records it describes.
+    internal static string Guide() => $$"""
+        registry.set {"hive":"HKCU|HKLM","path":"key path without the hive","name":"value name, empty for (Default)","type":"String|ExpandString|DWord|QWord|MultiString|Binary","value":"text; numbers decimal or 0x hex; MultiString as a JSON array text; Binary as hex"}
+        registry.delete {"hive":"HKCU|HKLM","path":"...","name":"..."} deletes one value
+        service.start-type {"name":"service key name","startType":"Automatic|AutomaticDelayed|Manual|Disabled"}
+        netadapter.property {"adapter":"network interface GUID from evidence","keyword":"advanced property RegistryKeyword such as *InterruptModeration","value":"RegistryValue"}
+        qos.policy {"exe":"game.exe","dscp":0-63}
+        powercfg.setting {"subgroup":"GUID","setting":"GUID","ac":integer,"dc":integer} at least one of ac/dc; optional "scheme":"GUID", default the active plan
+        bcd.option {"element":"name","value":"allowed value, or null to delete"} elements: {{string.Join("; ", BcdElements.Select(item => $"{item.Key}={string.Join('|', item.Value)}"))}}
+        startup.entry {"scope":"HKCU|HKLM","location":"Run|Run32|StartupFolder","name":"entry name","enabled":false}
+        scheduled-task.state {"path":"\\Folder\\TaskName","enabled":false}
+        appcompat.layer {"exe":"full path of an existing .exe","flags":["{{string.Join("\",\"", CompatFlags)}}"]} empty flags clear them
+        ifeo.perf {"exe":"game.exe","name":"CpuPriorityClass|IoPriority|PagePriority","value":integer or null to remove} CpuPriorityClass 1 Idle, 2 Normal, 3 High, 5 BelowNormal, 6 AboveNormal; IoPriority 0-2; PagePriority 1-5
+        file.json {"path":"full path of an existing .json under the user profile or the Steam folder","key":"dotted.property.path","value":any JSON value}
+        file.ini {"path":"full path of an existing .ini under the user profile or the Steam folder","section":"...","key":"...","value":"..."}
+        device.disable {"slug":"slug of a device.disable.<slug> capability"}
+        defender.exclusion {"type":"Path|Process","value":"narrow folder/file path or process name"} only when Defender blocks a tool the user needs
+        """;
+
     private static T Read<T>(string json) => JsonSerializer.Deserialize<T>(json, Strict) ?? throw new JsonException("The parameters were empty.");
 
     private static OptimizationAction Build<T>(string kind, T parameters, string name, string category, RiskLevel risk,
