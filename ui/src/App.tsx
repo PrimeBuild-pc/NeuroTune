@@ -13,7 +13,7 @@ import {
   ShieldCheck, Sun, Target, TerminalSquare, Timer, X,
 } from 'lucide-react';
 import { agent, cancelAgent, newRequestId } from './agent';
-import { analysisPresetsFor, preparatoryBaselines, selectActionIdsForProfile, withParametricActions } from './plan';
+import { analysisPresetsFor, planKindLabel, preparatoryBaselines, selectActionIdsForProfile, withParametricActions } from './plan';
 import { applyTheme, loadThemePreference, useResolvedTheme } from './theme';
 import { CaptureCountdown, FirmwarePanel, LatencyDetails, LiveProcessorTimes, MeasurementFeedback } from './LatencyDetails';
 import type {
@@ -217,13 +217,14 @@ function App() {
     ? { label: 'Review recovery', onClick: () => setPage('activity') }
     : recording ? { label: 'Measurements', onClick: () => setPage('measurements') }
     : scanRequestId ? { label: 'Local evidence', onClick: () => setPage('advanced') }
-    : runPending && activeRun ? { label: ['applying', 'rollingBack'].includes(activeRun.state) ? 'Activity & restore' : ['baselinePending', 'restartPending', 'candidatePending', 'evaluating', 'decisionPending'].includes(activeRun.state) ? 'Measurements' : diagnosis ? 'Review changes' : 'Complete diagnosis', onClick: () => setPage(['applying', 'rollingBack'].includes(activeRun.state) ? 'activity' : ['baselinePending', 'restartPending', 'candidatePending', 'evaluating', 'decisionPending'].includes(activeRun.state) ? 'measurements' : diagnosis ? 'review' : 'scan') }
+    : runPending && activeRun ? { label: ['applying', 'rollingBack'].includes(activeRun.state) ? 'Activity & restore' : ['restartPending', 'candidatePending', 'evaluating', 'decisionPending'].includes(activeRun.state) ? 'Measurements' : diagnosis ? 'Review changes' : 'Complete diagnosis', onClick: () => setPage(['applying', 'rollingBack'].includes(activeRun.state) ? 'activity' : ['restartPending', 'candidatePending', 'evaluating', 'decisionPending'].includes(activeRun.state) ? 'measurements' : diagnosis ? 'review' : 'scan') }
     : undefined;
   const applyBlockedReason = activeRun?.usedLocalFallback ? 'The provider diagnosis failed. Local observations are not a completed AI audit or authorization to apply changes.'
     : activeRun?.mode === 'auditOnly' ? 'Advisory audit · Apply is unavailable.'
     : !activeRun || ['completed', 'failed'].includes(activeRun.state) ? 'This report has no active optimization run. Start a new diagnosis to propose changes.'
     : activeRun.requiresRecovery ? 'Review recovery before starting another diagnosis.'
-    : ['scanned', 'hypothesizing', 'proposalReady', 'baselinePending', 'baselineReady'].includes(activeRun.state) ? 'Apply requires three matching quality-valid workload baselines in this run.'
+    : ['baselinePending', 'baselineReady'].includes(activeRun.state) ? undefined
+    : ['scanned', 'hypothesizing', 'proposalReady'].includes(activeRun.state) ? 'Wait for the current operation to finish.'
     : 'Continue this run in Measurements or Activity & restore; action approval is closed.';
 
   async function loadJournals() {
@@ -258,8 +259,8 @@ function App() {
     setMeasurementEvidenceIds(new Set([...run.baselineSessionIds, ...run.candidateSessionIds]));
     if (['applying', 'rollingBack', 'recoveryRequired'].includes(run.state)) setPage('activity');
     else if (run.usedLocalFallback && run.diagnosis) setPage('review');
-    else if (['baselinePending', 'restartPending', 'candidatePending', 'evaluating', 'decisionPending'].includes(run.state)) setPage('measurements');
-    else if (['baselineReady', 'approved', 'proposalReady'].includes(run.state)) setPage('review');
+    else if (['restartPending', 'candidatePending', 'evaluating', 'decisionPending'].includes(run.state)) setPage('measurements');
+    else if (['baselinePending', 'baselineReady', 'approved', 'proposalReady'].includes(run.state)) setPage('review');
     else setPage('scan');
   }
 
@@ -507,8 +508,8 @@ function App() {
   }
 
   async function applyChanges() {
-    if (!activeRun || activeRun.mode === 'auditOnly' || activeRun.state !== 'baselineReady') {
-      setNotice({ tone: 'danger', text: 'A quality-valid Baseline in the active optimization run is required before apply.' });
+    if (!activeRun || activeRun.mode === 'auditOnly' || !['baselinePending', 'baselineReady'].includes(activeRun.state)) {
+      setNotice({ tone: 'danger', text: 'This report has no active optimization run. Start a new diagnosis to propose changes.' });
       return;
     }
     const highRisk = planActions.filter(action => selected.has(action.id) && action.risk === 'high').length;
@@ -529,10 +530,10 @@ function App() {
     }
   }
 
-  async function rollback(operationId: string) {
-    if (!window.confirm(t("Create another restore point and restore this operation?"))) return;
+  async function rollback(operationId: string, actionId?: string) {
+    if (!window.confirm(t(actionId ? 'Restore only this change? The rest of the operation stays applied.' : "Create another restore point and restore this operation?"))) return;
     const runId = history.find(item => item.id === operationId)?.optimizationRunId;
-    const result = await run('Restoring the saved system state…', () => agent<null>('rollback', { operationId, runId }));
+    const result = await run('Restoring the saved system state…', () => agent<null>('rollback', { operationId, runId, actionIds: actionId ? [actionId] : undefined }));
     if (result !== undefined) {
       setHistory(await agent<OperationManifest[]>('history'));
       setActions(await agent<OptimizationAction[]>('actions'));
@@ -584,9 +585,9 @@ function App() {
           {(page === 'scan' || diagnosisOpened) && <div hidden={page !== 'scan'}><CompleteDiagnosis consentKey={`${provider.provider}:${provider.model}:${provider.baseUrl}:${provider.chatGptAccountId ?? ''}`} blockedReason={diagnosisBlockedReason} onProvider={!providerConfigured && !recording && !busy && !securityBusy && !runPending && !pendingRecovery ? () => setPage('provider') : undefined} mode={mode} onMode={setMode} goals={goals} onGoals={setGoals} onStart={(workload, duration, attachments, imagesConfirmed, conditions) => { void completeDiagnosis(workload, duration, attachments, imagesConfirmed, conditions); }} progress={diagnosisProgress} auditPreview={auditPreview} onAuditApprove={() => auditReview.current?.(true)} onCancel={cancelCompleteDiagnosis} blocked={Boolean(diagnosisBlockedReason)}><GoalContextEditor goals={goals} onGoals={setGoals}/></CompleteDiagnosis></div>}
           {page === 'security' && <div className="security-page"><WindowsSecurityPanel blocked={Boolean(recording || busy || diagnosisProgress || pendingRecovery || activeRun && activeRun.mode !== 'auditOnly' && !['completed', 'failed'].includes(activeRun.state))} onBusy={setSecurityBusy}><section className="section-card"><h2>{t('AI-led investigation')}</h2><p>{t('Review Windows privacy and security evidence, protections and detections. Opening this page does not start collection, a scan, an AI request, a download or a system change.')}</p><p className="muted-copy">{t('The privacy and security objective specializes the investigation; mode, consent, provider, risk profile and approval remain separate. Choose it below, then review the complete diagnosis controls before starting.')}</p><button className="primary" disabled={Boolean(recording || busy || securityBusy || diagnosisProgress || pendingRecovery || activeRun && !['completed', 'failed'].includes(activeRun.state))} onClick={() => { setGoals(current => ({ ...current, priority: 'privacySecurity' })); setPage('scan'); }}><ShieldCheck size={16}/>{t('Choose privacy & security diagnosis')}</button><div className="settings-lines"><div><LockKeyhole size={18}/><span><strong>{t('Credentials')}</strong><small>{t('Encrypted with Windows DPAPI for this user')}</small></span></div><div><TerminalSquare size={18}/><span><strong>{t('Model output')}</strong><small>{t('AI can propose manual guidance and review-only scripts; only registered actions have write authority')}</small></span></div><div><RotateCcw size={18}/><span><strong>{t('Recovery')}</strong><small>{t('Verified restore point, Registry exports, and action journal')}</small></span></div></div></section></WindowsSecurityPanel></div>}
           {page === 'advanced' && <ScanPage mode={mode} onMode={value => { if (!busy && (!activeRun || ['completed', 'failed'].includes(activeRun.state))) setMode(value); }} scan={scan} diagnosis={displayedDiagnosis} goals={goals} scanning={Boolean(scanRequestId)} onGoals={setGoals} onScan={scanSystem} onDiagnose={diagnose}/>}
-          {page === 'measurements' && <MeasurementsPage actions={planActions} evidenceIds={measurementEvidenceIds} onEvidenceIds={setMeasurementEvidenceIds} optimizationRun={preparingBaseline ? undefined : activeRun} onRun={setActiveRun} preparingBaseline={preparingBaseline} onBaselinePrepared={() => { void diagnose(); }} analysisGoals={goals} onRecording={setRecording}/>}
-          {page === 'review' && <ReviewPage onDiagnosis={() => setPage(providerConfigured ? 'scan' : 'provider')} investigationFailed={Boolean(activeRun?.usedLocalFallback || diagnosis && diagnosis === localDiagnosis.current)} applyBlockedReason={applyBlockedReason} auditOnly={activeRun?.mode === 'auditOnly'} auditEvidence={activeRun?.evidenceFacts} diagnosis={displayedDiagnosis} supporting={activeRun?.supportingAttachments} actions={planActions} recommendations={recommendations} selected={selected} riskProfile={goals.riskProfile} canApply={activeRun?.mode !== 'auditOnly' && activeRun?.state === 'baselineReady'} onToggle={id => setSelected(current => toggle(current, id))} onPreset={applyPreset} onApply={applyChanges} onDismiss={activeRun && !activeRun.operationId && !activeRun.requiresRecovery && !['completed', 'failed'].includes(activeRun.state) ? () => { void dismissDiagnosis(); } : undefined}/>}
-          {page === 'activity' && !journalError && <ActivityPage history={history} onRefresh={() => void refreshJournals()} onRollback={rollback}/>}
+          {page === 'measurements' && <MeasurementsPage onRestoreItem={actionId => { if (activeRun?.operationId) void rollback(activeRun.operationId, actionId); }} onFollowUp={hydrateRun} actions={planActions} evidenceIds={measurementEvidenceIds} onEvidenceIds={setMeasurementEvidenceIds} optimizationRun={preparingBaseline ? undefined : activeRun} onRun={setActiveRun} preparingBaseline={preparingBaseline} onBaselinePrepared={() => { void diagnose(); }} analysisGoals={goals} onRecording={setRecording}/>}
+          {page === 'review' && <ReviewPage onDiagnosis={() => setPage(providerConfigured ? 'scan' : 'provider')} investigationFailed={Boolean(activeRun?.usedLocalFallback || diagnosis && diagnosis === localDiagnosis.current)} applyBlockedReason={applyBlockedReason} auditOnly={activeRun?.mode === 'auditOnly'} auditEvidence={activeRun?.evidenceFacts} diagnosis={displayedDiagnosis} supporting={activeRun?.supportingAttachments} actions={planActions} recommendations={recommendations} selected={selected} riskProfile={goals.riskProfile} canApply={activeRun?.mode !== 'auditOnly' && ['baselinePending', 'baselineReady'].includes(activeRun?.state ?? '')} onToggle={id => setSelected(current => toggle(current, id))} onPreset={applyPreset} onApply={applyChanges} onDismiss={activeRun && !activeRun.operationId && !activeRun.requiresRecovery && !['completed', 'failed'].includes(activeRun.state) ? () => { void dismissDiagnosis(); } : undefined}/>}
+          {page === 'activity' && !journalError && <ActivityPage history={history} actionName={id => planActions.find(action => action.id === id)?.name ?? id} onRefresh={() => void refreshJournals()} onRollback={(id, actionId) => void rollback(id, actionId)}/>}
           {page === 'settings' && <SettingsPage theme={theme} onTheme={setTheme} setupBlocked={Boolean(recording || runPending || busy || securityBusy || diagnosisProgress || journalError || pendingRecovery)} onSetup={() => setSetupRequested(true)}/>}
           {(page === 'tools' || toolsOpened) && <div hidden={page !== 'tools'}><AdvancedToolsPage setupAssistant={assistantSetupRequested} onAssistantSetupHandled={() => setAssistantSetupRequested(false)} telemetryConsent={telemetryConsent} firmwareConsent={firmwareConsent} onFirmwareConsent={setFirmwareConsent} onActions={setActions} onTelemetryConsent={value => {
             setTelemetryConsent(value);
@@ -638,7 +639,7 @@ function GoalContextEditor({ goals, onGoals }: { goals: TuningGoals; onGoals: (v
   </section>;
 }
 
-export function MeasurementsPage({ actions = [], evidenceIds, onEvidenceIds, optimizationRun, onRun, preparingBaseline, onBaselinePrepared, analysisGoals, onRecording }: { actions?: OptimizationAction[]; evidenceIds: Set<string>; onEvidenceIds: (value: Set<string>) => void; optimizationRun?: OptimizationRun; onRun: (value: OptimizationRun) => void; preparingBaseline: boolean; onBaselinePrepared: () => void; analysisGoals: TuningGoals; onRecording: (value: boolean) => void }) {
+export function MeasurementsPage({ actions = [], evidenceIds, onEvidenceIds, optimizationRun, onRun, preparingBaseline, onBaselinePrepared, analysisGoals, onRecording, onRestoreItem, onFollowUp }: { onRestoreItem?: (actionId: string) => void; onFollowUp?: (value: OptimizationRun) => void; actions?: OptimizationAction[]; evidenceIds: Set<string>; onEvidenceIds: (value: Set<string>) => void; optimizationRun?: OptimizationRun; onRun: (value: OptimizationRun) => void; preparingBaseline: boolean; onBaselinePrepared: () => void; analysisGoals: TuningGoals; onRecording: (value: boolean) => void }) {
   const expert = useExpert();
   const [systemWide, setSystemWide] = useState(!optimizationRun && !preparingBaseline);
   const [workloads, setWorkloads] = useState<MeasurementWorkload[]>([]);
@@ -858,6 +859,18 @@ export function MeasurementsPage({ actions = [], evidenceIds, onEvidenceIds, opt
     await execute('Recording the Keep decision…', async () =>
       onRun(await agent<OptimizationRun>('run-keep', { runId: optimizationRun.id })));
   }
+  async function refine() {
+    if (!optimizationRun) return;
+    await execute('Asking the selected AI to review the applied changes…', async () =>
+      onRun(await agent<OptimizationRun>('run-refine', { runId: optimizationRun.id, language: getLanguage() })));
+  }
+  async function keepAndAdjust() {
+    if (!optimizationRun || !window.confirm(t('Keep these changes and open the adjustments as a new run?'))) return;
+    await execute('Recording the Keep decision…', async () => {
+      await agent<OptimizationRun>('run-keep', { runId: optimizationRun.id });
+      onFollowUp?.(await agent<OptimizationRun>('run-follow-up', { runId: optimizationRun.id }));
+    });
+  }
   async function resumeAfterRestart() {
     if (!optimizationRun) return;
     await execute('Verifying the Windows restart…', async () =>
@@ -896,6 +909,8 @@ export function MeasurementsPage({ actions = [], evidenceIds, onEvidenceIds, opt
       onAnalyze={id => void analyze(id)} onDelete={id => { if (window.confirm(t('Delete this measurement session and its local data?'))) void execute('Deleting measurement…', () => agent('measurement-delete', { sessionId: id })); }} onCompare={() => void compare()}/>
 
     {focused?.report && <>{!focused.systemWide && <section className="section-card"><div className="section-heading"><div><span className="eyebrow">{t("Optional frame evidence")}</span><h3>{t("Attach the matching PresentMon CSV")}</h3></div><span className="status-pill">{t("local only")}</span></div><p className="muted-copy">{t("The CSV must cover the same executable and duration. NeuroTune stores only aggregate FPS, 1% low, frame-time tails, stutter count, and present modes.")}</p><input type="file" accept=".csv,text/csv" disabled={Boolean(busy)} aria-label={t("Import matching PresentMon CSV")} onChange={event => { const file = event.currentTarget.files?.[0]; if (file) void importFrameTimes(file); event.currentTarget.value = ''; }}/></section>}<MeasurementReportView session={focused}/></>}
+    {optimizationRun?.state === 'candidatePending' && <section className="section-card"><div className="button-row"><button className="primary" disabled={Boolean(busy) || Boolean(active)} onClick={() => void keepCandidate()}><Check size={16}/>{t('Keep candidate')}</button><small>{t('Use Activity & restore to choose Rollback.')}</small></div></section>}
+    {optimizationRun && ['candidatePending', 'decisionPending'].includes(optimizationRun.state) && <RefinePanel run={optimizationRun} actions={actions} disabled={Boolean(busy) || Boolean(active)} onRefine={() => void refine()} onRestore={actionId => onRestoreItem?.(actionId)} onKeepAndAdjust={() => void keepAndAdjust()}/>}
     {comparison && !comparison.diagnosticOnly && !comparison.rejectionReasons.length && optimizationRun?.state === 'decisionPending' && <section className="section-card"><div className="consent-card"><Bot size={20}/><div><span className="eyebrow">{t('Automatic measured recommendation')}</span><strong>{statusLabel(comparison.recommendation)}</strong><small>{comparison.recommendationReason}</small></div></div><div className="button-row"><button className="primary" disabled={Boolean(busy) || Boolean(active)} onClick={() => void keepCandidate()}><Check size={16}/>{t('Keep candidate')}</button><small>{t('Use Activity & restore to choose Rollback.')}</small></div></section>}
     {expert && !topology && <section className="section-card"><h3>{t("Optional GPU IRQ diagnostics")}</h3><p className="muted-copy">{t("GPU candidate diagnostics are read-only and are not required for a latency capture. Load hardware topology only when needed.")}</p><button className="secondary" disabled={Boolean(busy) || loading} onClick={() => void loadTopology()}><Cpu size={16}/>{t("Load GPU topology")}</button></section>}
     {comparison && comparison.rejectionReasons.length === 0 && <section className="section-card"><SystemOneNotes items={comparison.systemOneAdvisories}/><h3>{t("Selected AI · read-only interpretation")}</h3><p>{t("Send only this comparison's aggregates and your tuning goals to the selected provider. It may disagree with the numerical recommendation; it cannot replace metrics, authorize changes or apply anything.")}</p><button className="secondary" disabled={Boolean(busy) || Boolean(active)} onClick={() => void execute('Explaining original comparison metrics with the selected AI…', async () => setComparisonExplanation(await agent<string>('measurement-explain', { comparison: { baselineSessionIds: comparison.baselineSessionIds, candidateSessionIds: comparison.candidateSessionIds, optimizationRunId: comparison.diagnosticOnly ? undefined : optimizationRun?.id }, goals: analysisGoals, language: getLanguage() })))}>{t("Ask selected AI to explain")}</button>{comparisonExplanation && <p className="muted-copy" role="status">{comparisonExplanation}</p>}</section>}
@@ -917,8 +932,25 @@ function MeasurementReportView({ session }: { session: MeasurementSession }) {
   </section>;
 }
 
-function ActivityPage({ history, onRefresh, onRollback }: { history: OperationManifest[]; onRefresh: () => void; onRollback: (id: string) => void }) {
-  return <div className="stack-lg"><div className="page-actions"><div><span className="eyebrow">{t("Operation journal")}</span><h2>{t("Every attempted change remains traceable")}</h2></div><button className="secondary" onClick={onRefresh}><RefreshCw size={16}/>{t("Refresh")}</button></div>{history.length ? <div className="history-list">{history.map(item => <article className="history-card" key={item.id}><div className="history-icon"><Activity size={19}/></div><div className="history-main"><div><strong>{item.status}</strong><span>{formatDate(item.createdAt)}</span></div><p>{t('{count} journaled actions · {id}', { count: item.actions.length, id: item.id })}</p><small className="history-recovery-state">{item.actions.some(action => (action.applied || action.attempted) && !action.rolledBack) ? t('Restore available · confirmation required') : t('No changes to restore')}</small><SystemOneNotes items={item.systemOneAdvisories}/>{item.error && <small className="error-text">{item.error}</small>}</div><button className="secondary" disabled={!item.actions.some(action => (action.applied || action.attempted) && !action.rolledBack)} onClick={() => onRollback(item.id)}><RotateCcw size={15}/>{t("Restore")}</button></article>)}</div> : <EmptyState icon={Activity} title={t("No operations yet")} text={t("Completed and interrupted operations will appear here with their rollback state.")}/>}</div>;
+// F4 closed loop: up to three AI reviews of what was applied; restores run now, adjustments open a follow-up run.
+function RefinePanel({ run, actions, disabled, onRefine, onRestore, onKeepAndAdjust }: { run: OptimizationRun; actions: OptimizationAction[]; disabled: boolean; onRefine: () => void; onRestore: (actionId: string) => void; onKeepAndAdjust: () => void }) {
+  const used = (run.refineIteration ?? 0) + (run.refinements?.length ?? 0);
+  const last = run.refinements?.at(-1);
+  const executable = last?.recommendations.filter(item => item.kind === 'executableAction') ?? [];
+  return <section className="section-card">
+    <div className="section-heading"><div><span className="eyebrow">{t('AI refinement')}</span><h3>{t('Ask the AI to review the applied changes ({count}/{max})', { count: used, max: 3 })}</h3></div></div>
+    <button className="secondary" disabled={disabled || used >= 3} onClick={onRefine}><Bot size={16}/>{t('AI refinement')}</button>
+    {last && <>
+      <p className="muted-copy" role="status">{last.summary}</p>
+      {last.rollback.length > 0 && <><h4>{t('Suggested restores')}</h4><ul className="history-actions">{last.rollback.map(item => <li key={item.actionId}><span>{actions.find(action => action.id === item.actionId)?.name ?? item.actionId} · {item.reason}</span><button className="secondary" disabled={disabled} onClick={() => onRestore(item.actionId)}><RotateCcw size={13}/>{t('Restore only this')}</button></li>)}</ul></>}
+      {last.recommendations.length > 0 && <><h4>{t('Suggested adjustments')}</h4><ul className="history-actions">{last.recommendations.map(item => <li key={item.id}><span>{item.title}</span><small>{planKindLabel(item.kind)}</small></li>)}</ul>
+        {executable.length > 0 && <button className="primary" disabled={disabled} onClick={onKeepAndAdjust}><Check size={16}/>{t('Keep and review adjustments')}</button>}</>}
+    </>}
+  </section>;
+}
+
+function ActivityPage({ history, actionName, onRefresh, onRollback }: { history: OperationManifest[]; actionName: (id: string) => string; onRefresh: () => void; onRollback: (id: string, actionId?: string) => void }) {
+  return <div className="stack-lg"><div className="page-actions"><div><span className="eyebrow">{t("Operation journal")}</span><h2>{t("Every attempted change remains traceable")}</h2></div><button className="secondary" onClick={onRefresh}><RefreshCw size={16}/>{t("Refresh")}</button></div>{history.length ? <div className="history-list">{history.map(item => <article className="history-card" key={item.id}><div className="history-icon"><Activity size={19}/></div><div className="history-main"><div><strong>{item.status}</strong><span>{formatDate(item.createdAt)}</span></div><p>{t('{count} journaled actions · {id}', { count: item.actions.length, id: item.id })}</p><small className="history-recovery-state">{item.actions.some(action => (action.applied || action.attempted) && !action.rolledBack) ? t('Restore available · confirmation required') : t('No changes to restore')}</small><SystemOneNotes items={item.systemOneAdvisories}/>{item.error && <small className="error-text">{item.error}</small>}{item.optimizationRunId && item.actions.filter(action => (action.applied || action.attempted) && !action.rolledBack).length > 1 && <ul className="history-actions">{item.actions.filter(action => (action.applied || action.attempted) && !action.rolledBack).map(action => <li key={action.actionId}><span>{actionName(action.actionId)}</span><button className="secondary" onClick={() => onRollback(item.id, action.actionId)}><RotateCcw size={13}/>{t('Restore only this')}</button></li>)}</ul>}</div><button className="secondary" disabled={!item.actions.some(action => (action.applied || action.attempted) && !action.rolledBack)} onClick={() => onRollback(item.id)}><RotateCcw size={15}/>{t("Restore")}</button></article>)}</div> : <EmptyState icon={Activity} title={t("No operations yet")} text={t("Completed and interrupted operations will appear here with their rollback state.")}/>}</div>;
 }
 
 function AdvancedToolsPage({ telemetryConsent, onTelemetryConsent, firmwareConsent, onFirmwareConsent, onActions, setupAssistant, onAssistantSetupHandled }: { setupAssistant: boolean; onAssistantSetupHandled: () => void; firmwareConsent: boolean; onFirmwareConsent: (value: boolean) => void; telemetryConsent: boolean; onTelemetryConsent: (value: boolean) => void; onActions: (value: OptimizationAction[]) => void }) {

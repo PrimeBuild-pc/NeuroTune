@@ -257,6 +257,9 @@ export interface OptimizationRun {
   supportingAttachments?: SupportingAttachmentInfo[];
   approvedActionIds: string[];
   operationId?: string;
+  parentRunId?: string;
+  refineIteration?: number;
+  refinements?: Array<{ atUtc: string; summary: string; rollback: Array<{ actionId: string; reason: string }>; recommendations: Recommendation[] }>;
   comparison?: MeasurementComparison;
 }
 

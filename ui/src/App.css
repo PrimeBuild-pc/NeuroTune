@@ -305,6 +305,8 @@ html[data-motion='quiet'] :is(button, .brand-mark, .nav-item > svg, .icon-button
 .history-main { min-width: 0; }
 .history-main > div { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; }
 .history-recovery-state { display: block; margin-top: 8px; color: var(--muted-strong); font-size: 12px; line-height: 1.5; }
+.history-actions { display: grid; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+.history-actions li { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; }
 .history-main > div span { color: var(--muted); font-size: 12px; }
 .history-main p { margin: 4px 0 0; color: var(--muted-strong); font: 12px/1.5 var(--font-ui); }
 .error-text { color: var(--danger-text); }

@@ -80,7 +80,8 @@ public sealed class OptimizationEngine
         finally { mutex.ReleaseMutex(); }
     });
 
-    public Task RollbackAsync(OperationManifest manifest) => Task.Run(() =>
+    // actionIds restores only those records (single-item rollback); null restores the whole operation.
+    public Task RollbackAsync(OperationManifest manifest, IReadOnlyCollection<string>? actionIds = null) => Task.Run(() =>
     {
         using var mutex = new Mutex(false, @"Global\NeuroTuneOptimization");
         var acquired = Acquire(mutex);
@@ -93,18 +94,19 @@ public sealed class OptimizationEngine
             manifest.Status = "Rolling back";
             _backup.Save(manifest);
             TestDelay();
-            RollbackApplied(manifest);
-            manifest.Status = Pending(manifest).Any() ? "Rollback incomplete" : "Rollback completed";
+            RollbackApplied(manifest, actionIds);
+            var failed = Pending(manifest).Any(record => actionIds is null || actionIds.Contains(record.ActionId, StringComparer.OrdinalIgnoreCase));
+            manifest.Status = failed ? "Rollback incomplete" : Pending(manifest).Any() ? "Partially rolled back" : "Rollback completed";
             _backup.Save(manifest);
-            if (manifest.Status == "Rollback incomplete")
+            if (failed)
                 throw new InvalidOperationException("Some actions could not be restored. Review the operation details.");
         }
         finally { mutex.ReleaseMutex(); }
     });
 
-    private void RollbackApplied(OperationManifest manifest)
+    private void RollbackApplied(OperationManifest manifest, IReadOnlyCollection<string>? actionIds = null)
     {
-        foreach (var record in Pending(manifest).Reverse())
+        foreach (var record in Pending(manifest).Where(record => actionIds is null || actionIds.Contains(record.ActionId, StringComparer.OrdinalIgnoreCase)).Reverse())
         {
             try
             {

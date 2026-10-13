@@ -58,6 +58,9 @@ public sealed class OptimizationRun
     public OptimizationRunDecision Decision { get; set; }
     public string? Error { get; set; }
     public List<OptimizationRunTransition> Transitions { get; set; } = [];
+    public Guid? ParentRunId { get; set; } // Set on a follow-up run created from a refinement.
+    public int RefineIteration { get; set; }
+    public List<RefineResult> Refinements { get; set; } = [];
 
     [JsonIgnore]
     public string DirectoryPath { get; set; } = "";
@@ -65,8 +68,22 @@ public sealed class OptimizationRun
     public bool RequiresRecovery => State is OptimizationRunState.Applying or OptimizationRunState.RollingBack or OptimizationRunState.RecoveryRequired;
 }
 
+public sealed record RefineRollback(string ActionId, string Reason);
+
+// One AI review of applied changes: single items to restore now and adjustments for a follow-up run.
+public sealed class RefineResult
+{
+    public DateTimeOffset AtUtc { get; set; } = DateTimeOffset.UtcNow;
+    public string Summary { get; set; } = "";
+    public List<RefineRollback> Rollback { get; set; } = [];
+    public List<PlanRecommendation> Recommendations { get; set; } = [];
+    public Dictionary<string, string> Facts { get; set; } = []; // What the model saw; follow-up citations resolve against it.
+}
+
 public static class OptimizationRunStateMachine
 {
+    public const int MaxRefinements = 3;
+
     public static bool IsTerminal(OptimizationRunState state) =>
         state is OptimizationRunState.Completed or OptimizationRunState.Failed;
 
@@ -77,12 +94,13 @@ public static class OptimizationRunStateMachine
         (OptimizationRunState.Scanned, OptimizationRunState.Hypothesizing) => true,
         (OptimizationRunState.Hypothesizing, OptimizationRunState.ProposalReady or OptimizationRunState.Failed) => true,
         (OptimizationRunState.ProposalReady, OptimizationRunState.BaselinePending or OptimizationRunState.BaselineReady or OptimizationRunState.Completed or OptimizationRunState.Failed) => true,
-        (OptimizationRunState.BaselinePending, OptimizationRunState.BaselineReady or OptimizationRunState.Failed) => true,
+        // v2: measurements are context, not a gate; approval and Keep no longer require a Baseline or a comparison.
+        (OptimizationRunState.BaselinePending, OptimizationRunState.BaselineReady or OptimizationRunState.Approved or OptimizationRunState.Failed) => true,
         (OptimizationRunState.BaselineReady, OptimizationRunState.Approved or OptimizationRunState.Failed) => true,
         (OptimizationRunState.Approved, OptimizationRunState.Applying or OptimizationRunState.Failed) => true,
         (OptimizationRunState.Applying, OptimizationRunState.RestartPending or OptimizationRunState.CandidatePending or OptimizationRunState.RollingBack or OptimizationRunState.RecoveryRequired or OptimizationRunState.Failed) => true,
         (OptimizationRunState.RestartPending, OptimizationRunState.CandidatePending or OptimizationRunState.RollingBack or OptimizationRunState.RecoveryRequired) => true,
-        (OptimizationRunState.CandidatePending, OptimizationRunState.Evaluating or OptimizationRunState.RollingBack or OptimizationRunState.RecoveryRequired) => true,
+        (OptimizationRunState.CandidatePending, OptimizationRunState.Evaluating or OptimizationRunState.Completed or OptimizationRunState.RollingBack or OptimizationRunState.RecoveryRequired) => true,
         (OptimizationRunState.Evaluating, OptimizationRunState.DecisionPending or OptimizationRunState.RollingBack or OptimizationRunState.RecoveryRequired) => true,
         (OptimizationRunState.DecisionPending, OptimizationRunState.Completed or OptimizationRunState.RollingBack or OptimizationRunState.RecoveryRequired) => true,
         (OptimizationRunState.Completed, OptimizationRunState.RollingBack) => true,
@@ -236,7 +254,7 @@ public sealed class OptimizationRunService
     });
 
     public OptimizationRun Approve(Guid id, IEnumerable<string> actionIds, bool highRiskConfirmed,
-        OptimizationCatalog catalog) => Advance(id, OptimizationRunState.BaselineReady,
+        OptimizationCatalog catalog) => Advance(id, [OptimizationRunState.BaselinePending, OptimizationRunState.BaselineReady],
         OptimizationRunState.Approved, "User approved selected capabilities", run =>
         {
             if (run.Mode == InvestigationMode.AuditOnly || run.Diagnosis is null)
@@ -298,10 +316,10 @@ public sealed class OptimizationRunService
     {
         ArgumentNullException.ThrowIfNull(comparison);
         var run = LoadExpected(id, OptimizationRunState.CandidatePending);
-        if (comparison.DiagnosticOnly || comparison.Level != ComparisonLevel.Repeated || comparison.RejectionReasons.Count > 0 || comparison.Metrics.Count == 0 ||
+        if (comparison.DiagnosticOnly || comparison.RejectionReasons.Count > 0 || comparison.Metrics.Count == 0 ||
             !SameIds(comparison.BaselineSessionIds, run.BaselineSessionIds) ||
             !SameIds(comparison.CandidateSessionIds, run.CandidateSessionIds))
-            throw new InvalidOperationException("A quality-valid repeated 3+3 comparison matching this optimization run is required.");
+            throw new InvalidOperationException("A quality-valid comparison matching this optimization run is required.");
         run.Comparison = comparison;
         Move(run, OptimizationRunState.Evaluating, "Valid Baseline/Candidate comparison recorded");
         Move(run, OptimizationRunState.DecisionPending, "Comparison is ready for an explicit Keep or Rollback decision");
@@ -309,7 +327,52 @@ public sealed class OptimizationRunService
         return run;
     });
 
-    public OptimizationRun Keep(Guid id) => Advance(id, OptimizationRunState.DecisionPending,
+    public OptimizationRun RecordRefinement(Guid id, RefineResult result) => WithLock(() =>
+    {
+        var run = LoadCore(id);
+        if (run.Mode != InvestigationMode.MeasuredOptimization || run.State is not (OptimizationRunState.CandidatePending or OptimizationRunState.DecisionPending))
+            throw new InvalidOperationException("Refinement is available after Apply, while the run waits for measurement or a decision.");
+        if (run.RefineIteration + run.Refinements.Count >= OptimizationRunStateMachine.MaxRefinements)
+            throw new InvalidOperationException($"This plan already used its {OptimizationRunStateMachine.MaxRefinements} refinements; decide Keep or Rollback.");
+        run.Refinements.Add(result);
+        run.UpdatedAtUtc = DateTimeOffset.UtcNow;
+        Save(run);
+        return run;
+    });
+
+    // Adjustments are applied in a new linked run so every run keeps exactly one operation journal.
+    public OptimizationRun CreateFollowUp(Guid parentId) => WithLock(() =>
+    {
+        var parent = LoadCore(parentId);
+        var refinement = parent.Refinements.LastOrDefault();
+        if (parent.State != OptimizationRunState.Completed || parent.Decision != OptimizationRunDecision.Keep || refinement is null ||
+            !refinement.Recommendations.Any(item => item.Kind == PlanRecommendationKind.ExecutableAction))
+            throw new InvalidOperationException("Keep the run with an AI refinement that proposes executable adjustments first.");
+        if (ListCore(strict: true).Any(existing => !OptimizationRunStateMachine.IsTerminal(existing.State)))
+            throw new InvalidOperationException("Finish or recover the active optimization run before creating another one.");
+        var run = new OptimizationRun
+        {
+            Goals = parent.Goals,
+            EvidenceFacts = parent.EvidenceFacts.Concat(refinement.Facts.Where(fact => !parent.EvidenceFacts.ContainsKey(fact.Key)))
+                .ToDictionary(fact => fact.Key, fact => fact.Value, StringComparer.Ordinal),
+            ParentRunId = parent.Id,
+            RefineIteration = parent.RefineIteration + parent.Refinements.Count,
+            Diagnosis = new DiagnosisResult
+            {
+                Summary = refinement.Summary,
+                Recommendations = refinement.Recommendations,
+                ConsentQuestion = "Apply the selected adjustments after a restore point?"
+            }
+        };
+        Move(run, OptimizationRunState.Scanned, "Follow-up of a refined run; evidence copied from the parent run");
+        Move(run, OptimizationRunState.Hypothesizing, "Refinement proposals from the parent run");
+        Move(run, OptimizationRunState.ProposalReady, "Refinement proposals passed local validation");
+        Move(run, OptimizationRunState.BaselinePending, "Measurements are optional context");
+        Save(run);
+        return run;
+    });
+
+    public OptimizationRun Keep(Guid id) => Advance(id, [OptimizationRunState.DecisionPending, OptimizationRunState.CandidatePending],
         OptimizationRunState.Completed, "User kept the measured candidate", run => run.Decision = OptimizationRunDecision.Keep);
 
     public OptimizationRun BeginRollback(Guid id) => WithLock(() =>
@@ -386,9 +449,13 @@ public sealed class OptimizationRunService
     }
 
     private OptimizationRun Advance(Guid id, OptimizationRunState expected, OptimizationRunState next,
+        string reason, Action<OptimizationRun>? update = null) => Advance(id, [expected], next, reason, update);
+
+    private OptimizationRun Advance(Guid id, OptimizationRunState[] expected, OptimizationRunState next,
         string reason, Action<OptimizationRun>? update = null) => WithLock(() =>
     {
-        var run = LoadExpected(id, expected);
+        var run = LoadCore(id);
+        if (!expected.Contains(run.State)) run = LoadExpected(id, expected[0]); // Reuses the existing state error.
         update?.Invoke(run);
         Move(run, next, reason);
         Save(run);
