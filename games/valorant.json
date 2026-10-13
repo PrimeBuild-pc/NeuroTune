@@ -1,0 +1,16 @@
+{
+  "id": "valorant",
+  "name": "VALORANT",
+  "aliases": ["VALORANT", "Valorant"],
+  "executables": ["VALORANT-Win64-Shipping.exe"],
+  "launchers": ["Riot Client"],
+  "antiCheat": "Riot Vanguard (kernel driver vgk, loaded at boot). On Windows 11 it requires TPM 2.0 and Secure Boot; never propose turning them off, and never disable the vgc/vgk services. Turning off VBS/Memory Integrity is compatible.",
+  "configFiles": [
+    { "path": "%LOCALAPPDATA%\\VALORANT\\Saved\\Config\\<account>\\Windows\\GameUserSettings.ini", "format": "ini", "notes": "Resolution and window mode; most in-game settings are stored on the Riot account." }
+  ],
+  "competitiveSettings": ["Fullscreen", "NVIDIA Reflex On + Boost", "Limit FPS off or well above refresh", "Material/texture quality low, anti-aliasing MSAA 2x or off"],
+  "cloudSync": "Most settings sync to the Riot account and override local edits.",
+  "benchmark": "The Range: same route and duration before and after.",
+  "typicalBound": "CPU-bound on most PCs; very high FPS makes DPC and core scheduling visible.",
+  "caveats": "Starting knowledge, not verified on this PC. Read the files with powershell-read before proposing changes."
+}

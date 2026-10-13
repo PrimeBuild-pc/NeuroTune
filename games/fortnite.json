@@ -1,0 +1,16 @@
+{
+  "id": "fortnite",
+  "name": "Fortnite",
+  "aliases": ["Fortnite"],
+  "executables": ["FortniteClient-Win64-Shipping.exe"],
+  "launchers": ["Epic Games Launcher"],
+  "antiCheat": "Easy Anti-Cheat and BattlEye. Do not inject, hook or overlay the game process; Windows, driver and per-exe settings are fine.",
+  "configFiles": [
+    { "path": "%LOCALAPPDATA%\\FortniteGame\\Saved\\Config\\WindowsClient\\GameUserSettings.ini", "format": "ini", "notes": "FrameRateLimit, bShowGrass, rendering mode (DirectX 11/12/Performance) and resolution live here; the file can be rewritten by the game while it runs." }
+  ],
+  "competitiveSettings": ["Performance rendering mode or DX12 with low settings on strong GPUs", "frame cap a few FPS below a G-Sync/FreeSync limit, or uncapped with Reflex On + Boost", "View distance medium or higher for visibility, shadows off", "Disable motion blur"],
+  "cloudSync": "Most settings sync to the Epic account; a local edit can be overwritten at the next login.",
+  "benchmark": "Replay mode: play the same replay segment with the same camera before and after.",
+  "typicalBound": "Usually CPU-bound at high refresh rates in Performance mode; GPU-bound in DX12 with high settings.",
+  "caveats": "Starting knowledge, not verified on this PC. Read the files with powershell-read before proposing writes."
+}
