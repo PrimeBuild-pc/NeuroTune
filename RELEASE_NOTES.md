@@ -55,6 +55,9 @@
 - At startup NeuroTune verifies the items of the last ten kept runs (read-only). When an update or driver install reset
   some of them, a banner offers **Review and reapply**: the reset items open as a linked run with the usual review,
   restore point, journal and rollback. Items that cannot be verified are not reported as reset.
+- Optional **Check at Windows sign-in** (Settings): a scheduled task for your account runs the same check one minute
+  after sign-in and opens NeuroTune only when something was reset. Turn it off before uninstalling; the uninstaller
+  does not remove it.
 
 # v2 F5 (part 1): high-impact domains
 
