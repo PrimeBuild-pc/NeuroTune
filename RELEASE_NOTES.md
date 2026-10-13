@@ -1,4 +1,17 @@
-# Unreleased — v2 F5: NVIDIA driver profiles
+# Unreleased — v2 F6: declared scripts (Expert mode)
+
+- New typed write `script.declared`: a PowerShell script written by the AI, its rollback script and the targets it
+  changes, declared as typed primitives. Before anything runs, a blocking check refuses downloads, `Invoke-Expression`,
+  nested shells, `Start-Process`, file deletion, accounts, Defender/firewall, `bcdedit`, task/service creation and
+  protected Registry paths.
+- Apply snapshots the targets, runs the script elevated, checks the declared values, tests the AI rollback (when no
+  restart is needed) and runs the script again. Rollback runs the AI rollback, then restores from NeuroTune's snapshot
+  any target it missed.
+- Registry writes outside the declared targets are traced (Kernel-Registry ETW) and shown in Activity as
+  "Rollback not guaranteed".
+- Shown only in Expert mode, with the full script and rollback text in the plan and a separate confirmation before Apply.
+
+# v2 F5: NVIDIA driver profiles
 
 - New typed write `nvidia.profile` through NVIDIA Profile Inspector from the command line: the exported profile plus the
   requested DWORD settings is imported, and rollback re-imports the exported profile exactly. Base Profile, or game

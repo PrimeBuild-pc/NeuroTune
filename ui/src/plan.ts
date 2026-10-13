@@ -36,8 +36,9 @@ export function analysisPresetsFor(priority: OptimizationPriority) {
 }
 
 // Typed AI proposals are validated by the agent but are not in the static catalog, so they are listed next to it.
-export function withParametricActions(actions: OptimizationAction[], recommendations: Recommendation[]): OptimizationAction[] {
-  const proposed = recommendations.filter(item => item.kind === 'executableAction' && item.actionKind && !actions.some(action => action.id === item.actionId));
+// Declared scripts (model-written PowerShell) are selectable only in Expert mode.
+export function withParametricActions(actions: OptimizationAction[], recommendations: Recommendation[], expert = false): OptimizationAction[] {
+  const proposed = recommendations.filter(item => item.kind === 'executableAction' && item.actionKind && (expert || item.actionKind !== 'script.declared') && !actions.some(action => action.id === item.actionId));
   return [...actions, ...proposed.filter((item, index) => proposed.findIndex(other => other.actionId === item.actionId) === index).map(item => ({
     id: item.actionId, name: item.actionSummary || item.title, description: item.actionKind!, category: 'AI proposal', risk: item.risk,
     requiresRestart: item.requiresRestart, availability: { canApply: true, alreadyApplied: false, status: 'Ready', currentValue: '' },

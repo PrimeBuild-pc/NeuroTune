@@ -289,6 +289,7 @@ public sealed class OperationManifest
     public Guid? OptimizationRunId { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
     public string Status { get; set; } = "Preparing";
+    public List<string> Notes { get; set; } = []; // Declared-script remarks: rollback test result, undeclared Registry writes.
     public string RestorePoint { get; set; } = "";
     public List<ActionRecord> Actions { get; set; } = [];
     public PerformanceSnapshot? Before { get; set; }

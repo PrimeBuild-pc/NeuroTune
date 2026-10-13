@@ -61,6 +61,9 @@ describe('dynamic plan helpers', () => {
     expect(listed.at(-1)).toMatchObject({ name: 'Set HKCU value X = 1', risk: 'medium', availability: { canApply: true } });
     expect(selectActionIdsForProfile(listed, [typed], 'balanced')).toEqual(['registry.set.abc']);
     expect(selectActionIdsForProfile(listed, [typed], 'safe')).toEqual([]);
+    const script = { ...typed, id: 'script', actionId: 'script.declared.abc', actionKind: 'script.declared', risk: 'high' as const };
+    expect(withParametricActions(actions, [script]).map(action => action.id)).not.toContain('script.declared.abc');
+    expect(withParametricActions(actions, [script], true).map(action => action.id)).toContain('script.declared.abc');
   });
 
   it('labels every item kind and creates inert text filenames', () => {

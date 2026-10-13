@@ -305,6 +305,7 @@ export interface OperationManifest {
   optimizationRunId?: string;
   createdAt: string;
   status: string;
+  notes?: string[];
   actions: ActionRecord[];
   before?: PerformanceSnapshot;
   after?: PerformanceSnapshot;
