@@ -1,4 +1,13 @@
-# Unreleased — v2 F7: Defender
+# Unreleased — v2 F5: NVIDIA driver profiles
+
+- New typed write `nvidia.profile` through NVIDIA Profile Inspector from the command line: the exported profile plus the
+  requested DWORD settings is imported, and rollback re-imports the exported profile exactly. Base Profile, or game
+  profiles that are already customized (an import needs their application list).
+- Advanced tools → NVIDIA Profile Inspector installs the pinned v3.0.2.1 release (SHA-256 checked). The prompt lists
+  verified setting IDs (power mode, low latency, V-Sync, frame limiter, threaded optimization, texture quality).
+- Tested with unit tests only: a real run needs an NVIDIA GPU.
+
+# v2 F7: Defender
 
 - Defender exclusions (`defender.exclusion`) stay until you roll them back, like any journaled change.
 - While Microsoft Defender real-time protection is off (and Defender is the active antivirus), a persistent banner
