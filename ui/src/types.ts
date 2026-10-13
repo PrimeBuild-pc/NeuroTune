@@ -216,7 +216,17 @@ export interface Diagnosis {
   findings: DiagnosisFinding[];
   recommendations: Recommendation[];
   conflicts: ConflictPattern[];
+  biosChecklist?: BiosChecklistItem[];
   consentQuestion: string;
+}
+
+export interface BiosChecklistItem {
+  setting: string;
+  value: string;
+  menuPath: string;
+  reason: string;
+  source: 'scewin' | 'manual' | 'general';
+  evidenceIds: string[];
 }
 
 export interface EvidencePayloadReport {

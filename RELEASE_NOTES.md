@@ -1,4 +1,13 @@
-# Unreleased — v2 F10: kept changes stay applied
+# Unreleased — v2 F8 (phase 1): BIOS checklist, no firmware writes
+
+- The diagnosis can return a **BIOS checklist** (setting, value, menu path, reason, source). Items cite a SCEWIN dump
+  or manual excerpt, or are shown as unverified general knowledge. Secure Boot/TPM, voltages and manual memory timings
+  are always dropped.
+- **Restart into BIOS setup** (`shutdown /r /fw`, after confirmation), **Download checklist** (self-contained HTML for
+  a phone) and **Check after restart** (DIMM configured speeds, memory profile, firmware virtualization, NVIDIA BAR;
+  C-states/ASPM/ErP/PBO are reported as not observable).
+
+# v2 F10: kept changes stay applied
 
 - At startup NeuroTune verifies the items of the last ten kept runs (read-only). When an update or driver install reset
   some of them, a banner offers **Review and reapply**: the reset items open as a linked run with the usual review,
