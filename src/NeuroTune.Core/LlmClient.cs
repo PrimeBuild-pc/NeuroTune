@@ -97,7 +97,7 @@ public sealed class LlmClient
 
         var supporting = SupportingAttachments.Normalize(attachments, imagesConfirmed);
         if (supporting.Count > 0) Console.Error.WriteLine($"Optional supporting evidence · {supporting.Count(item => item.Kind == "report")} report(s), {supporting.Count(item => item.Kind == "image")} screenshot(s). Unverified; sent to the selected main provider, not the auxiliary classifier.");
-        var evidenceFacts = SupportingAttachments.MergeEvidence(MergeEvidenceFacts(BuildEvidenceFacts(profile), measurementEvidence), supporting);
+        var evidenceFacts = SupportingAttachments.MergeEvidence(MergeEvidenceFacts(BuildEvidenceFacts(profile, goals), measurementEvidence), supporting);
         if (!MeasureEvidence(evidenceFacts).FitsSinglePass)
             throw new InvalidOperationException("The evidence bundle exceeds NeuroTune's local single-pass safety limit. Review the payload and use a smaller scan; unvalidated character slicing is not allowed.");
         var localConflicts = ConflictAnalyzer.Analyze(profile, goals);
@@ -126,6 +126,7 @@ public sealed class LlmClient
             action.Definition.Sources
         }));
         var provided = SelectInitialEvidence(evidenceFacts, localConflicts);
+        foreach (var fact in evidenceFacts.Where(fact => fact.Key.StartsWith("game-package:", StringComparison.Ordinal))) provided.TryAdd(fact.Key, fact.Value);
         var sample = evidenceFacts.Where(fact => ClassifyEvidence(fact.Key) == EvidencePrivacy.SystemConfiguration)
             .OrderBy(fact => fact.Key.StartsWith("measurement:", StringComparison.Ordinal) ? 0 : 1).Take(30)
             .ToDictionary(fact => fact.Key, fact => fact.Value[..Math.Min(180, fact.Value.Length)]);
@@ -912,7 +913,7 @@ public sealed class LlmClient
         recommendation.ScriptLanguage = "";
     }
 
-    public static IReadOnlyDictionary<string, string> BuildEvidenceFacts(SystemProfile profile)
+    public static IReadOnlyDictionary<string, string> BuildEvidenceFacts(SystemProfile profile, TuningGoals? goals = null)
     {
         ArgumentNullException.ThrowIfNull(profile);
         var facts = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -954,6 +955,7 @@ public sealed class LlmClient
         AddList("conflict-observation", profile.PolicyConflicts);
         foreach (var capability in profile.TelemetryCapabilities ?? [])
             facts[$"telemetry:{capability.Name}"] = $"{capability.Status}: {capability.Detail}";
+        foreach (var fact in GamePackages.Evidence(profile, goals)) facts[fact.Key] = fact.Value;
         foreach (var key in facts.Keys.ToList()) facts[key] = ProfileSanitizer.Redact(facts[key]);
         return facts;
 
