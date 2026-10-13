@@ -50,6 +50,15 @@ public sealed class PowerShellReaderTests
     public void Read_commands_are_allowed(string command) => Assert.IsNull(Check(command), command);
 
     [TestMethod]
+    public void Every_command_suggested_in_the_targets_preset_is_allowed()
+    {
+        var preset = LlmClient.Preset("targets");
+        var commands = System.Text.RegularExpressions.Regex.Matches(preset, @"`((?:Get-|gci )[^`]+)`").Select(match => match.Groups[1].Value).ToList();
+        Assert.IsGreaterThanOrEqualTo(3, commands.Count);
+        foreach (var command in commands) Assert.IsNull(Check(command), command);
+    }
+
+    [TestMethod]
     public void Only_powershell_read_accepts_a_command()
     {
         var turn = PlannerProtocol.Parse("""{"kind":"requestInvestigation","toolId":"powershell-read","question":"NIC","command":"Get-NetAdapter"}""");
