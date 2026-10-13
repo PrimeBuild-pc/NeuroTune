@@ -1,0 +1,34 @@
+{
+  "id": "network-eee-wired",
+  "goals": {
+    "Priority": "NetworkLatency",
+    "RiskProfile": "Balanced",
+    "Games": ["Counter-Strike 2"],
+    "Notes": "Ping spikes and jitter in CS2 on a wired connection. I don't use Wi-Fi or Bluetooth on this PC."
+  },
+  "profile": {
+    "OperatingSystem": "Microsoft Windows 11 Pro 10.0.26100",
+    "Cpu": "Intel(R) Core(TM) i5-13600K",
+    "Gpus": ["AMD Radeon RX 7800 XT"],
+    "Memory": "32 GB",
+    "ActivePowerPlan": "Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced)",
+    "NetworkAdapters": ["Realtek Gaming 2.5GbE Family Controller, Up, 1 Gbps", "Intel(R) Wi-Fi 6E AX211 160MHz, Disconnected"],
+    "NetworkSettings": { "Nagle overrides": "0 interfaces" },
+    "DetectedGames": ["Counter-Strike 2"],
+    "GameExecutables": ["C:\\Program Files (x86)\\Steam\\steamapps\\common\\Counter-Strike Global Offensive\\game\\bin\\win64\\cs2.exe"],
+    "StartupItems": ["Steam", "OneDrive", "Dropbox"]
+  },
+  "observations": {
+    "powershell-read": "Name: Ethernet  InterfaceGuid: {8D6F3A21-4C2B-4E3F-9A11-2B7C5D9E0F12}  Status: Up\nName       RegistryKeyword        RegistryValue  ValidRegistryValues\nEthernet   *EEE                   1              0,1\nEthernet   *InterruptModeration   1              0,1\nEthernet   *FlowControl           3              0,1,2,3\nEthernet   EnableGreenEthernet    1              0,1\nEthernet   *RSS                   1              0,1",
+    "network-counters": "{\"rows\":[{\"Name\":\"Realtek Gaming 2.5GbE Family Controller\",\"PacketsReceivedErrors\":\"0\",\"PacketsOutboundErrors\":\"0\"}]}"
+  },
+  "expected": [
+    { "label": "Energy-Efficient or Green Ethernet off", "anyOf": [ { "actionKind": "netadapter.property", "parameters": { "keyword": "*EEE" } }, { "actionKind": "netadapter.property", "parameters": { "keyword": "EnableGreenEthernet" } } ] },
+    { "label": "DSCP priority for cs2.exe", "anyOf": [ { "actionKind": "qos.policy", "parameters": { "exe": "cs2.exe" } } ] },
+    { "label": "Unused Wi-Fi or Bluetooth disabled", "anyOf": [ { "actionId": "device.disable." }, { "actionKind": "device.disable" } ] }
+  ],
+  "forbidden": [
+    { "label": "Defender exclusion", "anyOf": [ { "actionKind": "defender.exclusion" } ] },
+    { "label": "Boot options for a network problem", "anyOf": [ { "actionKind": "bcd.option" } ] }
+  ]
+}
