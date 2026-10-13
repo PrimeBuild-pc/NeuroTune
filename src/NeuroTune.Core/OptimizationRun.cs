@@ -348,29 +348,41 @@ public sealed class OptimizationRunService
         if (parent.State != OptimizationRunState.Completed || parent.Decision != OptimizationRunDecision.Keep || refinement is null ||
             !refinement.Recommendations.Any(item => item.Kind == PlanRecommendationKind.ExecutableAction))
             throw new InvalidOperationException("Keep the run with an AI refinement that proposes executable adjustments first.");
+        return CreateLinked(parent, refinement.Summary, refinement.Recommendations, refinement.Facts,
+            parent.RefineIteration + parent.Refinements.Count, "Refinement proposals from the parent run");
+    });
+
+    // F10: kept changes that Windows no longer reports (update, driver install) are offered again in a linked run.
+    public OptimizationRun CreateReapply(Guid parentId, List<PlanRecommendation> drifted, Dictionary<string, string> facts) => WithLock(() =>
+    {
+        var parent = LoadCore(parentId);
+        if (parent.State != OptimizationRunState.Completed || parent.Decision != OptimizationRunDecision.Keep || drifted.Count is 0 or > 100)
+            throw new InvalidOperationException("Only changes of a kept run can be reapplied.");
+        return CreateLinked(parent, "These kept changes are no longer active; an update or driver install may have reset them.", drifted, facts,
+            parent.RefineIteration, "Kept changes no longer verify");
+    });
+
+    private OptimizationRun CreateLinked(OptimizationRun parent, string summary, List<PlanRecommendation> recommendations,
+        Dictionary<string, string> facts, int iteration, string reason)
+    {
         if (ListCore(strict: true).Any(existing => !OptimizationRunStateMachine.IsTerminal(existing.State)))
             throw new InvalidOperationException("Finish or recover the active optimization run before creating another one.");
         var run = new OptimizationRun
         {
             Goals = parent.Goals,
-            EvidenceFacts = parent.EvidenceFacts.Concat(refinement.Facts.Where(fact => !parent.EvidenceFacts.ContainsKey(fact.Key)))
+            EvidenceFacts = parent.EvidenceFacts.Concat(facts.Where(fact => !parent.EvidenceFacts.ContainsKey(fact.Key)))
                 .ToDictionary(fact => fact.Key, fact => fact.Value, StringComparer.Ordinal),
             ParentRunId = parent.Id,
-            RefineIteration = parent.RefineIteration + parent.Refinements.Count,
-            Diagnosis = new DiagnosisResult
-            {
-                Summary = refinement.Summary,
-                Recommendations = refinement.Recommendations,
-                ConsentQuestion = "Apply the selected adjustments after a restore point?"
-            }
+            RefineIteration = iteration,
+            Diagnosis = new DiagnosisResult { Summary = summary, Recommendations = recommendations, ConsentQuestion = "Apply the selected changes after a restore point?" }
         };
-        Move(run, OptimizationRunState.Scanned, "Follow-up of a refined run; evidence copied from the parent run");
-        Move(run, OptimizationRunState.Hypothesizing, "Refinement proposals from the parent run");
-        Move(run, OptimizationRunState.ProposalReady, "Refinement proposals passed local validation");
+        Move(run, OptimizationRunState.Scanned, "Linked run; evidence copied from the parent run");
+        Move(run, OptimizationRunState.Hypothesizing, reason);
+        Move(run, OptimizationRunState.ProposalReady, "Proposals passed local validation");
         Move(run, OptimizationRunState.BaselinePending, "Measurements are optional context");
         Save(run);
         return run;
-    });
+    }
 
     public OptimizationRun Keep(Guid id) => Advance(id, [OptimizationRunState.DecisionPending, OptimizationRunState.CandidatePending],
         OptimizationRunState.Completed, "User kept the measured candidate", run => run.Decision = OptimizationRunDecision.Keep);

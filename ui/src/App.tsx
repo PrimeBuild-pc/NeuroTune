@@ -19,8 +19,7 @@ import { CaptureCountdown, FirmwarePanel, LatencyDetails, LiveProcessorTimes, Me
 import type {
   ChatGptAccountInfo, ConflictPattern, CustomPowerPlanFile, Diagnosis, OperationManifest, OptimizationAction, OptimizationRun, ProviderKind, ProviderSettings,
   GpuAffinityPolicySnapshot, GpuCandidateSet, MachineTopology, MeasurementComparison, MeasurementLabel, MeasurementSession, MeasurementWorkload,
-  InvestigationMode, RiskProfile, ScanResult, SupportingAttachment, ThemePreference, TuningGoals,
-} from './types';
+  InvestigationMode, RiskProfile, ScanResult, SupportingAttachment, ThemePreference, TuningGoals, KeptDrift } from './types';
 import { Navigation, SectionTabs, type NavigationItem, type Page } from './components/Navigation';
 import { JourneyBar } from './components/JourneyBar';
 import { LiveFps } from './components/LiveFps';
@@ -120,6 +119,7 @@ function App() {
   const activeScan = useRef<string | undefined>(undefined);
   const diagnosisRequest = useRef<string | undefined>(undefined);
   const cancellationPending = useRef(false);
+  const [drift, setDrift] = useState<KeptDrift[]>([]);
   const [notice, setNotice] = useState<{ tone: 'success' | 'danger' | 'info'; text: string; values?: Record<string, string | number>; raw?: boolean }>();
 
   const quietMotion = recording || diagnosisProgress?.stage === 'capture';
@@ -191,6 +191,8 @@ function App() {
         catch (error) { showError(error); }
       }
       hydrateRun(resumed);
+      // Kept changes can be reset by Windows or driver updates; checking reads only and never blocks startup.
+      if (!resumed) agent<KeptDrift[]>('persistence-check').then(setDrift).catch(() => setDrift([]));
       setInitializing(false); // Model discovery is optional network work, not an excuse to block the local interface.
       // Model discovery remains an explicit provider action; opening the UI must not contact a provider.
     }).catch(showError).finally(() => setInitializing(false));
@@ -530,6 +532,11 @@ function App() {
     }
   }
 
+  async function reapplyDrift() {
+    const created = await run('Preparing the changes to reapply…', () => agent<OptimizationRun>('run-reapply'));
+    if (created) { setDrift([]); hydrateRun(created); }
+  }
+
   async function rollback(operationId: string, actionId?: string) {
     if (!window.confirm(t(actionId ? 'Restore only this change? The rest of the operation stays applied.' : "Create another restore point and restore this operation?"))) return;
     const runId = history.find(item => item.id === operationId)?.optimizationRunId;
@@ -570,6 +577,7 @@ function App() {
           </div>
         </header>
 
+        {drift.length > 0 && !runPending && <div className="notice info" role="status"><span>{t('{count} kept changes are no longer active. A Windows or driver update may have reset them.', { count: drift.length })}</span><button className="secondary" disabled={Boolean(busy)} onClick={() => void reapplyDrift()}>{t('Review and reapply')}</button><button aria-label={t("Dismiss message")} onClick={() => setDrift([])}>×</button></div>}
         {notice && <div className={`notice ${notice.tone}`} role="status"><span>{notice.raw ? notice.text : t(notice.text, notice.values)}</span><button aria-label={t("Dismiss message")} onClick={() => setNotice(undefined)}>×</button></div>}
         {busy && <div className="busy-bar" role="status"><LoaderCircle size={16} className="spin"/><span>{t(busy, busyValues)}</span>{scanRequestId && <button className="ghost" onClick={cancelScan}><X size={14}/>{t("Cancel scan")}</button>}</div>}
         {journalError && <div className="notice danger" role="alert"><div><strong>{t('Review recovery')}</strong><p>{journalError}</p></div><button className="secondary" disabled={Boolean(recording || busy || securityBusy || diagnosisProgress)} onClick={() => void refreshJournals()}>{t('Refresh')}</button></div>}
