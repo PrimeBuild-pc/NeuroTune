@@ -101,7 +101,7 @@ public sealed class ResponseLanguageTests
                     Assert.Contains("not reader requests or shell execution", prompt);
                     Assert.Contains("status is reviewed | partial | unavailable | notChecked", prompt);
                 }
-                else Assert.Contains("workload Baseline, explicit approval, verified backups and Candidate comparison remain mandatory", prompt);
+                else Assert.Contains("explicit approval and verified backups are mandatory for executable changes", prompt);
                 return provided.ContainsKey(nativeId) ? JsonSerializer.Serialize(new
                 {
                     kind = "diagnosis",
