@@ -69,7 +69,7 @@ internal static class PowerShellReader
 
     internal sealed record Argument(bool Static, string Value, string Type, bool Parameter);
     internal sealed record Command(string? Name, string Operator, List<Argument> Arguments);
-    internal sealed record Shape(int Errors, List<Command> Commands, List<string> NodeTypes);
+    internal sealed record Shape(int Errors, List<Command> Commands, List<string> NodeTypes, List<string>? Members = null);
 
     private const string ParseScript = """
         $ErrorActionPreference = 'Stop'; $t = $null; $e = $null
@@ -83,7 +83,8 @@ internal static class PowerShellReader
                     [ordered]@{ static = $true; value = [string]$_.Value; type = $_.GetType().Name; parameter = $false }
                 } else { [ordered]@{ static = $false; value = $_.Extent.Text; type = $_.GetType().Name; parameter = $false } } }) } })
         $types = @($all | ForEach-Object { $_.GetType().Name } | Sort-Object -Unique)
-        [Console]::Write((ConvertTo-Json -Compress -Depth 6 -InputObject ([ordered]@{ errors = @($e).Count; commands = $commands; nodeTypes = $types })))
+        $members = @($all | Where-Object { $_ -is [System.Management.Automation.Language.InvokeMemberExpressionAst] } | ForEach-Object { $_.Extent.Text })
+        [Console]::Write((ConvertTo-Json -Compress -Depth 6 -InputObject ([ordered]@{ errors = @($e).Count; commands = $commands; nodeTypes = $types; members = $members })))
         """;
 
     private const string RunScript =
@@ -110,9 +111,10 @@ internal static class PowerShellReader
     }
 
     // Parsing never executes the command, so it runs in the agent's own process context.
-    internal static async Task<Shape> ParseAsync(string command, CancellationToken cancellationToken)
+    internal static async Task<Shape> ParseAsync(string command, CancellationToken cancellationToken, int maximumLength = 2000)
     {
-        ValidateText(command);
+        if (maximumLength == 2000) ValidateText(command);
+        else if (string.IsNullOrWhiteSpace(command) || command.Length > maximumLength || command.Contains('\0')) throw new ArgumentException("The script is empty or too long.");
         return JsonSerializer.Deserialize<Shape>(await RunPowerShellAsync(ParseScript, command, admin: true, cancellationToken),
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? throw new InvalidOperationException("The parser returned nothing.");
     }

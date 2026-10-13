@@ -120,7 +120,7 @@ public sealed class BackupService
     {
         if (manifest.SchemaVersion is not (3 or 4) || manifest.Id == Guid.Empty || manifest.OptimizationRunId == Guid.Empty ||
             manifest.Actions is null || manifest.Actions.Count > 100 || manifest.SystemOneAdvisories is null ||
-            manifest.SystemOneAdvisories.Count > 100 || manifest.RestorePoint is null || manifest.RestorePoint.Length > 300 ||
+            manifest.SystemOneAdvisories.Count > 100 || manifest.Notes is null || manifest.Notes.Count > 100 || manifest.Notes.Any(note => note is null || note.Length > 8_000) || manifest.RestorePoint is null || manifest.RestorePoint.Length > 300 ||
             manifest.Status is not ("Preparing" or "Backup completed" or "Applying" or "Completed" or "Error — automatic rollback" or
                 "Error — rollback incomplete" or "Error — rollback completed" or "Rolling back" or "Rollback incomplete" or "Rollback completed" or "Partially rolled back") ||
             manifest.Error?.Length > 16_384 || manifest.Actions.Any(record => record is null) ||
