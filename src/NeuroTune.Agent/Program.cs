@@ -53,6 +53,8 @@ try
         "run-refine" => await RefineRun(Read<RunRefineRequest>(input), settingsService, catalog, backup),
         "bios-verify" => FirmwareInspection.VerifyAfterRestart(),
         "defender-guard" => DefenderGuard.Status(),
+        "nvpi-status" => NvidiaProfileInspector.Status(),
+        "nvpi-install" => await NvidiaProfileInspector.InstallAsync(),
         "defender-open-settings" => DefenderGuard.OpenSettings(),
         "reboot-firmware" => FirmwareInspection.RestartIntoSetup(),
         "run-follow-up" => new OptimizationRunService().CreateFollowUp(Read<RunIdRequest>(input).RunId),
