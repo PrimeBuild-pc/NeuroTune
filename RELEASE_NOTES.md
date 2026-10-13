@@ -1,4 +1,9 @@
-# Unreleased — v2 F4 (part 1): measurements as context, single-item rollback
+# Unreleased — v2 F4: closed loop without the Baseline gate
+
+- **Refine (up to 3 rounds)**: after Apply, the selected AI reviews what was applied plus any before/after metrics and
+  suggests single items to restore (one button each) and adjustments. Restore suggestions only name applied records;
+  adjustments pass the diagnosis validation and open as a linked follow-up run after Keep, so each run keeps one
+  operation journal.
 
 - **No Baseline gate**: Apply is available as soon as the diagnosis is validated; Baselines and comparisons are optional
   context. Keep works right after Apply (or after a restart), with or without a comparison; any valid comparison
