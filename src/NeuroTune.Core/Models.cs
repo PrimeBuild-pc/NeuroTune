@@ -5,7 +5,7 @@ namespace NeuroTune;
 public enum LlmProvider { OpenRouter, OpenAI, Anthropic, DeepSeek, Custom, Local, ChatGpt }
 public enum ApiProtocol { OpenAiCompatible, Anthropic }
 public enum RiskLevel { Low, Medium, High }
-public enum OptimizationPriority { Balanced, Fps, SystemLatency, NetworkLatency, Efficiency, Stability, PrivacySecurity, CompromiseReview, HardwareLayout }
+public enum OptimizationPriority { Balanced, Fps, SystemLatency, NetworkLatency, Efficiency, Stability, PrivacySecurity, CompromiseReview, HardwareLayout, Streaming }
 public enum InvestigationMode { MeasuredOptimization, AuditOnly }
 public enum ConflictKind { Confirmed, Conditional, SuspiciousOverride, MissingEvidence }
 public enum EvidencePrivacy { General, SystemConfiguration, SoftwareInventory }

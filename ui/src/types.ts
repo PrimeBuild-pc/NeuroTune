@@ -114,6 +114,9 @@ export interface Recommendation {
   kind: PlanRecommendationKind;
   title: string;
   actionId: string;
+  actionKind?: string;
+  parameters?: unknown;
+  actionSummary?: string;
   resourceId: string;
   updateId: string;
   evidenceIds: string[];
@@ -129,10 +132,10 @@ export interface Recommendation {
   scriptLanguage: string;
   script: string;
   reviewWarnings: string[];
-  executionIssue?: '' | 'missingActionId' | 'unknownActionId';
+  executionIssue?: '' | 'missingActionId' | 'unknownActionId' | 'invalidParameters';
 }
 
-export type OptimizationPriority = 'balanced' | 'fps' | 'systemLatency' | 'networkLatency' | 'efficiency' | 'stability' | 'privacySecurity' | 'compromiseReview' | 'hardwareLayout';
+export type OptimizationPriority = 'balanced' | 'fps' | 'systemLatency' | 'networkLatency' | 'efficiency' | 'stability' | 'privacySecurity' | 'compromiseReview' | 'hardwareLayout' | 'streaming';
 export type InvestigationMode = 'measuredOptimization' | 'auditOnly';
 
 export interface TuningGoals {

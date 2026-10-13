@@ -106,14 +106,14 @@ describe('complete diagnosis lifecycle', () => {
       expect(calls).not.toContain('run-approve'); expect(calls).not.toContain('apply');
     }
   });
-  it('offers five prompt specializations and preserves a restored legacy selection without silently converting it', () => {
+  it('offers the prompt presets, including competitive FPS and streaming, and preserves a restored legacy selection without silently converting it', () => {
     const render = (priority: TuningGoals['priority']) => renderToStaticMarkup(<CompleteDiagnosis goals={{ ...goals, priority }} onGoals={() => {}} onStart={() => {}} onCancel={() => {}} blocked={false}/>);
     for (const priority of ['balanced', 'systemLatency', 'networkLatency', 'stability'] as const) {
       const html = render(priority);
       expect(html).toContain('Overall performance'); expect(html).toContain('System latency'); expect(html).toContain('Network optimization'); expect(html).toContain('System stability');
-      expect(html).toContain('Windows privacy &amp; security');
+      expect(html).toContain('Windows privacy &amp; security'); expect(html).toContain('value="fps"'); expect(html).toContain('value="streaming"');
       expect(html).toContain(`value="${priority}" selected=""`); expect(html).toContain('Ports &amp; PCIe lanes'); expect(html).not.toContain('What the AI receives');
-      expect(html).not.toContain('value="fps"'); expect(html).not.toContain('value="efficiency"');
+      expect(html).not.toContain('value="efficiency"');
     }
     expect(render('fps')).toContain('value="fps" selected=""'); expect(render('efficiency')).toContain('value="efficiency" selected=""');
     const ports = render('hardwareLayout');

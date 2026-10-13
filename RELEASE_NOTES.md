@@ -1,11 +1,21 @@
-# Unreleased — v2 F1: parametric write primitives
+# Unreleased — v2 F3: presets as prompts, typed proposals from the diagnosis
+
+- **Presets are prompts** (`presets/*.md`, embedded in the app): each objective has a checklist per domain, signals to
+  look for and the output format, replacing the fixed focus text in `LlmClient`. New objectives **Competitive FPS**
+  (no longer legacy) and **Streaming & recording**; the one-click scenarios use them.
+- **The diagnosis proposes typed writes**: an `executableAction` can carry `actionKind` + `parameters` of any F1
+  primitive. NeuroTune validates them (type, parameters, protected targets, availability), derives the action ID and
+  risk itself and shows the exact write; refused proposals stay manual guidance with the reason. Selected proposals
+  are sent to `apply` as `Parametric`.
+
+# v2 F1: parametric write primitives
 
 - **Typed write primitives with free parameters** (`plans/agentic-tuner-v2.md`, F1): `registry.set`,
   `registry.delete`, `service.start-type`, `netadapter.property`, `qos.policy`, `powercfg.setting`, `bcd.option`,
   `startup.entry`, `scheduled-task.state`, `appcompat.layer`, `ifeo.perf`, `file.json`, `file.ini`,
   `device.disable` and `defender.exclusion`. Each captures the exact prior state and restores it, including deleting
   values and keys that did not exist before. The agent `apply` request accepts them as `Parametric: [{ Kind,
-  Parameters }]`; the diagnosis does not propose them yet (F3).
+  Parameters }]`.
 - **Journal schema v4** stores each record's kind and parameters; v3 journals remain readable.
 - Protected targets (credentials, code integrity, raw autostart keys, boot-critical services, Defender except
   exclusions) are refused per kind; see `SECURITY.md`. VBS/Memory Integrity, startup apps and ordinary or automatic
