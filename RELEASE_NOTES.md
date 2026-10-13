@@ -1,4 +1,10 @@
-# Unreleased — v2 F5 (part 1): high-impact domains
+# Unreleased — v2 F10: kept changes stay applied
+
+- At startup NeuroTune verifies the items of the last ten kept runs (read-only). When an update or driver install reset
+  some of them, a banner offers **Review and reapply**: the reset items open as a linked run with the usual review,
+  restore point, journal and rollback. Items that cannot be verified are not reported as reset.
+
+# v2 F5 (part 1): high-impact domains
 
 - **MSI mode and interrupt affinity** through `registry.set`, limited under `Enum` to a present PCI device's MSI and
   Affinity Policy values (restart required, High risk).

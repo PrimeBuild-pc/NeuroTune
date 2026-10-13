@@ -356,6 +356,53 @@ public sealed class OptimizationRunTests
         finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); }
     }
 
+    [TestMethod]
+    public void Kept_changes_reset_outside_NeuroTune_are_found_and_offered_in_a_linked_run()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"neurotune-run-{Guid.NewGuid():N}");
+        var key = $@"Software\NeuroTuneTest-{Guid.NewGuid():N}";
+        try
+        {
+            var runs = new OptimizationRunService(Path.Combine(directory, "runs"));
+            var backup = new BackupService(Path.Combine(directory, "operations"));
+            var action = ParametricActions.Create("registry.set", System.Text.Json.JsonSerializer.Serialize(new { Hive = "HKCU", Path = key, Name = "V", Type = "DWord", Value = "1" }));
+            var run = runs.Create(Profile(), new TuningGoals());
+            runs.BeginDiagnosis(run.Id);
+            runs.RecordDiagnosis(run.Id, Outcome());
+            var catalog = new OptimizationCatalog();
+            catalog.AddParametric(action.Kind!, action.Parameters!);
+            runs.Approve(run.Id, [action.Id], true, catalog);
+            var manifest = new OperationManifest
+            {
+                OptimizationRunId = run.Id,
+                Status = "Completed",
+                Actions = [new() { ActionId = action.Id, Kind = action.Kind, Parameters = action.Parameters, OriginalState = action.Capture(), Attempted = true, Applied = true }]
+            };
+            manifest.DirectoryPath = Path.Combine(directory, "operations", $"{manifest.CreatedAt:yyyyMMdd-HHmmss}-{manifest.Id:N}");
+            backup.Save(manifest);
+            runs.BeginApply(run.Id, manifest.Id);
+            runs.RecordApplyCompleted(run.Id, false);
+            runs.Keep(run.Id);
+
+            // The value is absent, as after an update that reset it.
+            Assert.AreEqual(action.Id, KeptChanges.Drift(new OptimizationCatalog(), backup, runs).Single().ActionId);
+            var reapply = KeptChanges.Reapply(new OptimizationCatalog(), backup, runs);
+            Assert.AreEqual(OptimizationRunState.BaselinePending, reapply.State);
+            Assert.AreEqual(run.Id, reapply.ParentRunId);
+            var proposal = reapply.Diagnosis!.Recommendations.Single();
+            Assert.AreEqual((action.Id, "registry.set"), (proposal.ActionId, proposal.ActionKind));
+            runs.Dismiss(reapply.Id);
+
+            action.Apply();
+            Assert.IsEmpty(KeptChanges.Drift(new OptimizationCatalog(), backup, runs));
+        }
+        finally
+        {
+            Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(key, false);
+            if (Directory.Exists(directory)) Directory.Delete(directory, true);
+        }
+    }
+
     private static PlannerDiagnosisOutcome Outcome() => new(Diagnosis(), [], "diagnosis-completed", false);
 
     private static MeasurementSession Session(Guid runId, MeasurementLabel label) => new()
