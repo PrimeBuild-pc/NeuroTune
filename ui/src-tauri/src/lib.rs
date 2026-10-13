@@ -64,6 +64,18 @@ const COMMANDS: &[&str] = &[
     "measurement-delete",
     "power-plan-list",
     "power-plan-stage",
+    "run-refine",
+    "run-follow-up",
+    "run-reapply",
+    "persistence-check",
+    "bios-verify",
+    "reboot-firmware",
+    "defender-guard",
+    "defender-open-settings",
+    "nvpi-status",
+    "nvpi-install",
+    "tavily-status",
+    "tavily-save",
 ];
 
 #[derive(Default)]
@@ -139,7 +151,10 @@ fn windows_tool(name: &str) -> Result<PathBuf, String> {
     extern "system" {
         fn GetSystemDirectoryW(buffer: *mut u16, size: u32) -> u32;
     }
-    if !matches!(name, "taskkill.exe" | "tasklist.exe" | "powershell.exe") {
+    if !matches!(
+        name,
+        "taskkill.exe" | "tasklist.exe" | "powershell.exe" | "schtasks.exe"
+    ) {
         return Err("Unsupported Windows tool".into());
     }
     let mut buffer = [0u16; 260];
@@ -153,6 +168,54 @@ fn windows_tool(name: &str) -> Result<PathBuf, String> {
     } else {
         name
     }))
+}
+
+const LOGON_TASK: &str = "NeuroTune kept changes check";
+const LOGON_FLAG: &str = "--logon-check";
+
+// F10: an optional task opens NeuroTune at sign-in only when a kept change no longer verifies.
+#[tauri::command]
+async fn logon_task(enabled: Option<bool>) -> Result<bool, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let schtasks = windows_tool("schtasks.exe")?;
+        let run = |args: &[&str]| {
+            Command::new(&schtasks)
+                .args(args)
+                .creation_flags(0x08000000)
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .map(|status| status.success())
+                .map_err(|error| format!("Could not run schtasks: {error}"))
+        };
+        let exists = run(&["/Query", "/TN", LOGON_TASK])?;
+        match enabled {
+            Some(true) if !exists => {
+                let executable = std::env::current_exe().map_err(|error| error.to_string())?;
+                let action = format!("\"{}\" {LOGON_FLAG}", executable.display());
+                // The app requires elevation; HIGHEST runs it at sign-in without a UAC prompt.
+                if !run(&[
+                    "/Create", "/TN", LOGON_TASK, "/TR", &action, "/SC", "ONLOGON", "/DELAY",
+                    "0001:00", "/RL", "HIGHEST", "/F",
+                ])? {
+                    return Err("Windows refused to create the sign-in task".into());
+                }
+            }
+            Some(false) if exists => {
+                if !run(&["/Delete", "/TN", LOGON_TASK, "/F"])? {
+                    return Err("Windows refused to delete the sign-in task".into());
+                }
+            }
+            _ => return Ok(exists),
+        }
+        run(&["/Query", "/TN", LOGON_TASK])
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+fn has_drift(response: &Result<Value, String>) -> bool {
+    matches!(response, Ok(Value::Array(items)) if !items.is_empty())
 }
 
 fn track_agent(
@@ -321,9 +384,10 @@ fn validate_request(request_id: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        cancel_request, is_cancellable, track_agent, validate_request, windows_tool, ActiveAgent,
-        AgentState, COMMANDS,
+        cancel_request, has_drift, is_cancellable, track_agent, validate_request, windows_tool,
+        ActiveAgent, AgentState, COMMANDS,
     };
+    use serde_json::json;
     #[cfg(target_os = "windows")]
     use std::os::windows::process::CommandExt;
     use std::{
@@ -345,6 +409,29 @@ mod tests {
         assert!(!is_cancellable("defender-scan")); // Killing the client is not reliable antivirus cancellation.
         assert!(!COMMANDS.contains(&"measurement-watchdog"));
         assert!(!COMMANDS.iter().any(|command| command.contains("script")));
+    }
+
+    #[test]
+    fn logon_check_opens_only_on_drift() {
+        assert!(has_drift(&Ok(json!([{ "actionId": "registry.set.abc" }]))));
+        assert!(!has_drift(&Ok(json!([]))));
+        assert!(!has_drift(&Err("agent failed".into())));
+    }
+
+    #[test]
+    fn every_agent_command_is_reachable_from_the_ui() {
+        // A command added to the agent but not here fails in the packaged app only, never in the browser mock.
+        let program = include_str!("../../../src/NeuroTune.Agent/Program.cs");
+        for line in program.lines().map(str::trim) {
+            let Some(name) = line
+                .strip_prefix('"')
+                .and_then(|rest| rest.split_once("\" =>"))
+                .map(|(name, _)| name)
+            else {
+                continue;
+            };
+            assert!(COMMANDS.contains(&name), "{name} is missing from COMMANDS");
+        }
     }
 
     #[test]
@@ -494,10 +581,21 @@ pub fn run() {
                         .build(),
                 )?;
             }
+            // The window stays hidden until the page loads, so a clean check exits without showing it.
+            if std::env::args().any(|arg| arg == LOGON_FLAG)
+                && !has_drift(&run_agent(
+                    app.handle(),
+                    "logon-check",
+                    "persistence-check",
+                    None,
+                ))
+            {
+                std::process::exit(0);
+            }
             Ok(())
         })
         .manage(AgentState::default())
-        .invoke_handler(tauri::generate_handler![agent, cancel_agent])
+        .invoke_handler(tauri::generate_handler![agent, cancel_agent, logon_task])
         .build(tauri::generate_context!())
         .expect("error while building NeuroTune")
         .run(|app, event| {
