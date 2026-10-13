@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
 import { t, useLanguage, getLanguage, setLanguage, languages, formatDate, type Language } from './i18n';
 import { SystemOnePanel, SystemOneNotes } from './SystemOnePanel';
+import { NvidiaToolPanel } from './components/NvidiaToolPanel';
 import { CompleteDiagnosis, InvestigationModeControl } from './CompleteDiagnosis';
 import { WindowsSecurityPanel } from './WindowsSecurityPanel';
 import { DiagnosisFlow, type DiagnosisProgress } from './diagnosisFlow';
@@ -1006,9 +1007,11 @@ function AdvancedToolsPage({ telemetryConsent, onTelemetryConsent, firmwareConse
       <button aria-pressed={section === 'assistant'} onClick={() => setSection('assistant')}>{t('System One assistant')}</button>
       <button aria-pressed={section === 'power'} onClick={() => setSection('power')}>{t('Custom power plans')}</button>
       <button aria-pressed={section === 'telemetry'} onClick={() => setSection('telemetry')}>{t('Optional low-level telemetry')}</button>
+      <button aria-pressed={section === 'nvidia'} onClick={() => setSection('nvidia')}>{t('NVIDIA Profile Inspector')}</button>
     </div>
     <div hidden={section !== 'firmware'}><FirmwarePanel readConsent={firmwareConsent} onReadConsent={onFirmwareConsent}/></div>
     <div hidden={section !== 'assistant'}><SystemOnePanel/></div>
+    {section === 'nvidia' && <NvidiaToolPanel/>}
     <section className="section-card" hidden={section !== 'power'}>
       <div className="section-heading"><h2>{t('Stage a .pow file')}</h2><HardDrive size={22}/></div>
       <p className="muted-copy">{t('Files are copied into NeuroTune with their SHA-256. Their contents remain opaque, so activation is a high-risk action requiring a Baseline, separate confirmation, and rollback journal.')}</p>

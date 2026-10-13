@@ -20,7 +20,7 @@ internal static class ParametricActions
     [
         "registry.set", "registry.delete", "service.start-type", "netadapter.property", "qos.policy", "powercfg.setting",
         "bcd.option", "startup.entry", "scheduled-task.state", "appcompat.layer", "ifeo.perf", "file.json", "file.ini",
-        "device.disable", "defender.exclusion"
+        "device.disable", "defender.exclusion", "nvidia.profile"
     ];
 
     private static readonly JsonSerializerOptions Strict = new()
@@ -51,6 +51,7 @@ internal static class ParametricActions
                 "file.ini" => IniFile(Read<IniFileParameters>(parameters)),
                 "device.disable" => DeviceDisable(Read<DeviceParameters>(parameters)),
                 "defender.exclusion" => DefenderExclusion(Read<DefenderParameters>(parameters)),
+                "nvidia.profile" => NvidiaProfile(Read<NvidiaProfileParameters>(parameters)),
                 _ => throw new InvalidOperationException($"Unknown action kind: {kind}.")
             };
         }
@@ -74,7 +75,8 @@ internal static class ParametricActions
         file.json {"path":"full path of an existing .json under the user profile or the Steam folder","key":"dotted.property.path","value":any JSON value}
         file.ini {"path":"full path of an existing .ini under the user profile or the Steam folder","section":"...","key":"...","value":"..."}
         device.disable {"slug":"slug of a device.disable.<slug> capability"}
-        defender.exclusion {"type":"Path|Process","value":"narrow folder/file path or process name"} only when Defender blocks a tool the user needs
+        defender.exclusion {"type":"Path|Process","value":"narrow folder/file path or process name"} only when Defender blocks a tool the user needs; it stays until rollback
+        nvidia.profile {"profile":"Base Profile (global) or an already customized game profile name","settings":[{"id":decimal DRS setting ID,"value":decimal DWORD}]} through NVIDIA Profile Inspector; decimal IDs: Power Management - Mode 274197361 (0 Adaptive, 1 Prefer maximum performance, 5 Optimal); Ultra Low Latency - CPL State 390467 (0 Off, 1 On, 2 Ultra) together with Ultra Low Latency - Enabled 277041152 (0/1); Vertical Sync 11041231 (138504007 Force off, 1199655232 Force on, 1620202130 application setting); Frame Rate Limiter V3 277041154 (0 off, or the FPS cap); Threaded Optimization 549528094 (0 Auto, 1 On, 2 Off); Texture Filtering - Quality 13510289 (20 High performance, 10 Performance, 0 Quality)
         """;
 
     private static T Read<T>(string json) => JsonSerializer.Deserialize<T>(json, Strict) ?? throw new JsonException("The parameters were empty.");
@@ -621,6 +623,50 @@ internal static class ParametricActions
             () => JsonSerializer.Serialize(Enabled()), () => Set(enabled), state => Set(ReadState(state)),
             () => Enabled() == enabled, state => _ = ReadState(state));
     }
+
+    internal sealed record NvidiaSetting(uint Id, uint Value);
+    internal sealed record NvidiaProfileParameters(string Profile, NvidiaSetting[] Settings);
+
+    private static OptimizationAction NvidiaProfile(NvidiaProfileParameters parameters)
+    {
+        var profile = parameters.Profile?.Trim() ?? "";
+        if (profile.Length is 0 or > 200 || profile.Any(char.IsControl)) throw new InvalidOperationException("The NVIDIA profile name is invalid.");
+        var settings = (parameters.Settings ?? []).OrderBy(item => item?.Id).ToArray();
+        if (settings.Length is 0 or > 50 || settings.Any(item => item is null) || settings.DistinctBy(item => item.Id).Count() != settings.Length)
+            throw new InvalidOperationException("Settings must list 1-50 distinct DWORD settings.");
+        parameters = new(profile, settings);
+        var wanted = settings.ToDictionary(item => item.Id, item => item.Value);
+        XElementState Current() => new(NvidiaProfileInspector.FindProfile(NvidiaProfileInspector.ExportCustomized(), profile));
+        bool Matches(System.Xml.Linq.XElement? node) => NvidiaProfileInspector.Settings(node) is var current && wanted.All(item => current.TryGetValue(item.Key, out var value) && value == item.Value);
+        static string? ReadState(string state) => JsonSerializer.Deserialize<Dictionary<string, string?>>(state) is { Count: 1 } values && values.TryGetValue("Profile", out var xml)
+            ? xml : throw new InvalidOperationException("The NVIDIA profile snapshot is invalid.");
+        void Restore(string state) => NvidiaProfileInspector.Import(ReadState(state) is { } xml
+            ? new System.Xml.Linq.XDocument(new System.Xml.Linq.XElement("ArrayOfProfile", System.Xml.Linq.XElement.Parse(xml))).ToString()
+            : NvidiaProfileInspector.BuildImport(null, profile, new Dictionary<uint, uint>())); // The profile had no customization: a reset restores it.
+        return Build("nvidia.profile", parameters, $"NVIDIA profile {Short(profile)}: {string.Join(", ", settings.Select(item => $"0x{item.Id:X8}={item.Value}"))}",
+            "GPU", RiskLevel.Medium, false, $"nvidia:{profile}", "Changes the NVIDIA driver profile; games read it at the next launch",
+            () =>
+            {
+                if (NvidiaProfileInspector.Unavailable() is { } reason) return ActionAvailability.Unavailable(reason);
+                var node = Current().Node;
+                if (node is null && profile != NvidiaProfileInspector.BaseProfile)
+                    return ActionAvailability.Unavailable("Customize this game profile once in the NVIDIA Control Panel or Profile Inspector: an import needs its application list");
+                return Matches(node) ? ActionAvailability.Applied("Already set") : ActionAvailability.Ready("Different");
+            },
+            () => JsonSerializer.Serialize(new Dictionary<string, string?> { ["Profile"] = Current().Node?.ToString() }),
+            () =>
+            {
+                var node = Current().Node;
+                if (node is null && profile != NvidiaProfileInspector.BaseProfile) throw new InvalidOperationException("The game profile is not customized; its application list is unknown.");
+                NvidiaProfileInspector.Import(NvidiaProfileInspector.BuildImport(node, profile, wanted));
+            },
+            Restore, () => Matches(Current().Node), state => _ = ReadState(state),
+            state => ReadState(state) is { } xml
+                ? NvidiaProfileInspector.Settings(System.Xml.Linq.XElement.Parse(xml)).OrderBy(item => item.Key).SequenceEqual(NvidiaProfileInspector.Settings(Current().Node).OrderBy(item => item.Key))
+                : NvidiaProfileInspector.Settings(Current().Node).Count == 0);
+    }
+
+    private sealed record XElementState(System.Xml.Linq.XElement? Node);
 
     internal sealed record DefenderParameters(string Type, string Value);
 
