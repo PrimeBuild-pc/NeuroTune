@@ -13,7 +13,7 @@ import {
   Monitor, MonitorCog, Moon, Palette, RefreshCw, RotateCcw, ScanLine, Settings,
   ShieldCheck, Sun, Target, TerminalSquare, Timer, X,
 } from 'lucide-react';
-import { agent, cancelAgent, newRequestId } from './agent';
+import { agent, cancelAgent, logonTask, newRequestId } from './agent';
 import { analysisPresetsFor, planKindLabel, preparatoryBaselines, selectActionIdsForProfile, withParametricActions } from './plan';
 import { applyTheme, loadThemePreference, useResolvedTheme } from './theme';
 import { CaptureCountdown, FirmwarePanel, LatencyDetails, LiveProcessorTimes, MeasurementFeedback } from './LatencyDetails';
@@ -1036,7 +1036,16 @@ function SettingsPage({ theme, onTheme, onSetup, setupBlocked }: { theme: ThemeP
     <section className="section-card language-settings"><h2>{t('Guided setup')}</h2><p>{t('Review what NeuroTune can do and choose optional local reads. Drivers, model downloads, AI transmission and changes require their own consent.')}</p><button className="secondary" disabled={setupBlocked} onClick={onSetup}>{t('Open guided setup')}</button></section>
     <section className="section-card language-settings"><div className="section-heading"><h2>{t('Language')}</h2></div><p className="muted-copy">{t('Choose the interface and AI response language. Changes are immediate and saved locally; provider settings and consent are unchanged.')}</p><div className="form-grid"><label className="wide"><span>{t('Application language')}</span><select value={getLanguage()} onChange={event => setLanguage(event.target.value as Language)}>{languages.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label></div></section>
     <section className="section-card appearance-settings"><div className="section-heading"><h2>{t('Theme')}</h2><Palette size={22}/></div><p className="muted-copy">{t('Follow the Windows appearance automatically, or keep a manual override.')}</p><div className="theme-options"><ThemeOption active={theme === 'system'} icon={MonitorCog} title={t('Use Windows setting')} text={t('Switch automatically with the operating system')} onClick={() => onTheme('system')}/><ThemeOption active={theme === 'light'} icon={Sun} title={t('Light')} text={t('High-contrast light surfaces')} onClick={() => onTheme('light')}/><ThemeOption active={theme === 'dark'} icon={Moon} title={t('Dark')} text={t('Low-glare dark surfaces')} onClick={() => onTheme('dark')}/></div></section>
+    <LogonCheck/>
   </div>;
+}
+
+function LogonCheck() {
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => { logonTask().then(setEnabled).catch(() => setEnabled(null)); }, []);
+  if (enabled === null) return null; // The browser preview has no scheduled tasks.
+  return <section className="section-card language-settings"><h2>{t('Check at Windows sign-in')}</h2><p className="muted-copy">{t('One minute after you sign in, NeuroTune checks your kept changes and opens only if one is no longer active. It reads only; reapplying still asks you.')}</p><label className="consent-toggle"><input type="checkbox" checked={enabled} onChange={event => { setError(''); logonTask(event.target.checked).then(setEnabled).catch(reason => setError(String(reason))); }}/><span><strong>{t('Check kept changes at sign-in')}</strong><small>{t('Creates or removes a Windows scheduled task for this account')}</small></span></label>{error && <p role="alert">{error}</p>}</section>;
 }
 
 function ThemeOption({ active, icon: Icon, title, text, onClick }: { active: boolean; icon: typeof Sun; title: string; text: string; onClick: () => void }) { return <button aria-pressed={active} className={active ? 'theme-option active' : 'theme-option'} onClick={onClick}><Icon size={21}/><span><strong>{title}</strong><small>{text}</small></span>{active && <Check size={17}/>}</button>; }

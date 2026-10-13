@@ -3,6 +3,7 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AssemblyName>NeuroTune.Core</AssemblyName>
     <RootNamespace>NeuroTune</RootNamespace>
     <Version>0.8.0-alpha.5</Version>
