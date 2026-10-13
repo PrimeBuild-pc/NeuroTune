@@ -59,6 +59,8 @@ public sealed class OptimizationAction : IReversibleAction
     internal string? RecoveryTarget { get; }
     internal string? Kind { get; init; }
     internal string? Parameters { get; init; }
+    internal List<string>? Notes { get; init; } // Run-time remarks the operation journal keeps (declared scripts).
+    public IReadOnlyList<string> NotesForJournal => Notes?.Select(note => note.Length <= 8_000 ? note : note[..8_000]).ToList() ?? [];
     internal bool VerifyRestored(string state) => _verifyRestored?.Invoke(state) ??
         string.Equals(Capture(), state, StringComparison.Ordinal);
     internal void ValidateSnapshot(string state)
@@ -228,13 +230,19 @@ public sealed class OptimizationCatalog
             throw new InvalidOperationException("Selected capabilities write to the same target; choose only one state per setting.");
     }
 
+    public OptimizationAction? ResolveRollbackPublic(ActionRecord record)
+    {
+        try { return ResolveRollback(record); }
+        catch (InvalidOperationException) { return null; }
+    }
+
     internal OptimizationAction ResolveRollback(ActionRecord record)
     {
         OptimizationAction action;
         if (record.Kind is not null)
         {
             if (record.RecoveryTarget is not null) throw new InvalidOperationException("Unexpected parametric recovery metadata.");
-            action = ParametricActions.Create(record.Kind, record.Parameters ?? throw new InvalidOperationException("The parametric record has no parameters."));
+            action = AddParametric(record.Kind, record.Parameters ?? throw new InvalidOperationException("The parametric record has no parameters.")); // Shared instance: declared-script notes survive.
             if (!action.Id.Equals(record.ActionId, StringComparison.Ordinal) || action.Kind != record.Kind)
                 throw new InvalidOperationException("The parametric action does not match its recorded ID.");
         }

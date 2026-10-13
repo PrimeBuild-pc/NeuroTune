@@ -111,6 +111,16 @@ function unresolvedExecutor(item: Recommendation) {
   return Boolean(item.executionIssue || item.reviewWarnings.some(warning => warning.startsWith('No registered executor exists.')));
 }
 
+// The exact text that would run, so the user reviews code before the separate script confirmation.
+function DeclaredScriptPreview({ parameters }: { parameters: unknown }) {
+  const value = (parameters ?? {}) as { Script?: string; RollbackScript?: string; Targets?: Array<{ Kind?: string }> };
+  return <details className="proposal-evidence" open><summary>{t('AI-written script · runs with administrator rights')}</summary>
+    <pre className="script-preview" tabIndex={0}>{value.Script}</pre>
+    <small>{t('Rollback script')}</small><pre className="script-preview" tabIndex={0}>{value.RollbackScript}</pre>
+    <small>{t('Declared targets: {targets}', { targets: (value.Targets ?? []).map(target => target.Kind).join(', ') })}</small>
+  </details>;
+}
+
 function PlanItemReview({ recommendations }: { recommendations: Recommendation[] }) {
   const [copiedId, setCopiedId] = useState('');
   const [copyError, setCopyError] = useState('');
@@ -129,6 +139,7 @@ function PlanItemReview({ recommendations }: { recommendations: Recommendation[]
       {item.prerequisites.length > 0 && <small><strong>{t('Prerequisites:')}</strong> {item.prerequisites.join(' · ')}</small>}
       {item.tradeoffs.length > 0 && <small><strong>{t('Trade-offs:')}</strong> {item.tradeoffs.join(' · ')}</small>}
       {item.reviewWarnings.length > 0 && <div className="script-warnings" role="alert">{item.reviewWarnings.map(warning => <span key={warning}>{t(warning)}</span>)}</div>}
+      {item.actionKind === 'script.declared' && <DeclaredScriptPreview parameters={item.parameters}/>}
       {item.kind === 'scriptArtifact' && <><pre className="script-preview" tabIndex={0} aria-label={t('Full {language} script preview', { language: item.scriptLanguage })}>{item.script}</pre><div className="button-row">
         <button className="secondary" aria-label={t('Copy script {title}', { title: item.title })} onClick={async () => { try { await navigator.clipboard.writeText(item.script); setCopiedId(item.id); setCopyError(''); } catch { setCopyError('Could not copy the script. Use the full text preview or save it as .txt.'); } }}><Copy size={15} aria-hidden="true"/>{t('Copy')}</button>
         <button className="secondary" aria-label={t('Save script {title} as an inert text file', { title: item.title })} onClick={() => saveScriptArtifact(item)}><Download size={15} aria-hidden="true"/>{t('Save as .txt')}</button>

@@ -426,6 +426,7 @@ async Task<OperationManifest> Apply(ApplyRequest request, OptimizationCatalog ac
     {
         var manifest = await new OptimizationEngine(actionCatalog, backupService)
             .ApplyAsync(actionIds, request.HighRiskConfirmed, operationId, run.Id);
+        KeepNotes(manifest, actionIds.Select(actionCatalog.Get), backupService);
         var restart = actionIds.Select(actionCatalog.Get).Any(action => action.RequiresRestart);
         runService.RecordApplyCompleted(run.Id, restart);
         await AnnotateOperation(manifest, "application-result", JsonSerializer.Serialize(new { manifest.Status, verified = manifest.Actions.All(action => action.Applied), actions = actionIds.Select(id => actionCatalog.Get(id).Name) }));
@@ -493,6 +494,15 @@ async Task AnnotateOperation(OperationManifest manifest, string phase, string co
     catch (Exception error) { Console.Error.WriteLine($"Optional application annotation unavailable: {error.GetType().Name}. Transaction state unchanged."); }
 }
 
+// Declared scripts report what their rollback test found and any Registry write outside their targets.
+void KeepNotes(OperationManifest manifest, IEnumerable<OptimizationAction?> actions, BackupService backupService)
+{
+    var notes = actions.SelectMany(action => action?.NotesForJournal ?? []).Where(note => !manifest.Notes.Contains(note)).ToList();
+    if (notes.Count == 0) return;
+    manifest.Notes.AddRange(notes.Take(100 - manifest.Notes.Count));
+    backupService.Save(manifest);
+}
+
 async Task<object?> Rollback(RollbackRequest request, OptimizationCatalog actionCatalog, BackupService backupService)
 {
     var manifest = backupService.Load(request.OperationId)
@@ -517,7 +527,8 @@ async Task<object?> Rollback(RollbackRequest request, OptimizationCatalog action
         throw new InvalidOperationException("This legacy operation is not linked to an optimization run.");
     try
     {
-        await new OptimizationEngine(actionCatalog, backupService).RollbackAsync(manifest, request.ActionIds);
+        try { await new OptimizationEngine(actionCatalog, backupService).RollbackAsync(manifest, request.ActionIds); }
+        finally { KeepNotes(backupService.Load(manifest.Id) ?? manifest, manifest.Actions.Select(record => actionCatalog.ResolveRollbackPublic(record)), backupService); }
         if (manifest.OptimizationRunId is { } completedRunId && runService.Load(completedRunId).State == OptimizationRunState.RollingBack)
             runService.RecordRollbackCompleted(completedRunId);
     }
