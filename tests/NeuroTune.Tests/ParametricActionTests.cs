@@ -423,4 +423,50 @@ public sealed class ParametricActionTests
         RequireAdministrator();
         RoundTrip(Create("defender.exclusion", new { Type = "Process", Value = $"neurotunetest-{Guid.NewGuid():N}.exe" }));
     }
+
+    [TestMethod]
+    public void Diagnosis_links_typed_proposals_and_keeps_refused_ones_as_manual_guidance()
+    {
+        var path = $@"Software\NeuroTuneTest-{Guid.NewGuid():N}";
+        static object Item(string id, object parameters) => new
+        {
+            id,
+            kind = "executableAction",
+            title = $"[GPU] {id}",
+            evidenceIds = new[] { "system:cpu" },
+            reason = "test",
+            risk = "low",
+            actionKind = "registry.set",
+            parameters
+        };
+        var response = JsonSerializer.Serialize(new
+        {
+            summary = "s",
+            consentQuestion = "q",
+            recommendations = new[]
+            {
+                Item("plain", new { hive = "HKCU", path, name = "V", type = "DWord", value = "1" }),
+                Item("encoded", JsonSerializer.Serialize(new { hive = "HKCU", path, name = "W", type = "DWord", value = "2" })),
+                Item("forbidden", new { hive = "HKLM", path = @"SYSTEM\CurrentControlSet\Control\Lsa", name = "X", type = "DWord", value = "0" })
+            }
+        });
+        var catalog = new OptimizationCatalog();
+        var items = LlmClient.ParseDiagnosis(response, catalog, new Dictionary<string, string> { ["system:cpu"] = "CPU" }).Recommendations;
+
+        foreach (var item in items.Take(2))
+        {
+            Assert.AreEqual(PlanRecommendationKind.ExecutableAction, item.Kind);
+            StringAssert.StartsWith(item.ActionId, "registry.set.");
+            Assert.IsTrue(catalog.Contains(item.ActionId));
+            Assert.AreEqual(RiskLevel.Medium, item.Risk); // From the primitive, not the model's "low".
+            Assert.AreEqual(item.ActionId, ParametricActions.Create(item.ActionKind, item.Parameters!.Value.GetRawText()).Id);
+            StringAssert.Contains(item.ActionSummary, "NeuroTuneTest");
+        }
+        var refused = items[2];
+        Assert.AreEqual(PlanRecommendationKind.ManualGuidance, refused.Kind);
+        Assert.AreEqual("invalidParameters", refused.ExecutionIssue);
+        Assert.AreEqual("", refused.ActionId + refused.ActionKind);
+        Assert.IsNull(refused.Parameters);
+        Assert.IsNull(Registry.CurrentUser.OpenSubKey(path), "Parsing must not write.");
+    }
 }
