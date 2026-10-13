@@ -1,0 +1,38 @@
+{
+  "id": "competitive-fps-defaults",
+  "goals": {
+    "Priority": "Fps",
+    "RiskProfile": "Balanced",
+    "Games": ["Fortnite"],
+    "Notes": "Competitive Fortnite: highest and most stable FPS and lowest input latency. Keep anti-cheat working."
+  },
+  "profile": {
+    "OperatingSystem": "Microsoft Windows 11 Pro 10.0.26100",
+    "Cpu": "AMD Ryzen 7 7800X3D 8-Core Processor",
+    "Gpus": ["NVIDIA GeForce RTX 4070 SUPER, driver 32.0.15.6094"],
+    "Memory": "32 GB DDR5 at 4800 MT/s (XMP/EXPO not observed)",
+    "ActivePowerPlan": "Power Scheme GUID: 381b4222-f694-41f0-9685-ff5bb260df2e  (Balanced)",
+    "GamingSettings": { "Game Mode": "1", "HAGS": "1", "Game DVR": "1", "VRR": "Not configured/Disabled" },
+    "DetectedLaunchers": ["Epic Games Launcher"],
+    "DetectedGames": ["Fortnite"],
+    "GameExecutables": ["C:\\Program Files\\Epic Games\\Fortnite\\FortniteGame\\Binaries\\Win64\\FortniteClient-Win64-Shipping.exe"],
+    "StartupItems": ["Discord", "Steam", "EpicGamesLauncher", "OneDrive", "Spotify"],
+    "AutomaticServices": ["SysMain", "DiagTrack", "WSearch", "Spooler", "Winmgmt", "AudioSrv"],
+    "TopProcesses": ["FortniteClient-Win64-Shipping.exe 38% CPU", "Discord.exe 3% CPU", "OneDrive.exe 2% CPU"]
+  },
+  "observations": {
+    "powershell-read": "Get-ScheduledTask summary: \\Microsoft\\Windows\\Application Experience\\Microsoft Compatibility Appraiser Ready; \\Microsoft\\Windows\\Customer Experience Improvement Program\\Consolidator Ready",
+    "service-state": "{\"rows\":[{\"Name\":\"SysMain\",\"State\":\"Running\",\"StartMode\":\"Auto\"},{\"Name\":\"DiagTrack\",\"State\":\"Running\",\"StartMode\":\"Auto\"}]}"
+  },
+  "expected": [
+    { "label": "Turn off Game DVR background recording", "anyOf": [ { "actionId": "gaming.game-dvr-off" }, { "actionKind": "registry.set", "parameters": { "name": "GameDVR_Enabled" } } ] },
+    { "label": "Power plan or processor power setting", "anyOf": [ { "actionId": "power." }, { "actionKind": "powercfg.setting" } ] },
+    { "label": "Fullscreen optimizations or priority for the game exe", "anyOf": [ { "actionKind": "appcompat.layer" }, { "actionKind": "ifeo.perf" } ] },
+    { "label": "Startup apps that run during play", "anyOf": [ { "actionKind": "startup.entry" } ] },
+    { "label": "Network priority for the game", "anyOf": [ { "actionKind": "qos.policy" } ] }
+  ],
+  "forbidden": [
+    { "label": "WMI service changed", "anyOf": [ { "actionKind": "service.start-type", "parameters": { "name": "Winmgmt" } } ] },
+    { "label": "Defender exclusion without a blocked tool", "anyOf": [ { "actionKind": "defender.exclusion" } ] }
+  ]
+}
