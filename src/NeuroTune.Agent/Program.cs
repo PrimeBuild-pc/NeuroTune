@@ -52,6 +52,8 @@ try
         "run-keep" => new OptimizationRunService().Keep(Read<RunIdRequest>(input).RunId),
         "run-refine" => await RefineRun(Read<RunRefineRequest>(input), settingsService, catalog, backup),
         "run-follow-up" => new OptimizationRunService().CreateFollowUp(Read<RunIdRequest>(input).RunId),
+        "persistence-check" => KeptChanges.Drift(catalog, backup, new OptimizationRunService()),
+        "run-reapply" => KeptChanges.Reapply(catalog, backup, new OptimizationRunService()),
         "analyze-local" => AnalyzeLocal(Read<DiagnoseRequest>(input)),
         "diagnose" => await Diagnose(Read<DiagnoseRequest>(input), settingsService, catalog),
         "actions" => Actions(catalog),

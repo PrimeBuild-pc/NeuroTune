@@ -275,6 +275,12 @@ export interface UpdateNoticeDefinition {
   reason: string;
 }
 
+export interface KeptDrift {
+  runId: string;
+  actionId: string;
+  name: string;
+}
+
 export interface ActionRecord {
   actionId: string;
   attempted: boolean;
