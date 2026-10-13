@@ -9,8 +9,9 @@ Pi coding CLI/TUI. CORE schedules sequential bounded turns and tools in memory;
 NeuroTune owns the selected provider transport/OAuth, prompt/evidence preparation,
 fixed read-only readers and all response, citation, approval and execution
 validation. Model envelopes cross a bounded correlated host protocol and cannot
-be rewritten by the bridge. There is no shell/file tool, arbitrary command
-execution, built-in coding-tool set or additional provider credential store.
+be rewritten by the bridge. There is no write-capable shell/file tool, built-in
+coding-tool set or additional provider credential store; the only model-written
+code is the read-only `powershell-read` command described below.
 
 The packaged Node/CORE process is short-lived, non-admin and cancelled with its
 owner, not a filesystem/network sandbox. It does not require user npm, global
@@ -56,7 +57,7 @@ Persisted `fps`/`efficiency` goals remain valid with their previous enum values 
 ## Investigation freedom and limits
 
 - The model may request existing registered evidence or new local read-only observations: per-core counters, paging pressure, disk/free-space health metadata, display configuration, device errors, adapter error/traffic counters, service state, recent System warning/error IDs, driver associations/version metadata, and the PCIe/USB device topology (link width/generation, CPU or chipset attachment, USB controller and port path, without serials or instance IDs).
-- Readers have fixed projections and bounded output; model-supplied shell commands, WMI queries, filesystem paths, driver loading, network probes and firmware export are not tools. Unsupported requests produce explicit unavailability and can become manual follow-up proposals. These readers do **not** provide arbitrary Codex CLI powers or web research.
+- Fixed readers have fixed projections and bounded output. Model-written reads go through `powershell-read`: PowerShell's own parser describes the command, NeuroTune refuses any AST node, command or argument outside its read-only allowlist (no method calls, assignments, file redirection, `$( )`, `&`/`.` invocation, remote parameters or UNC paths), then runs it in Constrained Language mode as a non-admin process (admin only for `bcdedit`, `Get-MpPreference`, `Get-StorageReliabilityCounter`), with a 30 s limit and bounded, redacted output. Writes, driver loading, network probes and firmware export are not tools. Unsupported requests produce explicit unavailability and can become manual follow-up proposals. These readers do **not** provide arbitrary Codex CLI powers or web research.
 - New observations receive application-owned `investigation:` IDs, collection time/limitations and per-attempt/turn provenance; they are persisted with the run/audit and cannot replace original facts. Post-capture snapshots are not capture-time causal proof. Unknown is not zero.
 - The default budget is **12 turns / 10 minutes after measurements**, configurable in provider settings within **2–32 turns / 1–30 minutes**. Existing-evidence requests remain bounded to 40 facts per turn. Evidence/output size limits and exact citations remain in force. The final turn is reserved by prompt for a diagnosis; exhaustion/failure is reported rather than inventing completion.
 - `ConflictAnalyzer` still produces goal-conditioned, opinionated hypotheses. The main prompt explicitly permits challenging/dismissing them; there is no prescribed preferred MemoryCompression/PageCombining state. Local hypotheses are collapsed and labelled separately from AI conclusions.

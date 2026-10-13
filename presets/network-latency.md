@@ -4,7 +4,7 @@ Goal: fix the user's actual connection problem: latency, jitter, packet loss, di
 
 Mandatory checklist (cover each domain in the summary, even when the answer is "no change"):
 1. Separate the layers: adapter/link/Wi-Fi, VPN or filter drivers, host load, LAN/router, ISP/WAN route, remote service.
-2. Adapter settings: interrupt moderation, Energy-Efficient/Green Ethernet, flow control, RSS, offloads, receive/transmit buffers. Typed `netadapter.property` writes need the adapter interface GUID from evidence; without it, give the exact Device Manager steps as manualGuidance.
+2. Adapter settings: interrupt moderation, Energy-Efficient/Green Ethernet, flow control, RSS, offloads, receive/transmit buffers. Read them with `powershell-read` (`Get-NetAdapter | Select-Object Name, InterfaceGuid, Status` and `Get-NetAdapterAdvancedProperty -Name * | Select-Object Name, RegistryKeyword, RegistryValue, ValidRegistryValues`) before proposing typed `netadapter.property` writes with that GUID and keyword.
 3. Traffic priority: `qos.policy` DSCP 46 for the game executable; it only helps when the router honours DSCP, say so.
 4. Power saving on the adapter and on USB/Wi-Fi dongles.
 5. Unused network, Bluetooth or Wi-Fi devices (`device.disable.*`) only when the user does not use that connection type.
