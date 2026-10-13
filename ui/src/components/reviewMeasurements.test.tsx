@@ -13,7 +13,7 @@ describe('Provider, review and measurement presentation preserves gates', () => 
     const html = renderToStaticMarkup(<ProviderPage provider={{ provider: 'custom', providerName: 'Private model', baseUrl: 'https://example.test/v1', protocol: 'openAiCompatible', model: 'test', requiresApiKey: true }} apiKey="" hasCredential={false} models={[]} modelLabels={{}} chatGptAccounts={[]} authBusy onSignOut={noop} onChoose={noop} onChange={noop} onKey={noop} onSave={noop} onLoadModels={noop} onBrowserSignIn={noop} onModel={noop}/>);
     expect(html.match(/<fieldset[^>]*disabled=""/g)).toHaveLength(3);
     const buttons = html.match(/<button\b[^>]*>/g) ?? [];
-    expect(buttons).toHaveLength(12);
+    expect(buttons).toHaveLength(13);
     for (const button of buttons) expect(button).toContain('disabled=""');
     expect(html).not.toContain('<details');
     expect(html).toContain('Provider operation in progress');
