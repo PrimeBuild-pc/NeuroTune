@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { comparisonReportHtml } from './report';
+import { biosChecklistHtml, comparisonReportHtml } from './report';
 import type { MeasurementComparison, MeasurementSession } from './types';
 
 describe('before/after report', () => {
@@ -15,5 +15,12 @@ describe('before/after report', () => {
     expect(html).toContain("default-src 'none'");
     expect(html).toContain('100.00'); expect(html).toContain('110.00'); expect(html).toContain('10.0%');
     expect(html).toContain('Average FPS'); expect(html).toContain('Disable &#60;Wi-Fi&#62;');
+  });
+  it('exports the BIOS checklist as an escaped, script-free page', () => {
+    const html = biosChecklistHtml([{ setting: 'EXPO <b>', value: 'Enabled', menuPath: 'OC > Memory', reason: '<script>alert(1)</script>', source: 'general', evidenceIds: [] }]);
+    expect(html).toContain('EXPO &#60;b&#62;');
+    expect(html).not.toContain('<script>');
+    expect(html).toContain('Unverified (general knowledge)');
+    expect(html).toContain("default-src 'none'");
   });
 });

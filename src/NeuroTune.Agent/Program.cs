@@ -51,6 +51,8 @@ try
         "run-dismiss" => new OptimizationRunService().Dismiss(Read<RunIdRequest>(input).RunId),
         "run-keep" => new OptimizationRunService().Keep(Read<RunIdRequest>(input).RunId),
         "run-refine" => await RefineRun(Read<RunRefineRequest>(input), settingsService, catalog, backup),
+        "bios-verify" => FirmwareInspection.VerifyAfterRestart(),
+        "reboot-firmware" => FirmwareInspection.RestartIntoSetup(),
         "run-follow-up" => new OptimizationRunService().CreateFollowUp(Read<RunIdRequest>(input).RunId),
         "persistence-check" => KeptChanges.Drift(catalog, backup, new OptimizationRunService()),
         "run-reapply" => KeptChanges.Reapply(catalog, backup, new OptimizationRunService()),
