@@ -1,4 +1,10 @@
-# Unreleased — v2 F6: declared scripts (Expert mode)
+# Unreleased — v2 F9: web search
+
+- Planner turns can search the web: the provider's own search on Anthropic, OpenRouter and ChatGPT, or Tavily when you
+  save a Tavily key in the provider page (then the `web-search` reader is used instead). Web content is untrusted data
+  and only feeds typed, validated proposals.
+
+# v2 F6: declared scripts (Expert mode)
 
 - New typed write `script.declared`: a PowerShell script written by the AI, its rollback script and the targets it
   changes, declared as typed primitives. Before anything runs, a blocking check refuses downloads, `Invoke-Expression`,

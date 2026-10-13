@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Bot, Check, Cloud, Cpu, KeyRound, Laptop, LoaderCircle, LockKeyhole, LogIn, ShieldCheck, SlidersHorizontal, Wifi } from 'lucide-react';
 import type { ChatGptAccountInfo, ProviderKind, ProviderSettings } from '../types';
 import { t } from '../i18n';
+import { TavilyKey } from './TavilyKey';
 import './ProviderPage.css';
 
 const providers = [
@@ -79,6 +80,7 @@ export function ProviderPage({ provider, apiKey, hasCredential, models, modelLab
         <button className="secondary" disabled={authBusy || (provider.requiresApiKey && !hasCredential)} onClick={onSave}>{t('Save investigation budget')}</button>
       </section>
     </section>
+    <TavilyKey disabled={authBusy}/>
     <div className="provider-trust"><ShieldCheck size={18} aria-hidden="true"/><p>{t('Credentials stay encrypted on this PC. Only consented evidence reaches your model.')}</p></div>
   </div>;
 }
