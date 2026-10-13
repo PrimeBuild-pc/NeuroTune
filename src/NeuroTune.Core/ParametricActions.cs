@@ -149,6 +149,19 @@ internal static class ParametricActions
             name is "BootExecute" or "SetupExecute" or "Execute" or "S0InitialCommand" or "PendingFileRenameOperations";
         if (execValue || ForbiddenRegistry.Any(Under))
             throw new InvalidOperationException($@"{hive}\{path}\{name} is a protected security, boot or autostart target.");
+        // Device keys are open only for the documented MSI and interrupt-affinity values of a PCI device.
+        if (Under(@"HKLM\SYSTEM\CurrentControlSet\Enum") && InterruptManagement(full, name) is null)
+            throw new InvalidOperationException(@"Under Enum only PCI\<device>\<instance>\Device Parameters\Interrupt Management\MessageSignaledInterruptProperties (MSISupported, MessageNumberLimit) and \Affinity Policy (DevicePolicy, AssignmentSetOverride, DevicePriority) can be written.");
+    }
+
+    // Returns the device instance key (relative to HKLM) for an allowed MSI/affinity value, otherwise null.
+    internal static string? InterruptManagement(string full, string name)
+    {
+        var match = Regex.Match(full, @"^HKLM\\(SYSTEM\\CurrentControlSet\\Enum\\PCI\\[^\\]+\\[^\\]+)\\Device Parameters\\Interrupt Management\\(MessageSignaledInterruptProperties|Affinity Policy)$", RegexOptions.IgnoreCase);
+        if (!match.Success) return null;
+        var allowed = match.Groups[2].Value.Equals("Affinity Policy", StringComparison.OrdinalIgnoreCase)
+            ? new[] { "DevicePolicy", "AssignmentSetOverride", "DevicePriority" } : ["MSISupported", "MessageNumberLimit"];
+        return allowed.Contains(name, StringComparer.OrdinalIgnoreCase) ? match.Groups[1].Value : null;
     }
 
     private static (string Hive, string Path, string Name) RegistryTarget(string? hive, string? path, string? name)
@@ -187,11 +200,15 @@ internal static class ParametricActions
             parameters = new(hive, path, name);
         }
         var display = $@"{hive}\{path}\{(name.Length == 0 ? "(Default)" : name)}";
+        // Availability, not validation: a device that disappears later must still be restorable from the journal.
+        var device = hive == "HKLM" ? InterruptManagement($@"HKLM\{Regex.Replace(path, @"^SYSTEM\\ControlSet\d{3}(?=\\)", @"SYSTEM\CurrentControlSet", RegexOptions.IgnoreCase)}", name) : null;
         return Registry(kind, parameters, hive, path, name, () => desired,
             set ? $"Set {Short(display)} = {Short(parameters.Value!)}" : $"Delete {Short(display)}", "Registry",
             hive == "HKLM" ? RiskLevel.High : RiskLevel.Medium,
             hive == "HKLM" && path.StartsWith(@"SYSTEM\", StringComparison.OrdinalIgnoreCase),
-            "Effect depends on the component that reads this value; some values apply only after a restart or sign-out");
+            device is null ? "Effect depends on the component that reads this value; some values apply only after a restart or sign-out"
+                : "Changes how the device signals interrupts after a restart; a device or driver without MSI support can stop working until the value is restored",
+            unavailable: device is null ? null : () => Microsoft.Win32.Registry.LocalMachine.OpenSubKey(device) is null ? "The PCI device instance is not present" : null);
     }
 
     internal static object ParseRegistryValue(RegistryValueKind kind, string value)

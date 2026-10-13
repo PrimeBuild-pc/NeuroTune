@@ -1,4 +1,13 @@
-# Unreleased — v2 F4: closed loop without the Baseline gate
+# Unreleased — v2 F5 (part 1): high-impact domains
+
+- **MSI mode and interrupt affinity** through `registry.set`, limited under `Enum` to a present PCI device's MSI and
+  Affinity Policy values (restart required, High risk).
+- **Known high-impact targets** in the prompt when writes are possible (`presets/targets.md`): MSI/IRQ, NIC keywords,
+  QoS, Game DVR/capture, Discord settings, Chrome/Edge hardware acceleration policies, per-exe options and game config
+  files, always read first with `powershell-read`.
+- Not yet: NVIDIA driver profiles (DRS), AMD ADLX and audio endpoint enhancements (open decisions in the plan).
+
+# v2 F4: closed loop without the Baseline gate
 
 - **Refine (up to 3 rounds)**: after Apply, the selected AI reviews what was applied plus any before/after metrics and
   suggests single items to restore (one button each) and adjustments. Restore suggestions only name applied records;
