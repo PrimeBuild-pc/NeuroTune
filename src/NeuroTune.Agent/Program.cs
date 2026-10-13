@@ -52,6 +52,8 @@ try
         "run-keep" => new OptimizationRunService().Keep(Read<RunIdRequest>(input).RunId),
         "run-refine" => await RefineRun(Read<RunRefineRequest>(input), settingsService, catalog, backup),
         "bios-verify" => FirmwareInspection.VerifyAfterRestart(),
+        "defender-guard" => DefenderGuard.Status(),
+        "defender-open-settings" => DefenderGuard.OpenSettings(),
         "reboot-firmware" => FirmwareInspection.RestartIntoSetup(),
         "run-follow-up" => new OptimizationRunService().CreateFollowUp(Read<RunIdRequest>(input).RunId),
         "persistence-check" => KeptChanges.Drift(catalog, backup, new OptimizationRunService()),
