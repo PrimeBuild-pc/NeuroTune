@@ -120,6 +120,14 @@ function App() {
   const diagnosisRequest = useRef<string | undefined>(undefined);
   const cancellationPending = useRef(false);
   const [drift, setDrift] = useState<KeptDrift[]>([]);
+  const [defenderOff, setDefenderOff] = useState(false);
+  // F7: stays visible while Defender real-time protection is off; rechecked whenever the window regains focus.
+  useEffect(() => {
+    const check = () => { agent<{ needsAttention: boolean }>('defender-guard').then(status => setDefenderOff(status.needsAttention)).catch(() => setDefenderOff(false)); };
+    check();
+    window.addEventListener('focus', check);
+    return () => window.removeEventListener('focus', check);
+  }, []);
   const [notice, setNotice] = useState<{ tone: 'success' | 'danger' | 'info'; text: string; values?: Record<string, string | number>; raw?: boolean }>();
 
   const quietMotion = recording || diagnosisProgress?.stage === 'capture';
@@ -577,6 +585,7 @@ function App() {
           </div>
         </header>
 
+        {defenderOff && <div className="notice danger" role="alert"><span>{t('Microsoft Defender real-time protection is off. Turn it back on in Windows Security when you are done.')}</span><button className="secondary" onClick={() => void agent('defender-open-settings').catch(showError)}>{t('Open Windows Security')}</button></div>}
         {drift.length > 0 && !runPending && <div className="notice info" role="status"><span>{t('{count} kept changes are no longer active. A Windows or driver update may have reset them.', { count: drift.length })}</span><button className="secondary" disabled={Boolean(busy)} onClick={() => void reapplyDrift()}>{t('Review and reapply')}</button><button aria-label={t("Dismiss message")} onClick={() => setDrift([])}>×</button></div>}
         {notice && <div className={`notice ${notice.tone}`} role="status"><span>{notice.raw ? notice.text : t(notice.text, notice.values)}</span><button aria-label={t("Dismiss message")} onClick={() => setNotice(undefined)}>×</button></div>}
         {busy && <div className="busy-bar" role="status"><LoaderCircle size={16} className="spin"/><span>{t(busy, busyValues)}</span>{scanRequestId && <button className="ghost" onClick={cancelScan}><X size={14}/>{t("Cancel scan")}</button>}</div>}
