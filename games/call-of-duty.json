@@ -1,0 +1,16 @@
+{
+  "id": "call-of-duty",
+  "name": "Call of Duty / Warzone",
+  "aliases": ["Call of Duty", "Warzone", "Modern Warfare", "Black Ops"],
+  "executables": ["cod.exe", "cod24-cod.exe", "ModernWarfare.exe"],
+  "launchers": ["Battle.net", "Steam"],
+  "antiCheat": "RICOCHET (kernel driver). Recent titles may require TPM 2.0 and Secure Boot: never propose turning them off. Never modify game files or inject into the process.",
+  "configFiles": [
+    { "path": "%USERPROFILE%\\Documents\\Call of Duty\\players", "format": "text", "notes": "Per-title options files (for example options.4.cod23.cst) in a custom format: propose changes as manualGuidance through the in-game menu." }
+  ],
+  "competitiveSettings": ["NVIDIA Reflex On + Boost", "On-demand texture streaming off on fast connections only if VRAM allows", "Frame cap below the VRR limit", "Render resolution 100%, upscaler by GPU headroom"],
+  "cloudSync": "Some settings sync to the Activision account.",
+  "benchmark": "Built-in benchmark where the title has one, otherwise the same private match route before and after.",
+  "typicalBound": "Usually GPU-bound with high settings; CPU and memory matter at very high refresh rates.",
+  "caveats": "Starting knowledge, not verified on this PC; executable names change per title. Read the files with powershell-read before proposing changes."
+}

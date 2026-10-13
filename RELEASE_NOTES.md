@@ -1,4 +1,13 @@
-# Unreleased — v2 F8 (phase 1): BIOS checklist, no firmware writes
+# Unreleased — v2 F9 (part 1): game packages
+
+- `games/*.json` for Fortnite, Counter-Strike 2, VALORANT, Apex Legends and Call of Duty/Warzone: executables,
+  launchers, config files and formats, competitive settings, anti-cheat limits (for example Vanguard needs TPM and
+  Secure Boot), cloud sync, a repeatable benchmark and the usual CPU/GPU limit. A package is attached as
+  `game-package:<id>` evidence when its game is running, detected or named in the goals. Contents are starting
+  knowledge to verify, never commands.
+- Not yet: web search for games without a package (needs a search provider choice).
+
+# v2 F8 (phase 1): BIOS checklist, no firmware writes
 
 - The diagnosis can return a **BIOS checklist** (setting, value, menu path, reason, source). Items cite a SCEWIN dump
   or manual excerpt, or are shown as unverified general knowledge. Secure Boot/TPM, voltages and manual memory timings

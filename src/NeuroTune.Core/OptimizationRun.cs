@@ -138,7 +138,7 @@ public sealed class OptimizationRunService
         baselineSessions = (baselineSessions ?? []).Where(session => session.Label == MeasurementLabel.Baseline &&
             session.State == MeasurementSessionState.Completed && session.Report?.Quality.IsValid == true).ToList();
         var supporting = NeuroTune.SupportingAttachments.Normalize(attachments, imagesConfirmed);
-        var evidence = NeuroTune.SupportingAttachments.MergeEvidence(LlmClient.MergeEvidenceFacts(LlmClient.BuildEvidenceFacts(profile),
+        var evidence = NeuroTune.SupportingAttachments.MergeEvidence(LlmClient.MergeEvidenceFacts(LlmClient.BuildEvidenceFacts(profile, goals),
             MeasurementService.BuildNormalizedEvidence(baselineSessions)), supporting);
         var run = new OptimizationRun
         {

@@ -220,7 +220,7 @@ async Task<object> Diagnose(DiagnoseRequest request, SettingsService service, Op
         : run.BaselineSessionIds.Concat(run.CandidateSessionIds).Concat(run.DiagnosticSessionIds).ToList();
     var measurementEvidence = new MeasurementService().BuildNormalizedEvidence(measurementIds);
     var attachments = SupportingAttachments.Normalize(request.Attachments, request.ImagesConfirmed);
-    var evidence = SupportingAttachments.MergeEvidence(LlmClient.MergeEvidenceFacts(LlmClient.BuildEvidenceFacts(request.Profile), measurementEvidence), attachments);
+    var evidence = SupportingAttachments.MergeEvidence(LlmClient.MergeEvidenceFacts(LlmClient.BuildEvidenceFacts(request.Profile, request.Goals), measurementEvidence), attachments);
     if (run is not null)
     {
         if (JsonSerializer.Serialize(run.Goals, json) != JsonSerializer.Serialize(request.Goals, json))
