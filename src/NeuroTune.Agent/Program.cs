@@ -55,6 +55,8 @@ try
         "defender-guard" => DefenderGuard.Status(),
         "nvpi-status" => NvidiaProfileInspector.Status(),
         "nvpi-install" => await NvidiaProfileInspector.InstallAsync(),
+        "tavily-status" => new { configured = WebSearch.HasTavilyKey(settingsService) },
+        "tavily-save" => WebSearch.SaveTavilyKey(settingsService, Read<TavilyKeyRequest>(input).Key),
         "defender-open-settings" => DefenderGuard.OpenSettings(),
         "reboot-firmware" => FirmwareInspection.RestartIntoSetup(),
         "run-follow-up" => new OptimizationRunService().CreateFollowUp(Read<RunIdRequest>(input).RunId),
@@ -551,6 +553,7 @@ sealed record ScanRequest(bool OptionalTelemetryConsent, bool FirmwareReadConsen
 sealed record RunCreateRequest(SystemProfile? Profile, TuningGoals? Goals, List<Guid>? MeasurementSessionIds = null,
     List<SupportingAttachment>? Attachments = null, bool ImagesConfirmed = false, InvestigationMode Mode = InvestigationMode.MeasuredOptimization);
 sealed record RunIdRequest(Guid RunId);
+sealed record TavilyKeyRequest(string? Key);
 sealed record RunRefineRequest(Guid RunId, JsonElement Language = default);
 sealed record DefenderScanReviewRequest(bool ReviewedInWindowsSecurity);
 sealed record PowerPlanDirectoryRequest(string Directory);
