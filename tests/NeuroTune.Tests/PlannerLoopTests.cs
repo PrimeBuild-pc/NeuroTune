@@ -202,7 +202,7 @@ public sealed class PlannerLoopTests
             using var catalog = JsonDocument.Parse(section);
             CollectionAssert.AreEqual(expected, catalog.RootElement.EnumerateArray().Select(x => x.GetProperty("id").GetString()!).ToArray());
             Assert.Contains(JsonSerializer.Serialize(provided), prompt);
-            Assert.Contains("OMIT module entirely", prompt);
+            Assert.Contains("OMIT module and command entirely", prompt);
         }
     }
 
