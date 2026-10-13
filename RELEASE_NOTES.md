@@ -1,4 +1,18 @@
-# Unreleased — v2 F2: free read for the agent
+# Unreleased — v2 F4 (part 1): measurements as context, single-item rollback
+
+- **No Baseline gate**: Apply is available as soon as the diagnosis is validated; Baselines and comparisons are optional
+  context. Keep works right after Apply (or after a restart), with or without a comparison; any valid comparison
+  matching the run (1+1 or repeated) is recorded.
+- **Restore a single change**: Activity & restore lists each applied item of a run's operation with its own Restore
+  button; the rest stays applied (journal status `Partially rolled back`). Restoring everything still closes the run.
+
+# v2 F11: eval skeleton
+
+- `tests/eval/` cases and a manual `EvalRunner` (needs `NEUROTUNE_EVAL_PROVIDER`) measure recall of expected proposals,
+  forbidden proposals, parse failures and turns per model. Refused typed proposals keep their kind and parameters for
+  review; they stay non-executable.
+
+# v2 F2: free read for the agent
 
 - **`powershell-read` investigation tool**: the agent can read what the fixed readers miss (Registry values, services,
   NIC advanced properties and interface GUIDs, power settings, game config files). The command is parsed by Windows
