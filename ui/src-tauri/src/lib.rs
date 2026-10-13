@@ -64,6 +64,18 @@ const COMMANDS: &[&str] = &[
     "measurement-delete",
     "power-plan-list",
     "power-plan-stage",
+    "run-refine",
+    "run-follow-up",
+    "run-reapply",
+    "persistence-check",
+    "bios-verify",
+    "reboot-firmware",
+    "defender-guard",
+    "defender-open-settings",
+    "nvpi-status",
+    "nvpi-install",
+    "tavily-status",
+    "tavily-save",
 ];
 
 #[derive(Default)]
@@ -404,6 +416,22 @@ mod tests {
         assert!(has_drift(&Ok(json!([{ "actionId": "registry.set.abc" }]))));
         assert!(!has_drift(&Ok(json!([]))));
         assert!(!has_drift(&Err("agent failed".into())));
+    }
+
+    #[test]
+    fn every_agent_command_is_reachable_from_the_ui() {
+        // A command added to the agent but not here fails in the packaged app only, never in the browser mock.
+        let program = include_str!("../../../src/NeuroTune.Agent/Program.cs");
+        for line in program.lines().map(str::trim) {
+            let Some(name) = line
+                .strip_prefix('"')
+                .and_then(|rest| rest.split_once("\" =>"))
+                .map(|(name, _)| name)
+            else {
+                continue;
+            };
+            assert!(COMMANDS.contains(&name), "{name} is missing from COMMANDS");
+        }
     }
 
     #[test]
