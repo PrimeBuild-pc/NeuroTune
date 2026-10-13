@@ -1,0 +1,16 @@
+{
+  "id": "apex",
+  "name": "Apex Legends",
+  "aliases": ["Apex Legends", "Apex"],
+  "executables": ["r5apex.exe", "r5apex_dx12.exe"],
+  "launchers": ["Steam", "EA app"],
+  "antiCheat": "Easy Anti-Cheat. Launch options and video settings are allowed; never modify game files.",
+  "configFiles": [
+    { "path": "%USERPROFILE%\\Saved Games\\Respawn\\Apex\\local\\videoconfig.txt", "format": "text", "notes": "KeyValues-like format, not INI or JSON: propose changes as manualGuidance." }
+  ],
+  "competitiveSettings": ["Launch option +fps_max with a cap below the VRR limit, or unlimited", "NVIDIA Reflex Enabled + Boost", "Model detail and effects low, texture budget by VRAM"],
+  "cloudSync": "Settings are mostly local; Steam Cloud may sync the profile folder.",
+  "benchmark": "Firing Range: same route before and after.",
+  "typicalBound": "Mixed; often CPU-bound in fights at high refresh rates.",
+  "caveats": "Starting knowledge, not verified on this PC. Read the files with powershell-read before proposing changes."
+}

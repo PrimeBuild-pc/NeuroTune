@@ -9,7 +9,7 @@ Mandatory checklist (cover each domain in the summary, even when the answer is "
 4. Memory: commit pressure, paging, standby list, memory compression; no imposed preferred state.
 5. Background apps and services: startup entries (`startup.entry`), launchers and updaters running during play, scheduled tasks firing during play (`scheduled-task.state`), services with no use on this PC (`service.start-type` Manual/Disabled).
 6. Network for online play: QoS DSCP 46 for the game exe (`qos.policy`), adapter power saving.
-7. Game: config file settings that cap or smooth frames (`file.json`/`file.ini` under the user profile or Steam), in-game frame cap versus refresh rate, Reflex/Anti-Lag availability.
+7. Game: start from the game-package evidence when present (config files, anti-cheat limits, cloud sync, benchmark method); config file settings that cap or smooth frames (`file.json`/`file.ini` under the user profile or Steam), in-game frame cap versus refresh rate, Reflex/Anti-Lag availability.
 8. Virtualization-based security: VBS/Memory Integrity cost versus the user's security needs; turning it off is a High-risk confirmed write, never silent.
 
 Signals: frame-time spikes, 1% low far below average, high DPC/ISR on GPU/NIC/USB/audio drivers, CPU-bound versus GPU-bound evidence, background CPU usage during the recording.

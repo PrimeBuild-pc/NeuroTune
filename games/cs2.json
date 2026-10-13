@@ -1,0 +1,17 @@
+{
+  "id": "cs2",
+  "name": "Counter-Strike 2",
+  "aliases": ["Counter-Strike 2", "CS2", "Counter-Strike Global Offensive"],
+  "executables": ["cs2.exe"],
+  "launchers": ["Steam"],
+  "antiCheat": "VAC. Never modify game files or inject into the process; launch options and video settings are allowed.",
+  "configFiles": [
+    { "path": "<Steam>\\userdata\\<account>\\730\\local\\cfg\\cs2_video.txt", "format": "text", "notes": "Valve KeyValues format, not INI or JSON: propose changes as manualGuidance (in-game menu or exact line), not file.ini." },
+    { "path": "<Steam>\\steamapps\\common\\Counter-Strike Global Offensive\\game\\csgo\\cfg\\autoexec.cfg", "format": "text", "notes": "Optional user autoexec; console commands such as fps_max." }
+  ],
+  "competitiveSettings": ["fps_max 0 or a cap well above the refresh rate", "Reflex Enabled", "Boost Player Contrast on", "multisampling and shader detail by GPU headroom"],
+  "cloudSync": "Steam Cloud may sync cfg files; edits made while Steam is closed are the safest.",
+  "benchmark": "Workshop map 'CS2 FPS BENCHMARK' (same map, same run) before and after.",
+  "typicalBound": "Strongly CPU and memory-latency bound at high FPS; cache and RAM tuning matter more than GPU settings.",
+  "caveats": "Starting knowledge, not verified on this PC. Read the files with powershell-read before proposing changes."
+}
