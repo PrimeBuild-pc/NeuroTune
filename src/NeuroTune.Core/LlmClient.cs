@@ -644,8 +644,10 @@ public sealed class LlmClient
                     }
                     catch (InvalidOperationException exception)
                     {
-                        RetainManual(recommendation, $"NeuroTune refused the proposed {recommendation.ActionKind} write: {exception.Message}");
-                        recommendation.ExecutionIssue = "invalidParameters";
+                        var (kind, parameters) = (recommendation.ActionKind, recommendation.Parameters);
+                        RetainManual(recommendation, $"NeuroTune refused the proposed {kind} write: {exception.Message}");
+                        // Kept only to show what was proposed: a manual item with no ActionId can never be selected or applied.
+                        (recommendation.ActionKind, recommendation.Parameters, recommendation.ExecutionIssue) = (kind, parameters, "invalidParameters");
                     }
                     break;
                 case PlanRecommendationKind.ExecutableAction:

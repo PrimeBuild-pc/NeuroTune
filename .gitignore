@@ -35,3 +35,5 @@ operations/
 # OS
 Thumbs.db
 .DS_Store
+
+tests/eval/results/
