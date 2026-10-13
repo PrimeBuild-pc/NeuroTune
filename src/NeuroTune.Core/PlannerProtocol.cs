@@ -51,7 +51,8 @@ public static class PlannerProtocol
             {
                 var request = new InvestigationRequest(root.GetProperty("toolId").GetString() ?? "",
                     root.GetProperty("question").GetString() ?? "",
-                    root.TryGetProperty("module", out var module) ? module.GetString() : null);
+                    root.TryGetProperty("module", out var module) ? module.GetString() : null,
+                    root.TryGetProperty("command", out var command) ? command.GetString() : null);
                 InvestigationService.Validate(request);
                 return new(PlannerTurnKind.RequestInvestigation, [], "", request);
             }
@@ -65,7 +66,8 @@ public static class PlannerProtocol
             {
                 JsonException => "The planner envelope contains invalid JSON syntax.",
                 KeyNotFoundException => "The planner envelope is missing a required field.",
-                ArgumentException when exception.Message == "This investigation tool does not accept a module parameter." => exception.Message,
+                ArgumentException when exception.Message is "This investigation tool does not accept a module parameter." or "This investigation tool does not accept a command parameter." => exception.Message,
+                ArgumentException { ParamName: "command" } => "A powershell-read command must be 1-2000 characters.",
                 ArgumentException { ParamName: "module" } => "The planner driver-details request needs a .sys filename without a path.",
                 ArgumentException => "The planner returned an invalid read-only investigation request.",
                 InvalidOperationException when exception.Message is "The planner returned an unknown turn kind." or

@@ -6,7 +6,7 @@ download or antivirus scan, and its findings are hypotheses with stated limits, 
 
 ## What it reads
 
-Everything is a fixed, read-only reader. Pi receives no shell or file tool; it can only request these tools through
+Everything is read-only: fixed readers plus the allowlisted `powershell-read` (see `docs/DETERMINISTIC_CONTROLS.md`). Pi receives no write-capable shell or file tool; it can only request these tools through
 NeuroTune, which validates every request and result. The preset reuses the existing audit-only consent for Windows
 privacy/security reads and adds no new consent surface.
 
