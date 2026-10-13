@@ -208,7 +208,19 @@ public sealed class DiagnosisResult
     public List<DiagnosisFinding> Findings { get; set; } = [];
     public List<PlanRecommendation> Recommendations { get; set; } = [];
     public List<ConflictPattern> Conflicts { get; set; } = [];
+    public List<BiosChecklistItem> BiosChecklist { get; set; } = [];
     public string ConsentQuestion { get; set; } = "May NeuroTune apply the selected allowlisted fixes after creating a restore point?";
+}
+
+// F8 phase 1: firmware settings the user changes by hand; NeuroTune never writes them.
+public sealed class BiosChecklistItem
+{
+    public string Setting { get; set; } = "";
+    public string Value { get; set; } = "";
+    public string MenuPath { get; set; } = "";
+    public string Reason { get; set; } = "";
+    public string Source { get; set; } = "general"; // scewin | manual cite evidence; general = model knowledge, unverified
+    public List<string> EvidenceIds { get; set; } = [];
 }
 
 public sealed class DiagnosisFinding

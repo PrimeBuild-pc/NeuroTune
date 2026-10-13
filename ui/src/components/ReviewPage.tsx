@@ -3,6 +3,7 @@ import { Bot, Check, Copy, Download, FileText, Printer, ShieldCheck } from 'luci
 import { planKindLabel, scriptArtifactFilename } from '../plan';
 import { t } from '../i18n';
 import type { ConflictPattern, Diagnosis, OptimizationAction, Recommendation, RiskProfile, SupportingAttachmentInfo } from '../types';
+import { BiosChecklist } from './BiosChecklist';
 import { DiagnosisView } from './DiagnosisView';
 import { EmptyState } from './EmptyState';
 import './ReviewPage.css';
@@ -32,6 +33,7 @@ export function ReviewPage({ diagnosis, supporting = [], actions, recommendation
     {auditOnly && <section className="section-card"><h3>{t('Local observations · separate from AI interpretation')}</h3>{(['privacy', 'security'] as const).map(domain => <details key={domain}><summary>{domain === 'privacy' ? t('Privacy · preferences and policies, not measured traffic') : t('Security · protections and scanner summary, not a clean-PC certificate')}</summary><dl className="firmware-facts">{Object.entries(auditEvidence).filter(([id]) => id.startsWith(`audit:${domain}.`)).map(([id, value]) => <div key={id}><dt>{id.slice('audit:'.length)}</dt><dd>{value}</dd></div>)}</dl></details>)}</section>}
     {diagnosis.recommendations.some(unresolvedExecutor) && <section className="section-card" role="status"><h3>{t('Some proposals have no validated action link')}</h3><p>{t('The AI supplied a missing or unknown action reference. Those proposals stay review-only, even if a similarly named capability exists. NeuroTune never guesses an executor or grants permission from a title.')}</p></section>}
     <PlanItemReview recommendations={diagnosis.recommendations}/>
+    {diagnosis.biosChecklist && diagnosis.biosChecklist.length > 0 && <BiosChecklist items={diagnosis.biosChecklist}/>}
     {diagnosis.conflicts.length > 0 && <details className="review-local"><summary>{t('Local hypotheses · not AI conclusions')}</summary><ConflictView conflicts={diagnosis.conflicts}/></details>}
     {!auditOnly && <section className="review-selection" aria-label={t('Executable action selection')}>
       <div className="section-heading"><div><h3>{t('Select registered actions')}</h3><p>{t('Presets change your selection, not the machine. Availability and backup gates still apply.')}</p></div></div>
