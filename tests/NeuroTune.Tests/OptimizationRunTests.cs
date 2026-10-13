@@ -307,6 +307,55 @@ public sealed class OptimizationRunTests
         ConsentQuestion = "Apply selected actions?"
     };
 
+    [TestMethod]
+    public void Refinement_keeps_only_applied_rollbacks_validates_adjustments_and_feeds_a_limited_follow_up_run()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"neurotune-run-{Guid.NewGuid():N}");
+        try
+        {
+            var manifest = new OperationManifest
+            {
+                Actions = [new() { ActionId = "gaming.game-mode", Attempted = true, Applied = true },
+                    new() { ActionId = "gaming.game-dvr-off", Attempted = true, Applied = true, RolledBack = true }]
+            };
+            var run = new OptimizationRun { Goals = new TuningGoals() };
+            var facts = LlmClient.RefineFacts(run, manifest, new OptimizationCatalog());
+            Assert.IsTrue(facts.ContainsKey("applied:gaming.game-mode"));
+            var response = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                summary = "Game Mode had no measurable effect.",
+                rollback = new[] { new { actionId = "applied:gaming.game-mode", reason = "no benefit" }, new { actionId = "gaming.game-dvr-off", reason = "already restored" },
+                    new { actionId = "system.unknown", reason = "never applied" } },
+                recommendations = new object[] { new { id = "qos", kind = "executableAction", title = "[Network] QoS", evidenceIds = new[] { "applied:gaming.game-mode" },
+                    reason = "test", risk = "low", actionKind = "qos.policy", parameters = new { exe = "game.exe", dscp = 46 } } }
+            });
+            var result = LlmClient.ParseRefinement(response, manifest, facts, new OptimizationCatalog());
+            Assert.AreEqual("gaming.game-mode", result.Rollback.Single().ActionId);
+            Assert.AreEqual("qos.policy", result.Recommendations.Single().ActionKind);
+
+            var service = new OptimizationRunService(directory);
+            run = service.Create(Profile(), new TuningGoals());
+            service.BeginDiagnosis(run.Id);
+            service.RecordDiagnosis(run.Id, Outcome());
+            service.Approve(run.Id, ["gaming.game-mode"], false, new OptimizationCatalog());
+            service.BeginApply(run.Id, Guid.NewGuid());
+            service.RecordApplyCompleted(run.Id, false);
+            result.Recommendations.Single().Kind = PlanRecommendationKind.ExecutableAction; // Host-independent: availability may refuse it on this PC.
+            for (var index = 0; index < OptimizationRunStateMachine.MaxRefinements; index++) service.RecordRefinement(run.Id, result);
+            Assert.ThrowsExactly<InvalidOperationException>(() => service.RecordRefinement(run.Id, result));
+            Assert.ThrowsExactly<InvalidOperationException>(() => service.CreateFollowUp(run.Id), "Keep comes first.");
+            service.Keep(run.Id);
+
+            var followUp = service.CreateFollowUp(run.Id);
+            Assert.AreEqual(OptimizationRunState.BaselinePending, followUp.State);
+            Assert.AreEqual(run.Id, followUp.ParentRunId);
+            Assert.AreEqual(OptimizationRunStateMachine.MaxRefinements, followUp.RefineIteration);
+            Assert.IsTrue(followUp.EvidenceFacts.ContainsKey("applied:gaming.game-mode"));
+            Assert.AreEqual("qos.policy", new OptimizationRunService(directory).Load(followUp.Id).Diagnosis!.Recommendations.Single().ActionKind);
+        }
+        finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); }
+    }
+
     private static PlannerDiagnosisOutcome Outcome() => new(Diagnosis(), [], "diagnosis-completed", false);
 
     private static MeasurementSession Session(Guid runId, MeasurementLabel label) => new()

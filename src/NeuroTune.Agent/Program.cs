@@ -50,6 +50,8 @@ try
         "run-resume-after-restart" => new OptimizationRunService().ResumeAfterRestart(Read<RunIdRequest>(input).RunId),
         "run-dismiss" => new OptimizationRunService().Dismiss(Read<RunIdRequest>(input).RunId),
         "run-keep" => new OptimizationRunService().Keep(Read<RunIdRequest>(input).RunId),
+        "run-refine" => await RefineRun(Read<RunRefineRequest>(input), settingsService, catalog, backup),
+        "run-follow-up" => new OptimizationRunService().CreateFollowUp(Read<RunIdRequest>(input).RunId),
         "analyze-local" => AnalyzeLocal(Read<DiagnoseRequest>(input)),
         "diagnose" => await Diagnose(Read<DiagnoseRequest>(input), settingsService, catalog),
         "actions" => Actions(catalog),
@@ -313,6 +315,17 @@ async Task<MeasurementComparison> CompareMeasurement(MeasurementCompareRequest r
     return comparison;
 }
 
+async Task<OptimizationRun> RefineRun(RunRefineRequest request, SettingsService service, OptimizationCatalog actionCatalog, BackupService backupService)
+{
+    var runService = new OptimizationRunService();
+    var run = runService.Load(request.RunId);
+    var manifest = run.OperationId is { } operationId ? backupService.Load(operationId) : null;
+    if (manifest is null) throw new InvalidOperationException("This run has no applied operation to refine.");
+    var settings = service.Load();
+    var result = await new LlmClient(actionCatalog).RefineAsync(run, manifest, settings, await Credential(service, settings), language: ResponseLanguage.Read(request.Language));
+    return runService.RecordRefinement(run.Id, result);
+}
+
 async Task<string> ExplainMeasurement(MeasurementExplanationAgentRequest request, SettingsService service, OptimizationCatalog actionCatalog)
 {
     var language = ResponseLanguage.Read(request.Language);
@@ -518,6 +531,7 @@ sealed record ScanRequest(bool OptionalTelemetryConsent, bool FirmwareReadConsen
 sealed record RunCreateRequest(SystemProfile? Profile, TuningGoals? Goals, List<Guid>? MeasurementSessionIds = null,
     List<SupportingAttachment>? Attachments = null, bool ImagesConfirmed = false, InvestigationMode Mode = InvestigationMode.MeasuredOptimization);
 sealed record RunIdRequest(Guid RunId);
+sealed record RunRefineRequest(Guid RunId, JsonElement Language = default);
 sealed record DefenderScanReviewRequest(bool ReviewedInWindowsSecurity);
 sealed record PowerPlanDirectoryRequest(string Directory);
 sealed record PowerPlanPathRequest(string Path);
