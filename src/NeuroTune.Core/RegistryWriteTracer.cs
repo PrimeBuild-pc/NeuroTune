@@ -15,13 +15,21 @@ internal sealed class RegistryWriteTracer : IDisposable
     private readonly HashSet<int> _processes = [];
     private readonly Dictionary<ulong, string> _keyNames = [];
     private readonly SortedSet<string> _writes = new(StringComparer.OrdinalIgnoreCase);
+    // One session name per process: concurrent tracers would replace each other's session, so they take turns.
+    private static readonly SemaphoreSlim Gate = new(1, 1);
+    private bool _released;
 
     internal RegistryWriteTracer()
     {
+        Gate.Wait();
         _processes.Add(Environment.ProcessId);
         _session = new TraceEventSession($"NeuroTune-ScriptRegistry-{Environment.ProcessId}") { StopOnDispose = true };
-        _session.EnableProvider(KernelProcess, TraceEventLevel.Informational, 0x10);
-        _session.EnableProvider(KernelRegistry, TraceEventLevel.Verbose);
+        try
+        {
+            _session.EnableProvider(KernelProcess, TraceEventLevel.Informational, 0x10);
+            _session.EnableProvider(KernelRegistry, TraceEventLevel.Verbose);
+        }
+        catch { _session.Dispose(); Gate.Release(); throw; }
         new RegisteredTraceEventParser(_session.Source).All += Handle;
         _processing = Task.Run(() => _session.Source.Process());
         Thread.Sleep(500); // Let the session start before the script does.
@@ -76,5 +84,9 @@ internal sealed class RegistryWriteTracer : IDisposable
         lock (_writes) return _writes.ToList();
     }
 
-    public void Dispose() => _session.Dispose();
+    public void Dispose()
+    {
+        _session.Dispose();
+        if (!_released) { _released = true; Gate.Release(); }
+    }
 }
