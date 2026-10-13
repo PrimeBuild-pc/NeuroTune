@@ -505,8 +505,9 @@ async Task<object?> Rollback(RollbackRequest request, OptimizationCatalog action
         if (request.ActionIds is not { Count: > 0 } || manifest.Actions.All(action => !(action.Attempted || action.Applied) || action.RolledBack ||
             request.ActionIds.Contains(action.ActionId, StringComparer.OrdinalIgnoreCase)))
             runService.BeginRollback(linkedRunId);
-        else if (run.State is not (OptimizationRunState.RestartPending or OptimizationRunState.CandidatePending or OptimizationRunState.DecisionPending))
-            throw new InvalidOperationException("Single items can be restored only while the run is waiting for measurement or a decision.");
+        else if (run.State is not (OptimizationRunState.RestartPending or OptimizationRunState.CandidatePending or OptimizationRunState.DecisionPending) &&
+            !(run.State == OptimizationRunState.Completed && run.Decision == OptimizationRunDecision.Keep))
+            throw new InvalidOperationException("Single items can be restored while the run waits for measurement or a decision, or after Keep.");
     }
     else if (request.RunId is not null)
         throw new InvalidOperationException("This legacy operation is not linked to an optimization run.");
