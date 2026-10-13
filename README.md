@@ -81,7 +81,7 @@
   </tr>
   <tr>
     <td valign="top"><h3>07 · A focused Windows interface</h3><p>Tauri 2 + React 19, light/dark/system appearance, reduced-motion support and quiet capture periods. Five-section navigation with a guided path (diagnose → measure before → choose → apply → measure after → keep or undo) and a Simple/Expert switch. English, Simplified Chinese, Japanese, Spanish, Russian and Italian UI.</p></td>
-    <td valign="top"><h3>08 · Source-visible by design</h3><p>MIT-licensed code, registered actions and documented limits. No model-generated write command or script execution (model-written reads pass an AST allowlist), generic BIOS writer or automatic security-disable shortcut.</p></td>
+    <td valign="top"><h3>08 · Source-visible by design</h3><p>MIT-licensed code, registered actions and documented limits. No free model-generated write commands: model-written reads pass an AST allowlist, and model-written scripts run only in Expert mode with declared, snapshotted targets, generic BIOS writer or automatic security-disable shortcut.</p></td>
   </tr>
 </table>
 

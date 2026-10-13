@@ -20,7 +20,7 @@ internal static class ParametricActions
     [
         "registry.set", "registry.delete", "service.start-type", "netadapter.property", "qos.policy", "powercfg.setting",
         "bcd.option", "startup.entry", "scheduled-task.state", "appcompat.layer", "ifeo.perf", "file.json", "file.ini",
-        "device.disable", "defender.exclusion", "nvidia.profile"
+        "device.disable", "defender.exclusion", "nvidia.profile", "script.declared"
     ];
 
     private static readonly JsonSerializerOptions Strict = new()
@@ -52,6 +52,7 @@ internal static class ParametricActions
                 "device.disable" => DeviceDisable(Read<DeviceParameters>(parameters)),
                 "defender.exclusion" => DefenderExclusion(Read<DefenderParameters>(parameters)),
                 "nvidia.profile" => NvidiaProfile(Read<NvidiaProfileParameters>(parameters)),
+                "script.declared" => DeclaredScripts.Create(Read<DeclaredScripts.Parameters>(parameters)),
                 _ => throw new InvalidOperationException($"Unknown action kind: {kind}.")
             };
         }
@@ -77,6 +78,7 @@ internal static class ParametricActions
         device.disable {"slug":"slug of a device.disable.<slug> capability"}
         defender.exclusion {"type":"Path|Process","value":"narrow folder/file path or process name"} only when Defender blocks a tool the user needs; it stays until rollback
         nvidia.profile {"profile":"Base Profile (global) or an already customized game profile name","settings":[{"id":decimal DRS setting ID,"value":decimal DWORD}]} through NVIDIA Profile Inspector; decimal IDs: Power Management - Mode 274197361 (0 Adaptive, 1 Prefer maximum performance, 5 Optimal); Ultra Low Latency - CPL State 390467 (0 Off, 1 On, 2 Ultra) together with Ultra Low Latency - Enabled 277041152 (0/1); Vertical Sync 11041231 (138504007 Force off, 1199655232 Force on, 1620202130 application setting); Frame Rate Limiter V3 277041154 (0 off, or the FPS cap); Threaded Optimization 549528094 (0 Auto, 1 On, 2 Off); Texture Filtering - Quality 13510289 (20 High performance, 10 Performance, 0 Quality)
+        script.declared {"script":"PowerShell 5.1 that makes the change","rollbackScript":"PowerShell that restores the previous state","targets":[{"kind":"typed primitive","parameters":"its parameter object, as for that primitive"} ]} only when no single primitive can do it (a vendor CLI, several dependent settings). Declare every key, service, task, file or setting the script changes as a typed target with its final value. Refused before running: downloads, Invoke-Expression, nested shells, Start-Process, deleting files, accounts, Defender/firewall, bcdedit, creating tasks or services. NeuroTune snapshots the targets, tests your rollback, restores from its snapshot when your rollback misses a target and reports Registry writes outside the targets. Shown only in Expert mode.
         """;
 
     private static T Read<T>(string json) => JsonSerializer.Deserialize<T>(json, Strict) ?? throw new JsonException("The parameters were empty.");
