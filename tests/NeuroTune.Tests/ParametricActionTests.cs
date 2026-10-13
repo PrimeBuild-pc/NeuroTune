@@ -47,6 +47,40 @@ public sealed class ParametricActionTests
     }
 
     [TestMethod]
+    public void Registry_writes_work_on_keys_that_grant_only_SetValue()
+    {
+        // Audio endpoint keys (MMDevices) give Administrators SetValue and ReadKey but not CreateSubKey.
+        var root = $@"Software\NeuroTuneTest-{Guid.NewGuid():N}";
+        var user = System.Security.Principal.WindowsIdentity.GetCurrent().User!;
+        void Grant(System.Security.AccessControl.RegistryRights rights)
+        {
+            var acl = new System.Security.AccessControl.RegistrySecurity();
+            acl.SetAccessRuleProtection(true, false);
+            acl.AddAccessRule(new(user, rights, System.Security.AccessControl.AccessControlType.Allow));
+            using var key = Registry.CurrentUser.OpenSubKey(root, Microsoft.Win32.RegistryKeyPermissionCheck.ReadWriteSubTree,
+                System.Security.AccessControl.RegistryRights.ChangePermissions)!;
+            key.SetAccessControl(acl);
+        }
+        try
+        {
+            using (var key = Registry.CurrentUser.CreateSubKey(root)) key.SetValue("Existing", 0, RegistryValueKind.DWord);
+            Grant(System.Security.AccessControl.RegistryRights.ReadKey | System.Security.AccessControl.RegistryRights.SetValue);
+            Assert.ThrowsExactly<System.Security.SecurityException>(() => Registry.CurrentUser.OpenSubKey(root, true));
+            RoundTrip(Create("registry.set", new { Hive = "HKCU", Path = root, Name = "Existing", Type = "DWord", Value = "1" }));
+            RoundTrip(Create("registry.set", new { Hive = "HKCU", Path = root, Name = "Absent", Type = "DWord", Value = "1" }));
+            RoundTrip(Create("registry.delete", new { Hive = "HKCU", Path = root, Name = "Existing" }));
+            using var restored = Registry.CurrentUser.OpenSubKey(root)!;
+            Assert.AreEqual(0, restored.GetValue("Existing"));
+            Assert.IsNull(restored.GetValue("Absent"));
+        }
+        finally
+        {
+            Grant(System.Security.AccessControl.RegistryRights.FullControl);
+            Registry.CurrentUser.DeleteSubKeyTree(root, false);
+        }
+    }
+
+    [TestMethod]
     public void Registry_set_restores_the_original_type_and_value_or_absence()
     {
         var root = $@"Software\NeuroTuneTest-{Guid.NewGuid():N}";

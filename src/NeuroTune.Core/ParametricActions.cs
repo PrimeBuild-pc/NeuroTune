@@ -283,12 +283,13 @@ internal static class ParametricActions
             using var root = Base(hive);
             if (desired() is { } wanted)
             {
-                using var key = root.CreateSubKey(path, true) ?? throw new InvalidOperationException($@"Cannot open {hive}\{path}.");
+                using var key = OptimizationCatalog.OpenForValues(root, path) ?? root.CreateSubKey(path, true)
+                    ?? throw new InvalidOperationException($@"Cannot open {hive}\{path}.");
                 key.SetValue(name, wanted.Value, wanted.Kind);
             }
             else
             {
-                using var key = root.OpenSubKey(path, true);
+                using var key = OptimizationCatalog.OpenForValues(root, path);
                 key?.DeleteValue(name, false);
             }
         }
@@ -332,7 +333,7 @@ internal static class ParametricActions
             return;
         }
         using var root = Base(hive);
-        using (var key = root.OpenSubKey(path, true)) key?.DeleteValue(name, false);
+        using (var key = OptimizationCatalog.OpenForValues(root, path)) key?.DeleteValue(name, false);
         var current = path;
         for (var level = 0; level < saved.MissingKeys; level++)
         {
