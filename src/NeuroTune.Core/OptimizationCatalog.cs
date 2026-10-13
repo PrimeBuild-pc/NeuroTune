@@ -1,6 +1,7 @@
 using Microsoft.Win32;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Security.AccessControl;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -724,7 +725,8 @@ public sealed class OptimizationCatalog
     internal static void RestoreRegistryValue(RegistryHive hive, string path, string valueName, RegistryValueSnapshot snapshot)
     {
         ValidateRegistrySnapshot(snapshot);
-        using var key = RegistryKey.OpenBaseKey(hive, RegistryView.Registry64).CreateSubKey(path, true)
+        using var root = RegistryKey.OpenBaseKey(hive, RegistryView.Registry64);
+        using var key = OpenForValues(root, path) ?? root.CreateSubKey(path, true)
             ?? throw new InvalidOperationException($"Cannot open {(hive == RegistryHive.CurrentUser ? "HKCU" : "HKLM")}\\{path}.");
         if (!snapshot.Exists)
         {
@@ -733,6 +735,10 @@ public sealed class OptimizationCatalog
         }
         key.SetValue(valueName, DeserializeRegistryValue(snapshot.Kind, snapshot.Value), snapshot.Kind);
     }
+
+    // Value writes need only SetValue: audio endpoint keys grant Administrators SetValue but not CreateSubKey.
+    internal static RegistryKey? OpenForValues(RegistryKey root, string path) =>
+        root.OpenSubKey(path, RegistryKeyPermissionCheck.ReadWriteSubTree, RegistryRights.SetValue | RegistryRights.QueryValues);
 
     internal static RegistryValueSnapshot DeserializeRegistrySnapshot(string state)
     {

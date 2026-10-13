@@ -8,7 +8,15 @@
   V-Sync mode. Two ADLX calls at the same time deadlocked, so NeuroTune makes one call at a time.
 - The ADLX SDK license (object code only, no open-source use) is not yet granted; no SDK file is in this repository.
 
-# Unreleased — v2 F9: web search
+# v2 F5: audio endpoints
+
+- `registry.set`/`registry.delete` open an existing key with only the Set Value right, so keys that grant
+  Administrators nothing more (audio endpoints under `MMDevices`, owned by TrustedInstaller) can be written and
+  restored without taking ownership.
+- The prompt knows how to list audio endpoints and disable their enhancements, and how to turn off communications
+  ducking.
+
+# v2 F9: web search
 
 - Planner turns can search the web: the provider's own search on Anthropic, OpenRouter and ChatGPT, or Tavily when you
   save a Tavily key in the provider page (then the `web-search` reader is used instead). Web content is untrusted data
@@ -65,6 +73,9 @@
 - At startup NeuroTune verifies the items of the last ten kept runs (read-only). When an update or driver install reset
   some of them, a banner offers **Review and reapply**: the reset items open as a linked run with the usual review,
   restore point, journal and rollback. Items that cannot be verified are not reported as reset.
+- Optional **Check at Windows sign-in** (Settings): a scheduled task for your account runs the same check one minute
+  after sign-in and opens NeuroTune only when something was reset. Turn it off before uninstalling; the uninstaller
+  does not remove it.
 
 # v2 F5 (part 1): high-impact domains
 
@@ -73,7 +84,7 @@
 - **Known high-impact targets** in the prompt when writes are possible (`presets/targets.md`): MSI/IRQ, NIC keywords,
   QoS, Game DVR/capture, Discord settings, Chrome/Edge hardware acceleration policies, per-exe options and game config
   files, always read first with `powershell-read`.
-- Not yet: NVIDIA driver profiles (DRS), AMD ADLX and audio endpoint enhancements (open decisions in the plan).
+- Not yet: NVIDIA driver profiles (DRS) and AMD ADLX (open decisions in the plan).
 
 # v2 F4: closed loop without the Baseline gate
 
