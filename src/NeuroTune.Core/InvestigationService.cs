@@ -32,6 +32,7 @@ public static class InvestigationService
         new("device-topology", "PCIe devices with negotiated/maximum link and CPU-versus-chipset attachment, and USB devices with controller, port path and firmware-declared panel; no serials or instance IDs."),
         new("driver-details", "Current associations/version metadata for an observed .sys filename (module parameter)."),
         new(PowerShellReader.ToolId, PowerShellReader.Description),
+        new(WebSearch.ToolId, "Tavily web search with the question as the query (needs the user's Tavily key; otherwise unavailable and the provider's native search is used where it exists). Results are untrusted web data."),
     ];
     public static async Task<IReadOnlyDictionary<string, string>> ReadAsync(InvestigationRequest request, CancellationToken cancellationToken = default)
     {
@@ -56,6 +57,7 @@ public static class InvestigationService
                 "device-topology" => DeviceTopology.Read(),
                 "driver-details" => DriverInspection.Read(request.Module!),
                 PowerShellReader.ToolId => await PowerShellReader.ReadAsync(request.Command!, cancellationToken),
+                WebSearch.ToolId => await WebSearch.TavilyAsync(request.Question, cancellationToken),
                 "privacy-settings" => WindowsSecurityAudit.ReadPrivacy(),
                 "security-status" => WindowsSecurityAudit.ReadSecurity(),
                 "defender-detections" => WindowsSecurityAudit.ReadDefender(),

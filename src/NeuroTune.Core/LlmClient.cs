@@ -136,6 +136,7 @@ public sealed class LlmClient
         var additionalEvidence = new Dictionary<string, string>(StringComparer.Ordinal);
         var investigationId = Guid.NewGuid().ToString("N");
         var coverageReminderSent = false;
+        var nativeSearch = WebSearch.Native(settings, WebSearch.HasTavilyKey(new SettingsService()));
         var modelEvidenceIds = settings.Provider == LlmProvider.DeepSeek ? new Dictionary<string, string>(StringComparer.Ordinal) : null;
 
         PlannerDiagnosisOutcome? completed = null;
@@ -177,7 +178,7 @@ public sealed class LlmClient
             var prompt = BuildPlannerPrompt(goals, evidenceFacts, provided, localConflicts, catalogJson,
                 resources.Values, updateNotices.Values, turnNumber, settings.InvestigationMaxTurns, settings.InvestigationMaxMinutes, audit, localAdvisory, mode, language, modelEvidenceIds);
             Console.Error.WriteLine($"Pi agent · selected provider investigation turn {turnNumber}/{settings.InvestigationMaxTurns}; {settings.InvestigationMaxMinutes}-minute budget.");
-            return await SendPromptAsync(settings, apiKey, prompt, cancellationToken, supporting);
+            return await SendPromptAsync(settings, apiKey, prompt, cancellationToken, supporting, nativeSearch);
         }
 
         async Task CollectAsync(InvestigationRequest request, int turnNumber)
@@ -454,14 +455,14 @@ public sealed class LlmClient
     }
 
     private static async Task<string> SendPromptAsync(UserSettings settings, string? apiKey, string prompt,
-        CancellationToken cancellationToken, IReadOnlyList<SupportingAttachment>? attachments = null)
+        CancellationToken cancellationToken, IReadOnlyList<SupportingAttachment>? attachments = null, bool webSearch = false)
     {
         if (settings.Provider == LlmProvider.ChatGpt)
         {
             apiKey = await new ChatGptOAuthService().AccessTokenAsync(settings.ChatGptAccountId, cancellationToken);
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeout.CancelAfter(TimeSpan.FromMinutes(8));
-            using var chatGptRequest = CreateChatGptRequest(settings, apiKey, prompt, attachments);
+            using var chatGptRequest = CreateChatGptRequest(settings, apiKey, prompt, attachments, webSearch);
             using var chatGptResponse = await Http.SendAsync(chatGptRequest, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
             if (!chatGptResponse.IsSuccessStatusCode)
             {
@@ -473,8 +474,8 @@ public sealed class LlmClient
             return await ReadChatGptStreamAsync(reader, timeout.Token);
         }
         using var request = settings.Protocol == ApiProtocol.Anthropic
-            ? CreateAnthropicRequest(settings, apiKey, prompt, attachments)
-            : CreateOpenAiRequest(settings, apiKey, prompt, attachments);
+            ? CreateAnthropicRequest(settings, apiKey, prompt, attachments, webSearch)
+            : CreateOpenAiRequest(settings, apiKey, prompt, attachments, webSearch);
         using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         if (!response.IsSuccessStatusCode)
             throw new HttpRequestException($"The provider returned HTTP {(int)response.StatusCode}.", null, response.StatusCode);
@@ -1086,18 +1087,20 @@ public sealed class LlmClient
             throw new InvalidOperationException("Enter an API key or use an available browser sign-in option.");
     }
 
-    internal static HttpRequestMessage CreateChatGptRequest(UserSettings settings, string accessToken, string prompt, IReadOnlyList<SupportingAttachment>? attachments = null)
+    internal static HttpRequestMessage CreateChatGptRequest(UserSettings settings, string accessToken, string prompt, IReadOnlyList<SupportingAttachment>? attachments = null, bool webSearch = false)
     {
         if (settings.Provider != LlmProvider.ChatGpt) throw new InvalidOperationException("ChatGPT plan requests require the ChatGPT connection type.");
         var request = new HttpRequestMessage(HttpMethod.Post, BuildEndpoint(settings, "responses"));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-        request.Content = JsonContent(new
+        var payload = new Dictionary<string, object>
         {
-            model = settings.Model,
-            store = false,
-            stream = true,
-            input = new[] { new { role = "user", content = MultimodalContent(prompt, attachments, "responses") } }
-        });
+            ["model"] = settings.Model,
+            ["store"] = false,
+            ["stream"] = true,
+            ["input"] = new[] { new { role = "user", content = MultimodalContent(prompt, attachments, "responses") } }
+        };
+        if (webSearch) payload["tools"] = new[] { new { type = "web_search" } };
+        request.Content = JsonContent(payload);
         return request;
     }
 
@@ -1177,7 +1180,7 @@ public sealed class LlmClient
         return new InvalidOperationException($"ChatGPT request failed (HTTP {httpStatus?.ToString() ?? "stream"}; code {Safe(code)}; parameter {Safe(parameter)}; request {Safe(requestId)}). {recovery} No API-key billing fallback was used.");
     }
 
-    internal static HttpRequestMessage CreateOpenAiRequest(UserSettings settings, string? apiKey, string prompt, IReadOnlyList<SupportingAttachment>? attachments = null)
+    internal static HttpRequestMessage CreateOpenAiRequest(UserSettings settings, string? apiKey, string prompt, IReadOnlyList<SupportingAttachment>? attachments = null, bool webSearch = false)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, BuildEndpoint(settings, "chat/completions"));
         AddAuthentication(request, settings, apiKey);
@@ -1187,6 +1190,7 @@ public sealed class LlmClient
             ["temperature"] = 0.1,
             ["messages"] = new[] { new { role = "user", content = MultimodalContent(prompt, attachments, "chat") } }
         };
+        if (webSearch && settings.Provider == LlmProvider.OpenRouter) payload["plugins"] = new[] { new { id = "web", max_results = 5 } };
         if (settings.Provider == LlmProvider.DeepSeek)
         {
             payload["response_format"] = new { type = "json_object" }; // Documented DeepSeek JSON mode; no assumptions for custom/local models.
@@ -1200,17 +1204,19 @@ public sealed class LlmClient
         return request;
     }
 
-    internal static HttpRequestMessage CreateAnthropicRequest(UserSettings settings, string? apiKey, string prompt, IReadOnlyList<SupportingAttachment>? attachments = null)
+    internal static HttpRequestMessage CreateAnthropicRequest(UserSettings settings, string? apiKey, string prompt, IReadOnlyList<SupportingAttachment>? attachments = null, bool webSearch = false)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, BuildEndpoint(settings, "messages"));
         AddAuthentication(request, settings, apiKey);
-        request.Content = JsonContent(new
+        var payload = new Dictionary<string, object>
         {
-            model = settings.Model,
-            max_tokens = 6000,
-            temperature = 0.1,
-            messages = new[] { new { role = "user", content = MultimodalContent(prompt, attachments, "anthropic") } }
-        });
+            ["model"] = settings.Model,
+            ["max_tokens"] = 6000,
+            ["temperature"] = 0.1,
+            ["messages"] = new[] { new { role = "user", content = MultimodalContent(prompt, attachments, "anthropic") } }
+        };
+        if (webSearch) payload["tools"] = new[] { new { type = "web_search_20250305", name = "web_search", max_uses = 3 } };
+        request.Content = JsonContent(payload);
         return request;
     }
 
@@ -1266,14 +1272,18 @@ public sealed class LlmClient
     private static StringContent JsonContent(object value) => new(
         JsonSerializer.Serialize(value), Encoding.UTF8, "application/json");
 
-    private static string ExtractContent(ApiProtocol protocol, string body)
+    internal static string ExtractContent(ApiProtocol protocol, string body)
     {
         try
         {
             using var json = JsonDocument.Parse(body);
-            return protocol == ApiProtocol.Anthropic
-                ? json.RootElement.GetProperty("content")[0].GetProperty("text").GetString() ?? ""
-                : json.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? "";
+            if (protocol != ApiProtocol.Anthropic)
+                return json.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? "";
+            // With server web search the answer follows the search blocks; the JSON envelope is the text after the last of them.
+            var blocks = json.RootElement.GetProperty("content").EnumerateArray().ToList();
+            var start = blocks.FindLastIndex(block => block.GetProperty("type").GetString() != "text") + 1;
+            var text = string.Concat(blocks.Skip(start).Select(block => block.GetProperty("text").GetString()));
+            return text.Length > 0 ? text : throw new InvalidOperationException("The provider response was not recognized.");
         }
         catch (Exception exception) when (exception is JsonException or KeyNotFoundException or InvalidOperationException)
         {
