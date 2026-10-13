@@ -425,6 +425,46 @@ public sealed class ParametricActionTests
     }
 
     [TestMethod]
+    public void Device_keys_accept_only_msi_and_affinity_values_of_a_present_pci_device()
+    {
+        const string Prefix = @"SYSTEM\CurrentControlSet\Enum\";
+        OptimizationAction Set(string path, string name, string type = "DWord", string value = "1") =>
+            Create("registry.set", new { Hive = "HKLM", Path = Prefix + path, Name = name, Type = type, Value = value });
+
+        var missing = Set(@"PCI\VEN_FFFF&DEV_FFFF\0\Device Parameters\Interrupt Management\MessageSignaledInterruptProperties", "MSISupported");
+        Assert.IsTrue(missing.RequiresRestart);
+        Assert.AreEqual(RiskLevel.High, missing.Risk);
+        StringAssert.Contains(missing.Inspect().Status, "not present");
+        Set(@"PCI\VEN_FFFF&DEV_FFFF\0\Device Parameters\Interrupt Management\Affinity Policy", "DevicePolicy", value: "4");
+        foreach (var (path, name) in new[]
+        {
+            (@"PCI\VEN_FFFF&DEV_FFFF\0\Device Parameters\Interrupt Management\MessageSignaledInterruptProperties", "Other"),
+            (@"PCI\VEN_FFFF&DEV_FFFF\0\Device Parameters", "MSISupported"),
+            (@"PCI\VEN_FFFF&DEV_FFFF\0", "ConfigFlags"),
+            (@"USB\VID_FFFF&PID_FFFF\0\Device Parameters\Interrupt Management\MessageSignaledInterruptProperties", "MSISupported")
+        })
+            Assert.ThrowsExactly<InvalidOperationException>(() => Set(path, name), path + " " + name);
+
+        using var pci = Registry.LocalMachine.OpenSubKey(Prefix + "PCI");
+        var device = pci?.GetSubKeyNames().Select(id => (id, instance: pci.OpenSubKey(id)?.GetSubKeyNames().FirstOrDefault())).FirstOrDefault(item => item.instance is not null);
+        if (device?.instance is null) Assert.Inconclusive("No PCI device on this machine.");
+        var present = Set($@"PCI\{device.Value.id}\{device.Value.instance}\Device Parameters\Interrupt Management\MessageSignaledInterruptProperties", "MSISupported");
+        Assert.IsFalse(present.Inspect().Status.Contains("not present", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public void Planner_prompt_teaches_primitives_and_targets_only_when_writes_are_possible()
+    {
+        string Prompt(OptimizationPriority priority, InvestigationMode mode) => LlmClient.BuildPlannerPrompt(new TuningGoals { Priority = priority },
+            new Dictionary<string, string> { ["system:cpu"] = "CPU" }, new Dictionary<string, string> { ["system:cpu"] = "CPU" }, [], "[]", [], [], 1, 2, 1, [], null, mode);
+        var fps = Prompt(OptimizationPriority.Fps, InvestigationMode.MeasuredOptimization);
+        StringAssert.Contains(fps, "netadapter.property {");
+        StringAssert.Contains(fps, "MessageSignaledInterruptProperties");
+        foreach (var advice in new[] { Prompt(OptimizationPriority.HardwareLayout, InvestigationMode.MeasuredOptimization), Prompt(OptimizationPriority.PrivacySecurity, InvestigationMode.AuditOnly) })
+            Assert.IsFalse(advice.Contains("KNOWN HIGH-IMPACT TARGETS", StringComparison.Ordinal) || advice.Contains("netadapter.property {", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
     public void Diagnosis_links_typed_proposals_and_keeps_refused_ones_as_manual_guidance()
     {
         var path = $@"Software\NeuroTuneTest-{Guid.NewGuid():N}";

@@ -314,7 +314,7 @@ public sealed class LlmClient
         {{{JsonSerializer.Serialize(conflicts.Select(conflict => new { conflict.Id, conflict.Title, conflict.Kind, EvidenceIds = conflict.EvidenceIds.Select(id => MapEvidenceId(id, modelEvidenceIds)), conflict.Objectives, conflict.Explanation, conflict.WhyCounterproductive, conflict.Confidence, conflict.SuggestedActionIds }))}}}
 
         TYPED WRITE PRIMITIVES (executableAction with "actionKind" and a "parameters" object; NeuroTune validates them, refuses protected security/boot targets, captures the exact prior state and can roll each one back; risk comes from the primitive, not from you):
-        {{{(mode == InvestigationMode.AuditOnly || goals.Priority == OptimizationPriority.HardwareLayout ? "None in this objective: advice only." : ParametricActions.Guide())}}}
+        {{{(mode == InvestigationMode.AuditOnly || goals.Priority == OptimizationPriority.HardwareLayout ? "None in this objective: advice only." : ParametricActions.Guide() + Environment.NewLine + Preset("targets"))}}}
 
         CURRENTLY AVAILABLE EXECUTION CAPABILITIES (descriptive build/hardware metadata is not proof of universal compatibility):
         {{{catalogJson}}}
@@ -330,12 +330,16 @@ public sealed class LlmClient
     internal static string AnalysisFocus(OptimizationPriority priority)
     {
         if (!Enum.IsDefined(priority)) throw new InvalidOperationException("Unknown analysis objective.");
-        var name = Regex.Replace(priority.ToString(), "(?<=.)([A-Z])", "-$1").ToLowerInvariant();
-        using var stream = typeof(LlmClient).Assembly.GetManifestResourceStream($"NeuroTune.presets.{name}.md")
-            ?? throw new InvalidOperationException("Unknown analysis objective.");
         return "This preset is a prompt with the minimum checklist and steps, not a fixed tweak recipe and not execution permissions, risk consent, tool access or budgets. " +
             "Measurements are context for targeted changes, not a gate. The checklist is the minimum: investigate beyond it when the evidence points elsewhere.\n" +
-            new StreamReader(stream).ReadToEnd();
+            Preset(Regex.Replace(priority.ToString(), "(?<=.)([A-Z])", "-$1").ToLowerInvariant());
+    }
+
+    internal static string Preset(string name)
+    {
+        using var stream = typeof(LlmClient).Assembly.GetManifestResourceStream($"NeuroTune.presets.{name}.md")
+            ?? throw new InvalidOperationException("Unknown analysis objective.");
+        return new StreamReader(stream).ReadToEnd();
     }
 
     public async Task<string> ExplainComparisonAsync(MeasurementComparison comparison, TuningGoals goals, UserSettings settings,
