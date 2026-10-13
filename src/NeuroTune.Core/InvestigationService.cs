@@ -3,10 +3,10 @@ using System.Text.Json;
 
 namespace NeuroTune;
 
-public sealed record InvestigationRequest(string ToolId, string Question, string? Module = null);
+public sealed record InvestigationRequest(string ToolId, string Question, string? Module = null, string? Command = null);
 public sealed record InvestigationTool(string Id, string Description);
 
-// Read-only providers, never a model-supplied shell/query/path. The model chooses domains and questions, not executable code.
+// Read-only providers. Only powershell-read takes model-written code, and only after PowerShellReader has checked its AST.
 public static class InvestigationService
 {
     public static IReadOnlyList<InvestigationTool> Tools { get; } = [
@@ -31,6 +31,7 @@ public static class InvestigationService
         new("hosts-and-proxy", "Hosts-file entry counts and user proxy/PAC flags; no domains or addresses."),
         new("device-topology", "PCIe devices with negotiated/maximum link and CPU-versus-chipset attachment, and USB devices with controller, port path and firmware-declared panel; no serials or instance IDs."),
         new("driver-details", "Current associations/version metadata for an observed .sys filename (module parameter)."),
+        new(PowerShellReader.ToolId, PowerShellReader.Description),
     ];
     public static async Task<IReadOnlyDictionary<string, string>> ReadAsync(InvestigationRequest request, CancellationToken cancellationToken = default)
     {
@@ -54,6 +55,7 @@ public static class InvestigationService
                 "system-events" => ReadEvents(),
                 "device-topology" => DeviceTopology.Read(),
                 "driver-details" => DriverInspection.Read(request.Module!),
+                PowerShellReader.ToolId => await PowerShellReader.ReadAsync(request.Command!, cancellationToken),
                 "privacy-settings" => WindowsSecurityAudit.ReadPrivacy(),
                 "security-status" => WindowsSecurityAudit.ReadSecurity(),
                 "defender-detections" => WindowsSecurityAudit.ReadDefender(),
@@ -82,6 +84,8 @@ public static class InvestigationService
             throw new ArgumentException("Invalid read-only investigation request.");
         if (request.ToolId == "driver-details") DriverInspection.ValidateModule(request.Module ?? "");
         else if (request.Module is not null) throw new ArgumentException("This investigation tool does not accept a module parameter.");
+        if (request.ToolId == PowerShellReader.ToolId) PowerShellReader.ValidateText(request.Command);
+        else if (request.Command is not null) throw new ArgumentException("This investigation tool does not accept a command parameter.");
     }
     private static object ReadRows(string table, string[] columns, string where = "")
     {

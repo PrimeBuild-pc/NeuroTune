@@ -1,4 +1,13 @@
-# Unreleased — v2 F3: presets as prompts, typed proposals from the diagnosis
+# Unreleased — v2 F2: free read for the agent
+
+- **`powershell-read` investigation tool**: the agent can read what the fixed readers miss (Registry values, services,
+  NIC advanced properties and interface GUIDs, power settings, game config files). The command is parsed by Windows
+  PowerShell's own parser; every AST node, command and argument must be on a read-only allowlist (`Get-*` cmdlets,
+  pipeline helpers, read forms of `reg`, `powercfg`, `pnputil`, `netsh`, `bcdedit`, `driverquery`, `wevtutil`,
+  `nvidia-smi`). A refused command returns its reason and nothing runs. Allowed commands run in Constrained Language
+  mode as a non-admin process (admin only for `bcdedit`, `Get-MpPreference`, `Get-StorageReliabilityCounter`).
+
+# v2 F3: presets as prompts, typed proposals from the diagnosis
 
 - **Presets are prompts** (`presets/*.md`, embedded in the app): each objective has a checklist per domain, signals to
   look for and the output format, replacing the fixed focus text in `LlmClient`. New objectives **Competitive FPS**
