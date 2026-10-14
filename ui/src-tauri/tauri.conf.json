@@ -34,9 +34,10 @@
     "active": true,
     "targets": ["nsis"],
     "publisher": "PrimeBuild",
+    "licenseFile": "../../licenses/AMD-COMPONENT-EULA.txt",
     "shortDescription": "AI-guided, reversible Windows optimization",
     "longDescription": "NeuroTune measures Windows, lets your AI investigate, and applies only typed, validated and reversible changes that you approve.",
-    "resources": ["agent/NeuroTune.Agent.exe", "agent/NeuroTune.Telemetry.exe", "agent/NeuroTuneLatency.wprp", "agent/pi/*"],
+    "resources": ["agent/NeuroTune.Agent.exe", "agent/NeuroTune.Telemetry.exe", "agent/NeuroTuneLatency.wprp", "agent/pi/*", "agent/amd/*"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

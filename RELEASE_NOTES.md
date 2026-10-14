@@ -12,6 +12,12 @@ not certify recovery or compatibility.
 - `NeuroTune_0.9.0-alpha.1_x64-setup.exe`: unsigned per-machine NSIS installer.
 - `NeuroTune-0.9.0-alpha.1-win-x64.zip`: complete portable app with both
   self-contained agents, the bundled Pi runtime, WPR profile, license and docs.
+
+NeuroTune is MIT-licensed except the optional AMD Radeon component
+(`agent\amd\NeuroTune.AmdAdlx.dll`), which is built from the AMD ADLX SDK and
+ships only as object code under its own end user license
+(`licenses/AMD-COMPONENT-EULA.txt`, shown by the installer). Builds from the
+public source run without it.
 - `SHA256SUMS`: verify these against the downloaded assets before running them.
 
 Windows 11 x64, WebView2 and normal UAC approval are required. System
@@ -34,7 +40,7 @@ uninstall.
 ## Known limits
 
 - Not tested on a physical NVIDIA GPU; AMD ADLX covers only global 3D settings of
-  the first GPU and its SDK license is still pending.
+  the first GPU and is absent from builds made from the public source.
 - Web search and the F11 eval were not run against real providers.
 - Declared scripts (Expert) trace only Registry changes outside their targets.
 - BIOS settings are a checklist; firmware writes are not supported.
@@ -76,7 +82,9 @@ uninstall.
   rollback writes the captured value back.
 - Tested on an RX 6950 XT (driver 32.0.21045.5002, ADLX 1.4): reads, and write/restore round trips of MLAA and
   V-Sync mode. Two ADLX calls at the same time deadlocked, so NeuroTune makes one call at a time.
-- The ADLX SDK license (object code only, no open-source use) is not yet granted; no SDK file is in this repository.
+- The ADLX SDK license allows object code only, so the ADLX calls live in a separate private component,
+  `NeuroTune.AmdAdlx.dll`, shipped in `agent\amd` under `licenses/AMD-COMPONENT-EULA.txt`. The public source loads it
+  when present and otherwise refuses `amd.setting`/`amd-3d` with a clear message.
 
 ## v2 F5: audio endpoints
 

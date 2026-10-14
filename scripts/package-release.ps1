@@ -24,6 +24,7 @@ $required = @(
     (Join-Path $agentDirectory 'NeuroTune.Agent.exe'),
     (Join-Path $agentDirectory 'NeuroTune.Telemetry.exe'),
     (Join-Path $agentDirectory 'NeuroTuneLatency.wprp'),
+    (Join-Path $agentDirectory 'amd/AMD-COMPONENT-EULA.txt'),
     (Join-Path $root 'LICENSE'),
     (Join-Path $root 'README.md'),
     (Join-Path $root 'RELEASE_NOTES.md')
@@ -49,6 +50,7 @@ Copy-Item -LiteralPath (Join-Path $agentDirectory 'NeuroTune.Agent.exe') -Destin
 Copy-Item -LiteralPath (Join-Path $agentDirectory 'NeuroTune.Telemetry.exe') -Destination (Join-Path $portableRoot 'agent/NeuroTune.Telemetry.exe')
 Copy-Item -LiteralPath (Join-Path $agentDirectory 'NeuroTuneLatency.wprp') -Destination (Join-Path $portableRoot 'agent/NeuroTuneLatency.wprp')
 Copy-Item -LiteralPath $piDirectory -Destination (Join-Path $portableRoot 'agent/pi') -Recurse
+Copy-Item -LiteralPath (Join-Path $agentDirectory 'amd') -Destination (Join-Path $portableRoot 'agent/amd') -Recurse
 Copy-Item -LiteralPath (Join-Path $root 'LICENSE') -Destination $portableRoot
 Copy-Item -LiteralPath (Join-Path $root 'README.md') -Destination $portableRoot
 Copy-Item -LiteralPath (Join-Path $root 'RELEASE_NOTES.md') -Destination $portableRoot
@@ -64,7 +66,7 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 $archive = [System.IO.Compression.ZipFile]::OpenRead($zip)
 try {
     $entries = $archive.Entries.FullName -replace '\\', '/'
-    $requiredEntries = @('NeuroTune.exe', 'agent/NeuroTune.Agent.exe', 'agent/NeuroTune.Telemetry.exe', 'agent/NeuroTuneLatency.wprp', 'LICENSE') + @($piFiles | ForEach-Object { "agent/pi/$_" })
+    $requiredEntries = @('NeuroTune.exe', 'agent/NeuroTune.Agent.exe', 'agent/NeuroTune.Telemetry.exe', 'agent/NeuroTuneLatency.wprp', 'agent/amd/AMD-COMPONENT-EULA.txt', 'LICENSE') + @($piFiles | ForEach-Object { "agent/pi/$_" })
     foreach ($relative in $requiredEntries) {
         $expected = "$portableName/$relative"
         if ($entries -notcontains $expected) { throw "Portable archive is incomplete: $expected is missing." }
