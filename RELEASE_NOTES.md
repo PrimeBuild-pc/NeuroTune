@@ -1,11 +1,54 @@
-# Unreleased — power-plan import, no Baseline gate in Expert diagnosis
+# NeuroTune v0.9.0-alpha.1
+
+## v2: an agentic tuner with typed, reversible writes
+
+**Unsigned prerelease for controlled Windows 11 x64 testing, not a stable/general
+release or a promise of performance gains.** Keep independent backups and use a
+disposable VM for system-changing tests. A green build and matching hashes do
+not certify recovery or compatibility.
+
+## Downloads after publication
+
+- `NeuroTune_0.9.0-alpha.1_x64-setup.exe`: unsigned per-machine NSIS installer.
+- `NeuroTune-0.9.0-alpha.1-win-x64.zip`: complete portable app with both
+  self-contained agents, the bundled Pi runtime, WPR profile, license and docs.
+- `SHA256SUMS`: verify these against the downloaded assets before running them.
+
+Windows 11 x64, WebView2 and normal UAC approval are required. System
+Protection is required before Apply. SmartScreen may warn about unsigned
+binaries. Earlier alpha tags/assets remain unchanged.
+
+## What changed since alpha.5
+
+The v2 direction replaces the fixed action list and the Baseline gate: presets
+are prompts, measurements are context for the AI, reads are near-free, and every
+write goes through typed, parametric, reversible primitives with a journal and a
+restore point. The sections below list each phase.
+
+Checked in a Windows 11 Hyper-V VM on the CI installer: upgrade over alpha.4
+(old runs, operations and measurements stay readable), Apply/rollback of
+catalog and parametric changes, NIC, Defender exclusion and audio endpoint
+round trips, power-plan import/activation/rollback, the sign-in task and
+uninstall.
+
+## Known limits
+
+- Not tested on a physical NVIDIA GPU; AMD ADLX covers only global 3D settings of
+  the first GPU and its SDK license is still pending.
+- Web search and the F11 eval were not run against real providers.
+- Declared scripts (Expert) trace only Registry changes outside their targets.
+- BIOS settings are a checklist; firmware writes are not supported.
+- Some third-party .pow files are refused by Windows itself on some machines;
+  NeuroTune rolls the attempt back.
+
+## Power-plan import, no Baseline gate in Expert diagnosis
 
 - Custom power plans: NeuroTune ships only the Microsoft High performance and Ultimate Performance plans (listed by
   default). "Import a .pow file" stages any plan the user has in one step; a link points to the NeuroTune Discord for
   more plans. The default folder no longer points to a developer path.
 - Expert "Run AI diagnosis" no longer requires three matching baselines: selected baselines are sent as context.
 
-# Unreleased — fixes from the VM app test
+## Fixes from the VM app test
 
 - The uninstaller removes the "NeuroTune kept changes check" sign-in task (updates keep it).
 - An Apply that fails before its first change (restore point or Registry backup) no longer leaves a "Preparing"
@@ -16,7 +59,7 @@
 - Custom power plans: a missing suggested folder shows an empty list instead of a raw error.
 - The guided setup and the power-plan text no longer mention the removed Baseline gate.
 
-# Unreleased — restore point wait and VM checks
+## Restore point wait and VM checks
 
 - Apply and rollback now wait up to 60 s (was 10 s) for their restore point to appear. In the Hyper-V test VM Windows
   listed it about 10 s after accepting the request, so Apply failed with "the restore point was not found".
@@ -25,7 +68,7 @@
   Administrators have only Set Value); an operation journal v3 written by alpha.4 read and rolled back by the current
   agent.
 
-# Unreleased — v2 F5: AMD Radeon settings
+## v2 F5: AMD Radeon settings
 
 - New typed write `amd.setting` and reader `amd-3d` through AMD ADLX, called directly on the driver's
   `amdadlx64.dll` (System32): Anti-Lag, Chill, Boost, Radeon Image Sharpening, Enhanced Sync, Wait for Vertical
@@ -35,7 +78,7 @@
   V-Sync mode. Two ADLX calls at the same time deadlocked, so NeuroTune makes one call at a time.
 - The ADLX SDK license (object code only, no open-source use) is not yet granted; no SDK file is in this repository.
 
-# v2 F5: audio endpoints
+## v2 F5: audio endpoints
 
 - `registry.set`/`registry.delete` open an existing key with only the Set Value right, so keys that grant
   Administrators nothing more (audio endpoints under `MMDevices`, owned by TrustedInstaller) can be written and
@@ -43,13 +86,13 @@
 - The prompt knows how to list audio endpoints and disable their enhancements, and how to turn off communications
   ducking.
 
-# v2 F9: web search
+## v2 F9: web search
 
 - Planner turns can search the web: the provider's own search on Anthropic, OpenRouter and ChatGPT, or Tavily when you
   save a Tavily key in the provider page (then the `web-search` reader is used instead). Web content is untrusted data
   and only feeds typed, validated proposals.
 
-# v2 F6: declared scripts (Expert mode)
+## v2 F6: declared scripts (Expert mode)
 
 - New typed write `script.declared`: a PowerShell script written by the AI, its rollback script and the targets it
   changes, declared as typed primitives. Before anything runs, a blocking check refuses downloads, `Invoke-Expression`,
@@ -62,7 +105,7 @@
   "Rollback not guaranteed".
 - Shown only in Expert mode, with the full script and rollback text in the plan and a separate confirmation before Apply.
 
-# v2 F5: NVIDIA driver profiles
+## v2 F5: NVIDIA driver profiles
 
 - New typed write `nvidia.profile` through NVIDIA Profile Inspector from the command line: the exported profile plus the
   requested DWORD settings is imported, and rollback re-imports the exported profile exactly. Base Profile, or game
@@ -71,13 +114,13 @@
   verified setting IDs (power mode, low latency, V-Sync, frame limiter, threaded optimization, texture quality).
 - Tested with unit tests only: a real run needs an NVIDIA GPU.
 
-# v2 F7: Defender
+## v2 F7: Defender
 
 - Defender exclusions (`defender.exclusion`) stay until you roll them back, like any journaled change.
 - While Microsoft Defender real-time protection is off (and Defender is the active antivirus), a persistent banner
   reminds you and opens Windows Security; it is rechecked whenever the window regains focus.
 
-# v2 F9 (part 1): game packages
+## v2 F9 (part 1): game packages
 
 - `games/*.json` for Fortnite, Counter-Strike 2, VALORANT, Apex Legends and Call of Duty/Warzone: executables,
   launchers, config files and formats, competitive settings, anti-cheat limits (for example Vanguard needs TPM and
@@ -86,7 +129,7 @@
   knowledge to verify, never commands.
 - Not yet: web search for games without a package (needs a search provider choice).
 
-# v2 F8 (phase 1): BIOS checklist, no firmware writes
+## v2 F8 (phase 1): BIOS checklist, no firmware writes
 
 - The diagnosis can return a **BIOS checklist** (setting, value, menu path, reason, source). Items cite a SCEWIN dump
   or manual excerpt, or are shown as unverified general knowledge. Secure Boot/TPM, voltages and manual memory timings
@@ -95,7 +138,7 @@
   a phone) and **Check after restart** (DIMM configured speeds, memory profile, firmware virtualization, NVIDIA BAR;
   C-states/ASPM/ErP/PBO are reported as not observable).
 
-# v2 F10: kept changes stay applied
+## v2 F10: kept changes stay applied
 
 - At startup NeuroTune verifies the items of the last ten kept runs (read-only). When an update or driver install reset
   some of them, a banner offers **Review and reapply**: the reset items open as a linked run with the usual review,
@@ -104,7 +147,7 @@
   after sign-in and opens NeuroTune only when something was reset. Turn it off before uninstalling; the uninstaller
   does not remove it.
 
-# v2 F5 (part 1): high-impact domains
+## v2 F5 (part 1): high-impact domains
 
 - **MSI mode and interrupt affinity** through `registry.set`, limited under `Enum` to a present PCI device's MSI and
   Affinity Policy values (restart required, High risk).
@@ -113,7 +156,7 @@
   files, always read first with `powershell-read`.
 - Not yet: NVIDIA driver profiles (DRS) and AMD ADLX (open decisions in the plan).
 
-# v2 F4: closed loop without the Baseline gate
+## v2 F4: closed loop without the Baseline gate
 
 - **Refine (up to 3 rounds)**: after Apply, the selected AI reviews what was applied plus any before/after metrics and
   suggests single items to restore (one button each) and adjustments. Restore suggestions only name applied records;
@@ -126,13 +169,13 @@
 - **Restore a single change**: Activity & restore lists each applied item of a run's operation with its own Restore
   button; the rest stays applied (journal status `Partially rolled back`). Restoring everything still closes the run.
 
-# v2 F11: eval skeleton
+## v2 F11: eval skeleton
 
 - `tests/eval/` cases and a manual `EvalRunner` (needs `NEUROTUNE_EVAL_PROVIDER`) measure recall of expected proposals,
   forbidden proposals, parse failures and turns per model. Refused typed proposals keep their kind and parameters for
   review; they stay non-executable.
 
-# v2 F2: free read for the agent
+## v2 F2: free read for the agent
 
 - **`powershell-read` investigation tool**: the agent can read what the fixed readers miss (Registry values, services,
   NIC advanced properties and interface GUIDs, power settings, game config files). The command is parsed by Windows
@@ -141,7 +184,7 @@
   `nvidia-smi`). A refused command returns its reason and nothing runs. Allowed commands run in Constrained Language
   mode as a non-admin process (admin only for `bcdedit`, `Get-MpPreference`, `Get-StorageReliabilityCounter`).
 
-# v2 F3: presets as prompts, typed proposals from the diagnosis
+## v2 F3: presets as prompts, typed proposals from the diagnosis
 
 - **Presets are prompts** (`presets/*.md`, embedded in the app): each objective has a checklist per domain, signals to
   look for and the output format, replacing the fixed focus text in `LlmClient`. New objectives **Competitive FPS**
@@ -151,7 +194,7 @@
   risk itself and shows the exact write; refused proposals stay manual guidance with the reason. Selected proposals
   are sent to `apply` as `Parametric`.
 
-# v2 F1: parametric write primitives
+## v2 F1: parametric write primitives
 
 - **Typed write primitives with free parameters** (`plans/agentic-tuner-v2.md`, F1): `registry.set`,
   `registry.delete`, `service.start-type`, `netadapter.property`, `qos.policy`, `powercfg.setting`, `bcd.option`,
