@@ -12,13 +12,13 @@ not certify recovery or compatibility.
 - `NeuroTune_0.9.0-alpha.1_x64-setup.exe`: unsigned per-machine NSIS installer.
 - `NeuroTune-0.9.0-alpha.1-win-x64.zip`: complete portable app with both
   self-contained agents, the bundled Pi runtime, WPR profile, license and docs.
+- `SHA256SUMS`: verify these against the downloaded assets before running them.
 
 NeuroTune is MIT-licensed except the optional AMD Radeon component
 (`agent\amd\NeuroTune.AmdAdlx.dll`), which is built from the AMD ADLX SDK and
 ships only as object code under its own end user license
 (`licenses/AMD-COMPONENT-EULA.txt`, shown by the installer). Builds from the
 public source run without it.
-- `SHA256SUMS`: verify these against the downloaded assets before running them.
 
 Windows 11 x64, WebView2 and normal UAC approval are required. System
 Protection is required before Apply. SmartScreen may warn about unsigned
