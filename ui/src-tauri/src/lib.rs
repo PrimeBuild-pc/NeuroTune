@@ -64,6 +64,7 @@ const COMMANDS: &[&str] = &[
     "measurement-delete",
     "power-plan-list",
     "power-plan-stage",
+    "power-plan-import",
     "run-refine",
     "run-follow-up",
     "run-reapply",

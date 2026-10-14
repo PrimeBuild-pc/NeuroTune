@@ -931,6 +931,16 @@ public sealed class CoreTests
             File.WriteAllBytes(imported.Path, [9]);
             Assert.IsFalse(PowerPlanStore.Matches(imported));
             Assert.IsFalse(action.Inspect().CanApply);
+
+            var uploaded = store.Import("Third party.pow", [5, 6, 7]);
+            Assert.AreEqual("Third party.pow", uploaded.Name);
+            Assert.AreEqual(uploaded.Path, store.Import("Renamed copy.pow", [5, 6, 7]).Path); // Same content is staged once.
+            foreach (var name in new[] { @"..\evil.pow", "sub/evil.pow", "plan.txt", "", "a:b.pow" })
+                Assert.ThrowsExactly<InvalidOperationException>(() => store.Import(name, [1]), name);
+            Assert.ThrowsExactly<InvalidOperationException>(() => store.Import("empty.pow", []));
+
+            var bundled = store.ListSource(PowerPlanStore.ExtractBundled(Path.Combine(root, "bundled")));
+            CollectionAssert.AreEquivalent(new[] { "Microsoft High performance.pow", "Microsoft Ultimate Performance.pow" }, bundled.Select(plan => plan.Name).ToArray());
         }
         finally { Directory.Delete(root, true); }
     }

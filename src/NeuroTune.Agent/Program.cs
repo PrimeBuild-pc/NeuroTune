@@ -90,6 +90,7 @@ try
         "measurement-delete" => DeleteMeasurement(Read<MeasurementIdRequest>(input)),
         "power-plan-list" => ListPowerPlans(ReadOptional<PowerPlanDirectoryRequest>(input)),
         "power-plan-stage" => StagePowerPlan(Read<PowerPlanPathRequest>(input)),
+        "power-plan-import" => ImportPowerPlan(Read<PowerPlanImportRequest>(input)),
         _ => throw new InvalidOperationException($"Unknown agent command: {command}")
     };
     Write(new AgentResponse(true, result, null));
@@ -391,15 +392,19 @@ object Actions(OptimizationCatalog actionCatalog) => actionCatalog.All.Select(ac
 
 object ListPowerPlans(PowerPlanDirectoryRequest? request)
 {
-    var directory = string.IsNullOrWhiteSpace(request?.Directory) ? PowerPlanStore.SuggestedSourceDirectory : request.Directory.Trim();
-    // A missing suggested folder is the normal first-run state, not an error; a folder the user typed still is.
-    if (string.IsNullOrWhiteSpace(request?.Directory) && !Directory.Exists(directory)) return new { directory, plans = Array.Empty<object>() };
+    var directory = string.IsNullOrWhiteSpace(request?.Directory) ? PowerPlanStore.ExtractBundled() : request.Directory.Trim();
     return new { directory, plans = new PowerPlanStore().ListSource(directory) };
 }
 
 object StagePowerPlan(PowerPlanPathRequest request)
 {
     var plan = new PowerPlanStore().Stage(request.Path);
+    return new { plan, actions = Actions(new OptimizationCatalog()) };
+}
+
+object ImportPowerPlan(PowerPlanImportRequest request)
+{
+    var plan = new PowerPlanStore().Import(request.FileName, Convert.FromBase64String(request.ContentBase64));
     return new { plan, actions = Actions(new OptimizationCatalog()) };
 }
 
@@ -560,3 +565,4 @@ sealed record RunRefineRequest(Guid RunId, JsonElement Language = default);
 sealed record DefenderScanReviewRequest(bool ReviewedInWindowsSecurity);
 sealed record PowerPlanDirectoryRequest(string Directory);
 sealed record PowerPlanPathRequest(string Path);
+sealed record PowerPlanImportRequest(string FileName, string ContentBase64);
