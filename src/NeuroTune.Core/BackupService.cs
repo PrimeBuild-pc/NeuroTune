@@ -29,11 +29,21 @@ public sealed class BackupService
         _storage.EnsureDirectory(manifest.DirectoryPath);
         Save(manifest);
 
-        manifest.RestorePoint = CreateRestorePoint($"NeuroTune {manifest.Id:N}");
-        var backupDirectory = Path.Combine(manifest.DirectoryPath, "registry");
-        _storage.EnsureDirectory(backupDirectory);
-        foreach (var path in actions.Select(x => x.RegistryExportPath).Where(x => x is not null).Distinct())
-            ExportRegistry(path!, backupDirectory);
+        try
+        {
+            manifest.RestorePoint = CreateRestorePoint($"NeuroTune {manifest.Id:N}");
+            var backupDirectory = Path.Combine(manifest.DirectoryPath, "registry");
+            _storage.EnsureDirectory(backupDirectory);
+            foreach (var path in actions.Select(x => x.RegistryExportPath).Where(x => x is not null).Distinct())
+                ExportRegistry(path!, backupDirectory);
+        }
+        catch
+        {
+            // Nothing was changed yet: drop the empty journal so history does not keep a "Preparing" entry forever.
+            try { _storage.DeleteDirectory(manifest.DirectoryPath); }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException) { }
+            throw;
+        }
 
         manifest.Status = "Backup completed";
         Save(manifest);

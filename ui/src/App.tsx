@@ -39,7 +39,7 @@ const defaults: Record<ProviderKind, ProviderSettings> = {
   chatGpt: { provider: 'chatGpt', providerName: 'ChatGPT plan', baseUrl: 'https://api.openai.com/v1', protocol: 'openAiCompatible', model: '', requiresApiKey: true },
   openRouter: { provider: 'openRouter', providerName: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', protocol: 'openAiCompatible', model: 'openai/gpt-4o-mini', requiresApiKey: true },
   openAI: { provider: 'openAI', providerName: 'OpenAI', baseUrl: 'https://api.openai.com/v1', protocol: 'openAiCompatible', model: 'gpt-4o-mini', requiresApiKey: true },
-  anthropic: { provider: 'anthropic', providerName: 'Anthropic', baseUrl: 'https://api.anthropic.com/v1', protocol: 'anthropic', model: 'claude-3-5-haiku-latest', requiresApiKey: true },
+  anthropic: { provider: 'anthropic', providerName: 'Anthropic', baseUrl: 'https://api.anthropic.com/v1', protocol: 'anthropic', model: 'claude-haiku-5-5', requiresApiKey: true },
   deepSeek: { provider: 'deepSeek', providerName: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', protocol: 'openAiCompatible', model: 'deepseek-chat', requiresApiKey: true },
   custom: { provider: 'custom', providerName: 'Custom provider', baseUrl: 'https://api.example.com/v1', protocol: 'openAiCompatible', model: '', requiresApiKey: true },
   local: { provider: 'local', providerName: 'Local model', baseUrl: 'http://127.0.0.1:11434/v1', protocol: 'openAiCompatible', model: '', requiresApiKey: false },
@@ -1019,7 +1019,7 @@ function AdvancedToolsPage({ telemetryConsent, onTelemetryConsent, firmwareConse
     {section === 'nvidia' && <NvidiaToolPanel/>}
     <section className="section-card" hidden={section !== 'power'}>
       <div className="section-heading"><h2>{t('Stage a .pow file')}</h2><HardDrive size={22}/></div>
-      <p className="muted-copy">{t('Files are copied into NeuroTune with their SHA-256. Their contents remain opaque, so activation is a high-risk action requiring a Baseline, separate confirmation, and rollback journal.')}</p>
+      <p className="muted-copy">{t('Files are copied into NeuroTune with their SHA-256. Their contents remain opaque, so activation is a high-risk action with separate confirmation and a rollback journal.')}</p>
       <div className="form-grid"><label className="wide"><span>{t('Power-plan folder')}</span><input value={directory} spellCheck={false} onChange={event => setDirectory(event.target.value)}/></label><label className="wide"><span>{t('Plan')}</span><select value={selectedPath} onChange={event => setSelectedPath(event.target.value)}>{plans.map(plan => <option key={plan.path} value={plan.path}>{plan.name}</option>)}</select></label></div>
       {selectedPlan && <p className="muted-copy"><code>{selectedPlan.sha256}</code><br/>{formatBytes(selectedPlan.sizeBytes)}</p>}
       <div className="button-row"><button className="secondary" onClick={() => void loadPlans(directory)}><RefreshCw size={16}/>{t('Read folder')}</button><button className="primary" disabled={!selectedPlan} onClick={() => void stagePlan()}><Download size={16}/>{t('Stage selected plan')}</button></div>

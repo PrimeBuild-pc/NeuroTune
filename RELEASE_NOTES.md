@@ -1,3 +1,14 @@
+# Unreleased — fixes from the VM app test
+
+- The uninstaller removes the "NeuroTune kept changes check" sign-in task (updates keep it).
+- An Apply that fails before its first change (restore point or Registry backup) no longer leaves a "Preparing"
+  operation in history forever.
+- The Anthropic default model is now `claude-haiku-5-5` (was the retired `claude-3-5-haiku-latest`). Anthropic requests
+  no longer send `temperature` (current models reject it) and allow 16,000 output tokens, since thinking counts toward
+  the limit.
+- Custom power plans: a missing suggested folder shows an empty list instead of a raw error.
+- The guided setup and the power-plan text no longer mention the removed Baseline gate.
+
 # Unreleased — restore point wait and VM checks
 
 - Apply and rollback now wait up to 60 s (was 10 s) for their restore point to appear. In the Hyper-V test VM Windows

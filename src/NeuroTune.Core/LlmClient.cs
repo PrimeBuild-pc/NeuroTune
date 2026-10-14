@@ -34,7 +34,7 @@ public sealed class LlmClient
     {
         LlmProvider.ChatGpt => new() { Provider = provider, ProviderName = "ChatGPT plan", BaseUrl = "https://api.openai.com/v1", Model = "" },
         LlmProvider.OpenAI => new() { Provider = provider, ProviderName = "OpenAI", BaseUrl = "https://api.openai.com/v1", Model = "gpt-4o-mini" },
-        LlmProvider.Anthropic => new() { Provider = provider, ProviderName = "Anthropic", BaseUrl = "https://api.anthropic.com/v1", Protocol = ApiProtocol.Anthropic, Model = "claude-3-5-haiku-latest" },
+        LlmProvider.Anthropic => new() { Provider = provider, ProviderName = "Anthropic", BaseUrl = "https://api.anthropic.com/v1", Protocol = ApiProtocol.Anthropic, Model = "claude-haiku-5-5" },
         LlmProvider.DeepSeek => new() { Provider = provider, ProviderName = "DeepSeek", BaseUrl = "https://api.deepseek.com/v1", Model = "deepseek-chat" },
         LlmProvider.Custom => new() { Provider = provider, ProviderName = "Custom provider", BaseUrl = "https://api.example.com/v1", Model = "", Protocol = ApiProtocol.OpenAiCompatible },
         LlmProvider.Local => new() { Provider = provider, ProviderName = "Local model", BaseUrl = "http://127.0.0.1:11434/v1", Model = "", RequiresApiKey = false },
@@ -1211,8 +1211,8 @@ public sealed class LlmClient
         var payload = new Dictionary<string, object>
         {
             ["model"] = settings.Model,
-            ["max_tokens"] = 6000,
-            ["temperature"] = 0.1,
+            // Current Claude models reject a non-default temperature and think by default; thinking counts toward max_tokens.
+            ["max_tokens"] = 16000,
             ["messages"] = new[] { new { role = "user", content = MultimodalContent(prompt, attachments, "anthropic") } }
         };
         if (webSearch) payload["tools"] = new[] { new { type = "web_search_20250305", name = "web_search", max_uses = 3 } };

@@ -392,6 +392,8 @@ object Actions(OptimizationCatalog actionCatalog) => actionCatalog.All.Select(ac
 object ListPowerPlans(PowerPlanDirectoryRequest? request)
 {
     var directory = string.IsNullOrWhiteSpace(request?.Directory) ? PowerPlanStore.SuggestedSourceDirectory : request.Directory.Trim();
+    // A missing suggested folder is the normal first-run state, not an error; a folder the user typed still is.
+    if (string.IsNullOrWhiteSpace(request?.Directory) && !Directory.Exists(directory)) return new { directory, plans = Array.Empty<object>() };
     return new { directory, plans = new PowerPlanStore().ListSource(directory) };
 }
 
