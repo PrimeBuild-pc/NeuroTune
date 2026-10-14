@@ -1,3 +1,12 @@
+# Unreleased — restore point wait and VM checks
+
+- Apply and rollback now wait up to 60 s (was 10 s) for their restore point to appear. In the Hyper-V test VM Windows
+  listed it about 10 s after accepting the request, so Apply failed with "the restore point was not found".
+- Checked in the Windows 11 VM: real NIC property (`*JumboPacket`) and Defender exclusion round trips; an audio
+  endpoint `FxProperties` write and the ducking value restored through the agent (endpoint from VB-CABLE,
+  Administrators have only Set Value); an operation journal v3 written by alpha.4 read and rolled back by the current
+  agent.
+
 # Unreleased — v2 F5: AMD Radeon settings
 
 - New typed write `amd.setting` and reader `amd-3d` through AMD ADLX, called directly on the driver's
