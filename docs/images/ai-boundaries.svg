@@ -21,14 +21,14 @@
     <g fill="#bdc7d5" font-size="22">
       <text x="72" y="280">Hardware + Windows facts</text><text x="72" y="320">ETW / WPR analysis</text><text x="72" y="360">Quality + numeric comparison</text>
       <text x="456" y="280">Consented prepared evidence</text><text x="456" y="320">Bounded read-only follow-ups</text><text x="456" y="360">Untrusted structured proposals</text>
-      <text x="840" y="280">Registered Windows actions</text><text x="840" y="320">Protected recovery journals</text><text x="840" y="360">Verify + rollback</text>
+      <text x="840" y="280">Typed, validated writes</text><text x="840" y="320">Protected recovery journals</text><text x="840" y="360">Verify + rollback</text>
     </g>
     <g fill="#b6acf3" font-size="19" font-weight="600">
       <text x="72" y="397">No model calls during collection</text><text x="456" y="397">No write authority</text><text x="840" y="397">No arbitrary model commands</text>
     </g>
     <rect x="48" y="450" width="1104" height="104" rx="16" fill="#26223e" stroke="#655da7"/>
     <text x="72" y="489" fill="#f4f7fb" font-size="25" font-weight="600">The write gate is local, not an AI promise.</text>
-    <text x="72" y="528" fill="#d7d1ff" font-size="22">Valid workload Baselines + explicit approval + registered action + verified backups</text>
-    <text x="48" y="599" fill="#bdc7d5" font-size="21">Raw ETL stays local. Generated scripts stay inert. The model cannot change metrics or approve writes.</text>
+    <text x="72" y="528" fill="#d7d1ff" font-size="22">Explicit approval + typed, validated write + verified backups</text>
+    <text x="48" y="599" fill="#bdc7d5" font-size="21">Raw ETL stays local. Scripts: Expert only, declared. The model cannot change metrics or approve writes.</text>
   </g>
 </svg>

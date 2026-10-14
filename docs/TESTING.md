@@ -49,7 +49,8 @@ recovery, compatibility, a clean PC or a performance gain.
 2. For **Measured optimization**, select an already-running workload and keep
    a repeatable scene active. Complete diagnosis collects three matching traces
    and validates quality before AI. Without a workload it collects one
-   system-wide diagnostic; this cannot unlock Apply or establish FPS/input latency.
+   system-wide diagnostic, which cannot establish FPS/input latency. Measurements
+   are context for the AI, not a gate before Apply.
 3. For **Advisory audit**, no ETW/workload benchmark or Apply is allowed.
    Complete audit pauses on the prepared evidence and requires explicit
    transmission consent. A preset alone never starts collection or scanning.

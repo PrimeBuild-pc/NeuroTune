@@ -21,6 +21,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
     await page.addInitScript(() => {
       localStorage.setItem('neurotune.language', 'en');
       localStorage.setItem('neurotune.theme', 'dark');
+      localStorage.setItem('neurotune.setupReviewed.v1', 'true');
       let next = 0;
       window.readmeRequests = [];
       window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener() {} };
@@ -32,7 +33,8 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
           window.readmeRequests.push(args.command);
           switch (args.command) {
             case 'get-state': return { settings: { provider: 'local', providerName: 'Local model', protocol: 'openAiCompatible', baseUrl: 'http://127.0.0.1:11434/v1', model: 'demo-local-model', requiresApiKey: false }, hasCredential: false, isRecording: false, chatGptAccounts: [] };
-            case 'actions': case 'history': case 'run-list': case 'measurement-workloads': case 'measurement-list': return [];
+            case 'actions': case 'history': case 'run-list': case 'measurement-workloads': case 'measurement-list': case 'persistence-check': return [];
+            case 'defender-guard': return { needsAttention: false };
             case 'defender-scan-current': return null;
             default: throw Error('Capture must not perform operations: ' + args.command);
           }
@@ -61,7 +63,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_PATH || 'playwright');
     assert.deepEqual(errors, []);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     const requests = await page.evaluate(() => window.readmeRequests);
-    assert.ok(requests.every(command => ['get-state', 'actions', 'history', 'run-list', 'measurement-workloads', 'measurement-list', 'defender-scan-current'].includes(command)));
+    assert.deepEqual(requests.filter(command => !['get-state', 'actions', 'history', 'run-list', 'measurement-workloads', 'measurement-list', 'defender-scan-current', 'defender-guard', 'persistence-check'].includes(command)), []);
     for (const name of ['dark', 'light', 'diagnosis', 'security']) {
       const png = fs.readFileSync(path.join(output, `neurotune-${name}.png`));
       assert.equal(png.readUInt32BE(16), 1440);

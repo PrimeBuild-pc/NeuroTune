@@ -35,7 +35,7 @@
     "targets": ["nsis"],
     "publisher": "PrimeBuild",
     "shortDescription": "AI-guided, reversible Windows optimization",
-    "longDescription": "NeuroTune profiles Windows and applies only allowlisted, compatible, and reversible optimizations.",
+    "longDescription": "NeuroTune measures Windows, lets your AI investigate, and applies only typed, validated and reversible changes that you approve.",
     "resources": ["agent/NeuroTune.Agent.exe", "agent/NeuroTune.Telemetry.exe", "agent/NeuroTuneLatency.wprp", "agent/pi/*"],
     "icon": [
       "icons/32x32.png",
