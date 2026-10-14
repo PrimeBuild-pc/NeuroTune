@@ -23,17 +23,17 @@
       <text x="840" y="388">04 / YOUR DECISION</text><text x="456" y="388">05 / APPLY</text><text x="72" y="388">06 / COMPARE</text>
     </g>
     <g fill="#f4f7fb" font-size="26" font-weight="600">
-      <text x="72" y="224">Local system evidence</text><text x="456" y="224">3 workload Baselines</text><text x="840" y="224">Your selected AI</text>
-      <text x="840" y="432">Review the proposal</text><text x="456" y="432">Back up, then verify</text><text x="72" y="432">3 matching Candidates</text>
+      <text x="72" y="224">Local system evidence</text><text x="456" y="224">Workload captures</text><text x="840" y="224">Your selected AI</text>
+      <text x="840" y="432">Review the proposal</text><text x="456" y="432">Back up, then verify</text><text x="72" y="432">Measure again</text>
     </g>
     <g fill="#bdc7d5" font-size="21">
       <text x="72" y="264">Hardware, Windows, drivers</text><text x="456" y="264">Local trace quality checks</text><text x="840" y="264">Consented read-only follow-ups</text>
-      <text x="840" y="472">Approve some, all or none</text><text x="456" y="472">Registered actions only</text><text x="72" y="472">Keep or verified rollback</text>
+      <text x="840" y="472">Approve some, all or none</text><text x="456" y="472">Typed, reversible writes</text><text x="72" y="472">Keep or verified rollback</text>
     </g>
     <text x="48" y="551" fill="#f1cb8d" font-size="21">Failed or interrupted write → rollback attempt; unresolved recovery stays visible.</text>
     <path d="M48 580H1152" stroke="#394253"/>
     <text x="48" y="616" fill="#b6acf3" font-size="21" font-weight="600">ADVISORY AUDIT</text>
     <text x="270" y="616" fill="#bdc7d5" font-size="21">Local evidence → consented AI → report → finish. No benchmark. No Apply.</text>
-    <text x="48" y="652" fill="#bdc7d5" font-size="19">No workload? A system-wide diagnostic can inform advice, but cannot unlock Apply.</text>
+    <text x="48" y="652" fill="#bdc7d5" font-size="19">Measurements are context for the AI, not a gate before Apply.</text>
   </g>
 </svg>

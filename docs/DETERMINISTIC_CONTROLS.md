@@ -10,8 +10,9 @@ NeuroTune owns the selected provider transport/OAuth, prompt/evidence preparatio
 fixed read-only readers and all response, citation, approval and execution
 validation. Model envelopes cross a bounded correlated host protocol and cannot
 be rewritten by the bridge. There is no write-capable shell/file tool, built-in
-coding-tool set or additional provider credential store; the only model-written
-code is the read-only `powershell-read` command described below.
+coding-tool set or additional provider credential store. Model-written code runs
+only as the read-only `powershell-read` command described below or, in Expert
+mode, as a declared script (`script.declared`, see Execution vetoes).
 
 The packaged Node/CORE process is short-lived, non-admin and cancelled with its
 owner, not a filesystem/network sandbox. It does not require user npm, global
@@ -38,31 +39,35 @@ The user chooses objectives/context and consents to sanitized provider transmiss
 
 Cancellation waits for noncancellable recorder startup/finalization so the owned session is known, then releases only that session if still recording. Completed reports remain local. The existing independent watchdog finalizes captures on app closure; captured traces can be analyzed in advanced measurements. An unfinished recoverable run prevents another diagnosis. AI failure is not presented as a completed deterministic substitute plan.
 
-## Analysis presets are prompt specializations
+## Analysis presets are prompts
 
-The primary and advanced diagnosis views share four selectable objectives. `LlmClient.AnalysisFocus` maps the validated objective to application-owned instructions on **every planner turn** and in the read-only comparison explanation:
+Each objective is a Markdown prompt in `presets/` (embedded in the app) that `LlmClient.AnalysisFocus` adds to **every planner turn** and to the read-only comparison explanation: a mandatory checklist per domain, the signals to look for, the typed primitives that fit and the expected output. `presets/targets.md` lists known high-impact targets (for example MSI/IRQ keys, audio endpoints, NVIDIA and AMD settings) and is shown only when writes are possible.
 
-| Preset | Investigation emphasis | Evidence caveat |
-|---|---|---|
-| Performance complessive (`balanced`) | Actual workload bottlenecks, sustained useful throughput, frame-time consistency where available, responsiveness and resource/power trade-offs. | Scheduling traces do not establish FPS improvements; use representative supported before/after measures. |
-| Latenza del sistema (`systemLatency`) | Responsiveness, stalls/tail delays, CPU ready time, interrupts, paging/storage waits and display/input context. | DPC/ISR attribution is not causality or end-to-end input latency. |
-| Ottimizzazione rete (`networkLatency`) | The actual symptom: latency, jitter, loss, disconnects or throughput; distinguish host, local link/router, WAN/ISP and remote-service issues. | Adapter counters/configuration do not measure ping/jitter or establish path causes; missing probes become explicit manual proposals. |
-| Stabilità del sistema (`stability`) | Reproducible crashes/freezes/resets, device/driver/event/storage/memory evidence and uncertain thermal/firmware/tuning context, with data-integrity risks first. | Error IDs, old drivers, installed tuning software or a clean snapshot alone cannot prove causes, active overclocks or stability; stress tests/repairs/firmware operations are not automatic tools. |
-| Porte e linee PCIe (`hardwareLayout`) | CPU versus chipset attachment, negotiated versus maximum PCIe link of GPU/NVMe, and a USB port plan for input, audio and capture devices, cross-checked with the user's manual excerpt or rear-panel photo. | Attachment is inferred from PCI topology, the firmware USB panel is often wrong and slot sharing is only in the manual. The `device-topology` reading is preloaded before the first turn and no executable action is offered. |
+| Preset file | Objective |
+|---|---|
+| `fps.md` | Competitive FPS: highest, most consistent frame rate and lowest input latency, anti-cheat compatible. |
+| `streaming.md` | Streaming and recording: smooth game plus encoder, no dropped frames, low-risk changes. |
+| `balanced.md` | Overall performance and responsiveness with resource/power trade-offs. |
+| `system-latency.md` | Stalls, tail delays, CPU ready time, interrupts, paging/storage waits. |
+| `network-latency.md` | Latency, jitter, loss or disconnects; host versus link, WAN or remote service. |
+| `efficiency.md` | Less power, heat, fan noise and background work. |
+| `stability.md` | Crashes, freezes and resets, with data-integrity risks first. |
+| `privacy-security.md`, `compromise-review.md` | Advisory audits: data collection, Windows protections, Defender detections and signs of compromise, as hypotheses. |
+| `hardware-layout.md` | CPU versus chipset attachment, PCIe link widths and a USB port plan; advice only. |
 
-These are **not predetermined tweak packages**, prescribed policy states or extra permissions. They change reasoning priorities, while workload choice, mandatory measurements, available readers, investigation budget, provider/attachment consent, evidence/quality gates, risk profiles and explicit approval remain independent. Every focus allows cross-domain investigation, user preservation constraints, uncertainty and no change. The model must explain goal relevance and trade-offs; no numeric priority weights or deterministic action list is added. Existing goal-conditioned local hypotheses remain contestable.
+Presets are **not tweak packages**, prescribed policy states or extra permissions. They change reasoning priorities and the minimum checklist; the model may investigate beyond it when evidence points elsewhere, and may propose no change. Measurements are context, not a gate. Workload choice, available readers, investigation budget, provider/attachment consent, quality checks, risk profiles and explicit approval stay independent of the preset. `ConflictAnalyzer` hypotheses remain contestable.
 
-Persisted `fps`/`efficiency` goals remain valid with their previous enum values and dedicated legacy prompts; restoring one exposes its labelled legacy selection without silently converting the run. Stability is appended to the enum, not inserted into old values. Unknown objectives/risk enums are rejected before investigation. Changing the visible goal cannot rewrite a persisted run or its matching-goal validation.
+Objective enum values are append-only, so a persisted run keeps its objective; unknown objectives and risk values are rejected before investigation. Changing the visible goal cannot rewrite a persisted run.
 
 ## Investigation freedom and limits
 
 - The model may request existing registered evidence or new local read-only observations: per-core counters, paging pressure, disk/free-space health metadata, display configuration, device errors, adapter error/traffic counters, service state, recent System warning/error IDs, driver associations/version metadata, and the PCIe/USB device topology (link width/generation, CPU or chipset attachment, USB controller and port path, without serials or instance IDs).
-- Fixed readers have fixed projections and bounded output. Model-written reads go through `powershell-read`: PowerShell's own parser describes the command, NeuroTune refuses any AST node, command or argument outside its read-only allowlist (no method calls, assignments, file redirection, `$( )`, `&`/`.` invocation, remote parameters or UNC paths), then runs it in Constrained Language mode as a non-admin process (admin only for `bcdedit`, `Get-MpPreference`, `Get-StorageReliabilityCounter`), with a 30 s limit and bounded, redacted output. Writes, driver loading, network probes and firmware export are not tools. Unsupported requests produce explicit unavailability and can become manual follow-up proposals. These readers do **not** provide arbitrary Codex CLI powers or web research.
+- Fixed readers have fixed projections and bounded output. Model-written reads go through `powershell-read`: PowerShell's own parser describes the command, NeuroTune refuses any AST node, command or argument outside its read-only allowlist (no method calls, assignments, file redirection, `$( )`, `&`/`.` invocation, remote parameters or UNC paths), then runs it in Constrained Language mode as a non-admin process (admin only for `bcdedit`, `Get-MpPreference`, `Get-StorageReliabilityCounter`), with a 30 s limit and bounded, redacted output. Writes, driver loading, network probes and firmware export are not tools. Unsupported requests produce explicit unavailability and can become manual follow-up proposals. These readers do **not** provide arbitrary Codex CLI powers. Web search (the provider's own search on Anthropic, OpenRouter and ChatGPT, or Tavily with a saved key) is a separate planner tool; its results are untrusted data that can only motivate validated proposals.
 - New observations receive application-owned `investigation:` IDs, collection time/limitations and per-attempt/turn provenance; they are persisted with the run/audit and cannot replace original facts. Post-capture snapshots are not capture-time causal proof. Unknown is not zero.
 - The default budget is **12 turns / 10 minutes after measurements**, configurable in provider settings within **2–32 turns / 1–30 minutes**. Existing-evidence requests remain bounded to 40 facts per turn. Evidence/output size limits and exact citations remain in force. The final turn is reserved by prompt for a diagnosis; exhaustion/failure is reported rather than inventing completion.
 - `ConflictAnalyzer` still produces goal-conditioned, opinionated hypotheses. The main prompt explicitly permits challenging/dismissing them; there is no prescribed preferred MemoryCompression/PageCombining state. Local hypotheses are collapsed and labelled separately from AI conclusions.
-- Useful outside-catalog proposals remain manual guidance or review-only script artifacts. Unknown executable/resource/update identifiers cannot gain write authority; they are downgraded to unverified manual proposals rather than rejecting an otherwise cited analysis.
-- Optional service, startup and installed-app proposals are evidence-cited manual review only: no commands, removal/debloater scope inference, authorization or auto-execution; uncertain roles/dependencies require verification rather than disablement or uninstall.
+- Executable proposals use a registered `ActionId` or a typed primitive (`actionKind` + `parameters`). NeuroTune validates the type, parameters, protected targets and availability, derives the action ID and risk itself and shows the exact write; refused proposals stay manual guidance with the reason. Unknown executable/resource/update identifiers cannot gain write authority; they are downgraded to unverified manual proposals rather than rejecting an otherwise cited analysis.
+- Startup entries, service start types and scheduled tasks use the typed `startup.entry`, `service.start-type` and `scheduled-task.state` primitives when the target is listed in the evidence. Other background-software and installed-app proposals are evidence-cited manual review only: no commands, removal/debloater scope inference or auto-execution; uncertain roles/dependencies require verification rather than disablement or uninstall.
 - The final view orders proposals by risk and shows evidence, expected impact, trade-offs, prerequisites, uncertainty and reversibility. Missing model explanations remain explicitly unspecified. Users can select some, all executable recommendations, or none; nothing is auto-applied.
 
 ## Optional user-supplied reports and screenshots
@@ -81,12 +86,12 @@ Prepared report text and file names/hashes are retained in the normal run eviden
 
 | Control | Actual boundary |
 |---|---|
-| Registered capabilities | Only existing `ActionId` implementations and the typed parametric primitives of `ParametricActions` enter `OptimizationEngine.ApplyAsync`. A parametric action is rebuilt from its journaled kind + parameters and refuses forbidden targets before capture. Guidance, generated scripts and external resources remain review-only. Unsupported BIOS writes/GPU IRQ candidates have no adapter. |
+| Registered capabilities | Only existing `ActionId` implementations and the typed parametric primitives of `ParametricActions` enter `OptimizationEngine.ApplyAsync`. A parametric action is rebuilt from its journaled kind + parameters and refuses forbidden targets before capture. Guidance and external resources remain review-only. Model-written scripts run only as `script.declared` in Expert mode, after a blocking AST check and with typed, snapshotted targets (see `SECURITY.md`). Unsupported BIOS writes/GPU IRQ candidates have no adapter. |
 | Live availability | Action-specific state/access/prerequisites are inspected again before execution. Descriptive supported-build/hardware metadata is **not** a universal compatibility matrix or proof of benefit. |
 | Approval and identity | Apply belongs to a persisted run and matches its approved IDs. High-risk actions require separate confirmation. Risk presets select, never authorize a write. |
 | Recovery/backup | Verified restore point, original-state snapshots, Registry exports and an operation journal remain mandatory. Failure leads to verified rollback or visible recovery. |
 | Baselines and comparison | Since v2 F4 measurements are context, not a gate: approval works from `BaselinePending`, and Keep works from `CandidatePending` without a comparison. Comparison still rejects invalid/mismatched captures and enforces drift/thermal constraints; any accepted comparison matching the run is recorded for the decision, not as causal proof. Single records of a run's operation can be restored while the run waits for measurement or a decision. |
-| Recorder/tool separation | Optional inference and SCEWIN export use recording interlocks. Elevated local-worker launches require a same-user, non-admin, medium-integrity linked UAC token or refuse before process creation; no hand-filtered token, station/desktop ACL changes or administrator fallback. SCEWIN additionally requires explicit consent, elevation, approved staged hashes and fixed export arguments; no security bypass exists. |
+| Recorder/tool separation | Optional inference and SCEWIN export use recording interlocks. Elevated local-worker launches use a LUA-filtered, medium-integrity copy of NeuroTune's own token (Administrators deny-only, privileges removed); if the desktop refuses it, the worker is declined, with no station/desktop ACL changes or administrator fallback. SCEWIN additionally requires explicit consent, elevation, approved staged hashes and fixed export arguments; no security bypass exists. |
 
 `LlmClient.ParseDiagnosis` validates structure, evidence provenance and capability kinds, **not universal semantic goal-optimality**. There is no separate universal `DiagnosisValidator`. Preserving consent, credentials, privilege separation, backups, quality checks and verification does not require imposing tuning conclusions on the investigator.
 
