@@ -996,7 +996,7 @@ function AdvancedToolsPage({ telemetryConsent, onTelemetryConsent, firmwareConse
     try {
       const result = await agent<{ plan: CustomPowerPlanFile; actions: OptimizationAction[] }>(command, await body());
       onActions(result.actions);
-      setMessageRaw(false); setMessage('{name} staged. It can only be activated through a measured optimization run.'); setMessageValues({ name: result.plan.name });
+      setMessageRaw(false); setMessage('{name} added. It can now be proposed and applied as a high-risk change, with confirmation and rollback.'); setMessageValues({ name: result.plan.name });
     } catch (error) { setMessageRaw(true); setMessage(String(error)); }
   };
   const stagePlan = () => selectedPlan && stage(selectedPlan.name, 'power-plan-stage', async () => ({ path: selectedPlan.path }));
