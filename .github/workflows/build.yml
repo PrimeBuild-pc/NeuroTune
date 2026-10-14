@@ -15,6 +15,17 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # Private AMD Radeon component (AMD ADLX SDK license: object code only, never public source).
+      # Builds without the secret (forks) skip it and run without AMD Radeon settings.
+      - id: amd
+        run: echo "present=${{ secrets.ADLX_INTEROP_TOKEN != '' }}" >> $env:GITHUB_OUTPUT
+      - if: steps.amd.outputs.present == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: PrimeBuild-pc/NeuroTune-AmdAdlx
+          token: ${{ secrets.ADLX_INTEROP_TOKEN }}
+          path: src/NeuroTune.AmdAdlx
+          persist-credentials: false
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           dotnet-version: 8.0.x
@@ -57,6 +68,10 @@ jobs:
       - name: Publish Tauri agent resources
         run: npm run agent:publish
         working-directory: ui
+      - name: Require the AMD component in official builds
+        if: steps.amd.outputs.present == 'true'
+        shell: pwsh
+        run: if (-not (Test-Path -LiteralPath ui/src-tauri/agent/amd/NeuroTune.AmdAdlx.dll -PathType Leaf)) { throw 'NeuroTune.AmdAdlx.dll is missing.' }
       - run: npm test
         working-directory: ui
       - run: npm run typecheck

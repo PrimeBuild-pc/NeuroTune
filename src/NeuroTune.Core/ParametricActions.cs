@@ -79,7 +79,7 @@ internal static class ParametricActions
         device.disable {"slug":"slug of a device.disable.<slug> capability"}
         defender.exclusion {"type":"Path|Process","value":"narrow folder/file path or process name"} only when Defender blocks a tool the user needs; it stays until rollback
         nvidia.profile {"profile":"Base Profile (global) or an already customized game profile name","settings":[{"id":decimal DRS setting ID,"value":decimal DWORD}]} through NVIDIA Profile Inspector; decimal IDs: Power Management - Mode 274197361 (0 Adaptive, 1 Prefer maximum performance, 5 Optimal); Ultra Low Latency - CPL State 390467 (0 Off, 1 On, 2 Ultra) together with Ultra Low Latency - Enabled 277041152 (0/1); Vertical Sync 11041231 (138504007 Force off, 1199655232 Force on, 1620202130 application setting); Frame Rate Limiter V3 277041154 (0 off, or the FPS cap); Threaded Optimization 549528094 (0 Auto, 1 On, 2 Off); Texture Filtering - Quality 13510289 (20 High performance, 10 Performance, 0 Quality)
-        amd.setting {"setting":"name","value":integer} global Radeon 3D setting of the first AMD GPU through ADLX; read amd-3d first. {{AmdAdlx.Guide}}
+        amd.setting {"setting":"name","value":integer} global Radeon 3D setting of the first AMD GPU through ADLX; read amd-3d first. {{AmdRadeon.Guide}}
         script.declared {"script":"PowerShell 5.1 that makes the change","rollbackScript":"PowerShell that restores the previous state","targets":[{"kind":"typed primitive","parameters":"its parameter object, as for that primitive"} ]} only when no single primitive can do it (a vendor CLI, several dependent settings). Declare every key, service, task, file or setting the script changes as a typed target with its final value. Refused before running: downloads, Invoke-Expression, nested shells, Start-Process, deleting files, accounts, Defender/firewall, bcdedit, creating tasks or services. NeuroTune snapshots the targets, tests your rollback, restores from its snapshot when your rollback misses a target and reports Registry writes outside the targets. Shown only in Expert mode.
         """;
 
@@ -678,17 +678,17 @@ internal static class ParametricActions
     private static OptimizationAction AmdSetting(AmdSettingParameters parameters)
     {
         var name = parameters.Setting?.Trim() ?? "";
-        if (!AmdAdlx.Names.Contains(name)) throw new InvalidOperationException($"Unknown AMD setting. Use one of: {string.Join(", ", AmdAdlx.Names)}.");
+        if (!AmdRadeon.Names.Contains(name)) throw new InvalidOperationException($"Unknown AMD setting. Use one of: {string.Join(", ", AmdRadeon.Names)}.");
         var maximum = name switch { "waitForVerticalRefresh" => 3, "frameRateTargetControlFps" => 1000, _ => 1 };
         if (parameters.Value < 0 || parameters.Value > maximum) throw new InvalidOperationException($"{name} must be between 0 and {maximum}.");
         parameters = new(name, parameters.Value);
         static int ReadState(string state) => JsonSerializer.Deserialize<int>(state);
         return Build("amd.setting", parameters, $"AMD {name} = {parameters.Value}", "GPU", RiskLevel.Medium, false, $"amd:{name}",
             "Changes the global Radeon setting, as the Graphics tab of AMD Software does; games pick it up at the next launch",
-            () => AmdAdlx.Get(name) is var current && current == parameters.Value
-                ? ActionAvailability.Applied(current.ToString(CultureInfo.InvariantCulture)) : ActionAvailability.Ready(AmdAdlx.Get(name).ToString(CultureInfo.InvariantCulture)),
-            () => JsonSerializer.Serialize(AmdAdlx.Get(name)), () => AmdAdlx.Set(name, parameters.Value),
-            state => AmdAdlx.Set(name, ReadState(state)), () => AmdAdlx.Get(name) == parameters.Value, state => _ = ReadState(state));
+            () => AmdRadeon.Get(name) is var current && current == parameters.Value
+                ? ActionAvailability.Applied(current.ToString(CultureInfo.InvariantCulture)) : ActionAvailability.Ready(AmdRadeon.Get(name).ToString(CultureInfo.InvariantCulture)),
+            () => JsonSerializer.Serialize(AmdRadeon.Get(name)), () => AmdRadeon.Set(name, parameters.Value),
+            state => AmdRadeon.Set(name, ReadState(state)), () => AmdRadeon.Get(name) == parameters.Value, state => _ = ReadState(state));
     }
 
     internal sealed record DefenderParameters(string Type, string Value);

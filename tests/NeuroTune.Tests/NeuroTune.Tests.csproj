@@ -13,6 +13,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\NeuroTune.Core\NeuroTune.Core.csproj" />
+    <!-- Private AMD component (not in this repository): copied next to the tests when checked out, loaded by reflection. -->
+    <ProjectReference Include="..\..\src\NeuroTune.AmdAdlx\NeuroTune.AmdAdlx.csproj" Condition="Exists('..\..\src\NeuroTune.AmdAdlx\NeuroTune.AmdAdlx.csproj')" />
   </ItemGroup>
 
   <ItemGroup>

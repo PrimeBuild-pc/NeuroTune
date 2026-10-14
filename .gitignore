@@ -37,3 +37,6 @@ Thumbs.db
 .DS_Store
 
 tests/eval/results/
+
+# Private AMD Radeon component (separate repository, AMD ADLX SDK license)
+/src/NeuroTune.AmdAdlx/

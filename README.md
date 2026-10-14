@@ -81,7 +81,7 @@
   </tr>
   <tr>
     <td valign="top"><h3>07 · A focused Windows interface</h3><p>Tauri 2 + React 19, light/dark/system appearance, reduced-motion support and quiet capture periods. Five-section navigation with a guided path (diagnose → measure before → choose → apply → measure after → keep or undo) and a Simple/Expert switch. English, Simplified Chinese, Japanese, Spanish, Russian and Italian UI.</p></td>
-    <td valign="top"><h3>08 · Source-visible by design</h3><p>MIT-licensed code, typed write primitives and documented limits. The model never sends raw commands: its reads pass a PowerShell AST allowlist, and its scripts run only in Expert mode with declared, snapshotted targets. No generic BIOS writer and no automatic security-disable shortcut.</p></td>
+    <td valign="top"><h3>08 · Source-visible by design</h3><p>MIT-licensed code (except the optional AMD Radeon component), typed write primitives and documented limits. The model never sends raw commands: its reads pass a PowerShell AST allowlist, and its scripts run only in Expert mode with declared, snapshotted targets. No generic BIOS writer and no automatic security-disable shortcut.</p></td>
   </tr>
   <tr>
     <td valign="top"><h3>09 · Deep, hardware-aware tuning</h3><p>Registry, services, startup apps, scheduled tasks, power settings, BCD, network adapters, QoS, MSI/IRQ, audio endpoints, NVIDIA driver profiles (Profile Inspector), AMD Radeon 3D settings (ADLX) and your own <code>.pow</code> power plans, each with an exact snapshot and rollback.</p></td>
@@ -198,7 +198,7 @@ cd ..
 </ul>
 <p>Internal planning, research notes and historical machine reports are not part of the public user documentation. Source checks and previous tests are not exact-candidate release certification.</p>
 <p>To contribute hardware inventory, use the <a href="tools/hardware-collector/README.md">source-visible hardware collector</a>. It runs offline without administrator rights, traces or settings changes. Review its dated JSON before sharing; inventory is not a performance benchmark.</p>
-<p>NeuroTune is <a href="LICENSE">MIT-licensed</a>. Third-party packages and models retain their own licenses and trust requirements. Report vulnerabilities privately through <a href="SECURITY.md">Security advisories</a>, not public issues containing secrets or full PC profiles.</p>
+<p>NeuroTune is <a href="LICENSE">MIT-licensed</a>, except the optional AMD Radeon component in official builds (<code>agent\amd\NeuroTune.AmdAdlx.dll</code>): it is built from the AMD ADLX SDK, ships only as object code under <a href="licenses/AMD-COMPONENT-EULA.txt">its own end user license</a>, and builds from this source run without AMD Radeon settings. Third-party packages and models retain their own licenses and trust requirements. Report vulnerabilities privately through <a href="SECURITY.md">Security advisories</a>, not public issues containing secrets or full PC profiles.</p>
 <hr>
 <p align="center"><strong>Evidence before claims. Approval before writes. Recovery before moving on.</strong></p>
 <p align="center">

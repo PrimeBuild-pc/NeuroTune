@@ -56,7 +56,7 @@ public static class InvestigationService
                 "scheduled-tasks" => ReadScheduledTasks(),
                 "system-events" => ReadEvents(),
                 "device-topology" => DeviceTopology.Read(),
-                "amd-3d" => AmdAdlx.Read(),
+                "amd-3d" => AmdRadeon.Read(),
                 "driver-details" => DriverInspection.Read(request.Module!),
                 PowerShellReader.ToolId => await PowerShellReader.ReadAsync(request.Command!, cancellationToken),
                 WebSearch.ToolId => await WebSearch.TavilyAsync(request.Question, cancellationToken),

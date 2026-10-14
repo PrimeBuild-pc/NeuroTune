@@ -38,7 +38,8 @@ $versions = [ordered]@{
     cargoLock = [regex]::Match($cargoLock, '(?m)^name[ \t]*=[ \t]*"neurotune"\r?\nversion[ \t]*=[ \t]*"([^"]+)"').Groups[1].Value
 }
 
-Get-ChildItem -LiteralPath (Join-Path $root 'src') -Filter '*.csproj' -Recurse | ForEach-Object {
+# The private AMD component (checked out by official builds) is under its own EULA, not MIT.
+Get-ChildItem -LiteralPath (Join-Path $root 'src') -Filter '*.csproj' -Recurse | Where-Object BaseName -ne 'NeuroTune.AmdAdlx' | ForEach-Object {
     [xml]$project = Get-Content -LiteralPath $_.FullName -Raw
     $licenseExpression = [string]$project.Project.PropertyGroup.PackageLicenseExpression
     if ($licenseExpression -ne 'MIT') { throw "$($_.Name) must declare MIT." }
