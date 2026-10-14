@@ -82,7 +82,8 @@ public sealed class BackupService
         var returnValue = Convert.ToUInt32(result?["ReturnValue"] ?? uint.MaxValue);
         if (returnValue != 0) throw new InvalidOperationException($"Windows error code {returnValue}");
 
-        for (var attempt = 0; attempt < 20; attempt++)
+        // On slower disks (a Hyper-V VM) the point is listed ~10 s after CreateRestorePoint returns; wait up to 60 s.
+        for (var attempt = 0; attempt < 120; attempt++)
         {
             if (RestorePointExists(description)) return description;
             Thread.Sleep(500);
