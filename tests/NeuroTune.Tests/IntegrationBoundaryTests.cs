@@ -87,6 +87,17 @@ public sealed class IntegrationBoundaryTests
     }
 
     [TestMethod]
+    public async Task Anthropic_requests_send_no_sampling_parameters_and_leave_room_for_thinking()
+    {
+        var settings = LlmClient.Defaults(LlmProvider.Anthropic);
+        Assert.AreEqual("claude-haiku-5-5", settings.Model);
+        using var request = LlmClient.CreateAnthropicRequest(settings, "test-key", "Return JSON");
+        using var body = JsonDocument.Parse(await request.Content!.ReadAsStringAsync());
+        Assert.IsFalse(body.RootElement.TryGetProperty("temperature", out _));
+        Assert.AreEqual(16000, body.RootElement.GetProperty("max_tokens").GetInt32());
+    }
+
+    [TestMethod]
     public async Task Model_catalog_metadata_can_exceed_inference_limits_without_unbounding_responses()
     {
         var body = JsonSerializer.Serialize(new { models = new[] { new { slug = "available", visibility = "list", display_name = "Available", metadata = new string('x', 400_000) } } });

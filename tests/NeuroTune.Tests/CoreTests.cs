@@ -826,6 +826,11 @@ public sealed class CoreTests
         {
             var store = new JournalStorage(root);
             Assert.ThrowsExactly<InvalidOperationException>(() => store.CheckPath(Path.Combine(root, "..", "outside.json")));
+            Assert.ThrowsExactly<InvalidOperationException>(() => store.DeleteDirectory(Path.Combine(root, "..")));
+            Assert.ThrowsExactly<InvalidOperationException>(() => store.DeleteDirectory(root));
+            store.EnsureDirectory(Path.Combine(root, "failed-operation", "registry"));
+            store.DeleteDirectory(Path.Combine(root, "failed-operation"));
+            Assert.IsFalse(Directory.Exists(Path.Combine(root, "failed-operation")));
             JournalStorage.RequireNoLegacyJournals(root);
             var operations = Path.Combine(root, "operations");
             var runs = Path.Combine(root, "runs");

@@ -36,7 +36,7 @@ describe('Saved before/after and setup boundaries', () => {
   it('provides a semantic setup dialog without consent-by-opening or installation claims', () => {
     const html = renderToStaticMarkup(<SetupGuide open={false} initial={{ telemetry: false, firmware: false }} onLoadModels={noop} onSignIn={noop} onOther={noop} onFinish={noop} onClose={noop}/>);
     expect(html).toContain('<dialog'); expect(html).toContain('Welcome to NeuroTune'); expect(html).toContain('Nothing is installed');
-    expect(html).toContain('Skip without changing permissions'); expect(html).toContain('measurement and backup gates');
+    expect(html).toContain('Skip without changing permissions'); expect(html).toContain('NeuroTune backs them up and verifies them');
     expect(html).not.toContain('checked=""'); expect(html).not.toContain('System One is installed');
     expect(html).toContain('Continue with ChatGPT'); expect(html).toContain('Sign in with OpenRouter'); expect(html).toContain('Other');
     const busy = renderToStaticMarkup(<SetupGuide open initial={{ telemetry: true, firmware: false }} busy="Waiting for browser authorization…" onLoadModels={noop} onSignIn={noop} onOther={noop} onFinish={noop} onClose={noop}/>);

@@ -170,6 +170,7 @@ fn windows_tool(name: &str) -> Result<PathBuf, String> {
     }))
 }
 
+// The uninstaller deletes this task by name too (windows/hooks.nsh).
 const LOGON_TASK: &str = "NeuroTune kept changes check";
 const LOGON_FLAG: &str = "--logon-check";
 

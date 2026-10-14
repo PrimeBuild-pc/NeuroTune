@@ -65,6 +65,14 @@ internal sealed class JournalStorage(string directory, bool privileged = false)
         CheckOne(path);
     }
 
+    internal void DeleteDirectory(string path)
+    {
+        CheckPath(path);
+        if (Path.GetFullPath(path).Equals(DirectoryPath, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("The journal store itself cannot be deleted.");
+        if (Directory.Exists(path)) Directory.Delete(path, recursive: true);
+    }
+
     internal IEnumerable<string> Directories()
     {
         CheckPath(DirectoryPath);
