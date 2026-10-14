@@ -1,3 +1,10 @@
+# Unreleased — power-plan import, no Baseline gate in Expert diagnosis
+
+- Custom power plans: NeuroTune ships only the Microsoft High performance and Ultimate Performance plans (listed by
+  default). "Import a .pow file" stages any plan the user has in one step; a link points to the NeuroTune Discord for
+  more plans. The default folder no longer points to a developer path.
+- Expert "Run AI diagnosis" no longer requires three matching baselines: selected baselines are sent as context.
+
 # Unreleased — fixes from the VM app test
 
 - The uninstaller removes the "NeuroTune kept changes check" sign-in task (updates keep it).

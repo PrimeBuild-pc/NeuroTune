@@ -17,6 +17,7 @@
     <EmbeddedResource Include="..\..\presets\*.md" LogicalName="NeuroTune.presets.%(Filename).md" />
     <EmbeddedResource Include="..\..\games\*.json" LogicalName="NeuroTune.games.%(Filename).json" />
     <EmbeddedResource Include="..\..\scripts\clm-requirements.txt" LogicalName="NeuroTune.clm-requirements.txt" />
+    <EmbeddedResource Include="power-plans\*.pow" LogicalName="NeuroTune.power-plans.%(Filename)%(Extension)" />
     <Content Include="..\..\ui\src-tauri\agent\pi\*" Link="pi\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <InternalsVisibleTo Include="NeuroTune.Tests" />
     <PackageReference Include="System.Management" Version="8.0.0" />
