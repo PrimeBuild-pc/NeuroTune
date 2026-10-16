@@ -23,6 +23,12 @@ network sandbox. Node and CORE are bundled: users need no npm, global Pi or
 local model installation. The selected provider remains responsible for
 inference and its costs. Missing/failed Pi does not trigger another agent or
 provider/billing fallback; local findings remain explicitly incomplete advice.
+A **Pi agent startup** failure occurs before the investigation requests its first
+model response: it is not evidence of a bad API key, quota or invalid model JSON.
+Startup diagnostics distinguish missing/unreadable runtime, unavailable non-admin
+token, Windows launch error and worker exit code without exporting stderr or
+private paths. Global Pi/Node installations are not a replacement for NeuroTune's
+bundled runtime.
 
 First-launch Guided setup offers **ChatGPT**, **OpenRouter** and **Other**.
 Other opens API-key/local provider settings. Signing in saves the main connection

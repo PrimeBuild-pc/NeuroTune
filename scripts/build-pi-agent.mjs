@@ -89,11 +89,24 @@ copyFileSync(process.execPath, join(destination, 'node.exe'));
 writeFileSync(join(destination, 'LICENSE-node.txt'), nodeLicenseText);
 writeFileSync(join(destination, 'LICENSE-pi.txt'), piLicense);
 
-// Self-check only syntax and the copied runtime; never start the bridge or contact a provider.
+// Syntax/version checks plus a local protocol roundtrip; no provider, credentials or system tools.
 for (const args of [['--version'], ['--check', join(destination, 'agent.mjs')]]) {
   const check = spawnSync(join(destination, 'node.exe'), args, { encoding: 'utf8', windowsHide: true });
   assert.equal(check.error, undefined, 'The packaged Node runtime could not start.');
   assert.equal(check.status, 0, check.stderr || 'Packaged runtime/bridge self-check failed.');
   if (args[0] === '--version') assert.equal(check.stdout.trim(), process.version);
 }
-console.log(`Pi bridge and Node ${process.version} packaged in ${destination}`);
+const environment = Object.fromEntries(['SystemRoot', 'WINDIR', 'TEMP', 'TMP']
+  .filter(name => process.env[name] !== undefined).map(name => [name, process.env[name]]));
+const response = '{"kind":"diagnosis"}';
+const frames = [{ maxTurns: 2 }, { id: 1, response }, { id: 2, finished: true }];
+const smoke = spawnSync(join(destination, 'node.exe'), [join(destination, 'agent.mjs')], {
+  cwd: destination, env: environment, windowsHide: true, encoding: 'utf8', timeout: 10_000,
+  input: frames.map(frame => JSON.stringify(frame)).join('\n') + '\n',
+});
+assert.equal(smoke.error, undefined, 'The packaged Pi bridge could not start/finish its local protocol check.');
+assert.equal(smoke.status, 0, smoke.stderr || 'The packaged Pi bridge failed its local protocol check.');
+assert.deepEqual(smoke.stdout.trim().split(/\r?\n/u).map(line => JSON.parse(line)), [
+  { type: 'generate', turn: 1, id: 1 }, { type: 'handle', turn: 1, response, id: 2 }, { type: 'done' },
+], 'The packaged Pi bridge must request a turn and finish the host-validated protocol.');
+console.log(`Pi bridge and Node ${process.version} packaged and protocol-checked in ${destination}`);

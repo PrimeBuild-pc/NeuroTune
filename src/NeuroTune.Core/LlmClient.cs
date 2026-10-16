@@ -151,19 +151,22 @@ public sealed class LlmClient
                 stage = "device topology";
                 await CollectAsync(new("device-topology", "Preloaded for the ports and PCIe lanes objective."), 0);
             }
+            stage = "Pi agent startup";
             Console.Error.WriteLine("Pi agent · investigating with the selected provider and registered read-only tools.");
             await PiAgentBridge.RunAsync(settings.InvestigationMaxTurns, GenerateAsync, HandleAsync, cancellationToken);
             return completed ?? new(LocalFallback(localConflicts), audit, "planner-turn-limit", true, additionalEvidence);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            audit.Add(new(currentTurn, "rejected", plannerTurn?.EvidenceIds ?? [], false, PlannerFailureReason(exception, stage) + ModelAdvice(exception, settings)));
+            audit.Add(new(currentTurn, "rejected", plannerTurn?.EvidenceIds ?? [], false, PlannerFailureReason(exception, stage, settings)));
             return new(LocalFallback(localConflicts), audit, "local-conflict-fallback", true, additionalEvidence);
         }
         catch (OperationCanceledException exception) when (!callerToken.IsCancellationRequested)
         {
             // The investigation budget or the provider timeout expired: the model did not answer in time, which is not a user cancellation.
-            audit.Add(new(currentTurn, "rejected", [], false, $"The model did not finish within the {settings.InvestigationMaxMinutes}-minute investigation budget.{ModelAdvice(exception, settings)}"));
+            audit.Add(new(currentTurn, "rejected", [], false, stage == "Pi agent startup"
+                ? PiAgentBridge.StartupFailureReason(exception)
+                : $"The model did not finish within the {settings.InvestigationMaxMinutes}-minute investigation budget.{ModelAdvice(exception, settings)}"));
             return new(LocalFallback(localConflicts), audit, "investigation-timeout", true, additionalEvidence);
         }
 
@@ -541,6 +544,10 @@ public sealed class LlmClient
         return cause.Length == 0 ? "" :
             $" {cause} Choose another model or retry later in Provider settings; NeuroTune never retries or switches models on its own, and nothing was applied.";
     }
+
+    internal static string PlannerFailureReason(Exception exception, string stage, UserSettings settings) =>
+        stage == "Pi agent startup" ? PiAgentBridge.StartupFailureReason(exception) :
+        PlannerFailureReason(exception, stage) + ModelAdvice(exception, settings);
 
     private static string PlannerFailureReason(Exception exception, string stage) => exception switch
     {

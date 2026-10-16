@@ -193,9 +193,11 @@ npm run build
 ```
 
 `pi:build` copies the build machine's Node runtime, bundles pinned CORE/Pi AI
-and dependency notices, and checks runtime version/syntax without starting a
-provider. If the official Node license is already beside `node.exe`, no override
-is needed. **Only when it is missing**, obtain the official license matching the
+and dependency notices, checks runtime version/syntax and runs the packaged
+bridge through one local generate/handle/done roundtrip with a minimal environment.
+That roundtrip uses a synthetic host response, no credentials, provider or system
+tools; it does not certify non-admin startup on another PC. If the official Node
+license is already beside `node.exe`, no override is needed. **Only when it is missing**, obtain the official license matching the
 exact Node version/distribution (official distribution or its matching
 [nodejs/node](https://github.com/nodejs/node) release tag), review it, and set
 `NEUROTUNE_NODE_LICENSE` to that file before `npm run pi:build`. Do not use an

@@ -17,6 +17,8 @@ $mainExecutable = Join-Path $releaseDirectory 'neurotune.exe'
 $agentDirectory = Join-Path $releaseDirectory 'agent'
 $piDirectory = Join-Path $agentDirectory 'pi'
 $piFiles = @('node.exe', 'agent.mjs', 'LICENSE-node.txt', 'LICENSE-pi.txt', 'agent.mjs.LEGAL.txt')
+$collector = Join-Path $root 'scripts/Collect-NeuroTune-Diagnostics.ps1'
+$retryGuide = Join-Path $root 'docs/RETRY_DIAGNOSIS.md'
 $installer = Get-ChildItem -LiteralPath (Join-Path $releaseDirectory 'bundle/nsis') -Filter "NeuroTune_${version}_*-setup.exe" | Select-Object -First 1
 
 $required = @(
@@ -27,7 +29,9 @@ $required = @(
     (Join-Path $agentDirectory 'amd/AMD-COMPONENT-EULA.txt'),
     (Join-Path $root 'LICENSE'),
     (Join-Path $root 'README.md'),
-    (Join-Path $root 'RELEASE_NOTES.md')
+    (Join-Path $root 'RELEASE_NOTES.md'),
+    $collector,
+    $retryGuide
 ) + @($piFiles | ForEach-Object { Join-Path $piDirectory $_ })
 foreach ($path in $required) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Required release file is missing: $path" }
@@ -54,6 +58,8 @@ Copy-Item -LiteralPath (Join-Path $agentDirectory 'amd') -Destination (Join-Path
 Copy-Item -LiteralPath (Join-Path $root 'LICENSE') -Destination $portableRoot
 Copy-Item -LiteralPath (Join-Path $root 'README.md') -Destination $portableRoot
 Copy-Item -LiteralPath (Join-Path $root 'RELEASE_NOTES.md') -Destination $portableRoot
+Copy-Item -LiteralPath $collector -Destination $portableRoot
+Copy-Item -LiteralPath $retryGuide -Destination $portableRoot
 
 $zip = Join-Path $output "$portableName.zip"
 $installerOutput = Join-Path $output $installer.Name
@@ -66,7 +72,7 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 $archive = [System.IO.Compression.ZipFile]::OpenRead($zip)
 try {
     $entries = $archive.Entries.FullName -replace '\\', '/'
-    $requiredEntries = @('NeuroTune.exe', 'agent/NeuroTune.Agent.exe', 'agent/NeuroTune.Telemetry.exe', 'agent/NeuroTuneLatency.wprp', 'agent/amd/AMD-COMPONENT-EULA.txt', 'LICENSE') + @($piFiles | ForEach-Object { "agent/pi/$_" })
+    $requiredEntries = @('NeuroTune.exe', 'agent/NeuroTune.Agent.exe', 'agent/NeuroTune.Telemetry.exe', 'agent/NeuroTuneLatency.wprp', 'agent/amd/AMD-COMPONENT-EULA.txt', 'LICENSE', 'Collect-NeuroTune-Diagnostics.ps1', 'RETRY_DIAGNOSIS.md') + @($piFiles | ForEach-Object { "agent/pi/$_" })
     foreach ($relative in $requiredEntries) {
         $expected = "$portableName/$relative"
         if ($entries -notcontains $expected) { throw "Portable archive is incomplete: $expected is missing." }
@@ -76,7 +82,11 @@ finally {
     $archive.Dispose()
 }
 
-$assets = @($installerOutput, $zip) | Get-Item | Sort-Object Name
+$collectorOutput = Join-Path $output 'Collect-NeuroTune-Diagnostics.ps1'
+$guideOutput = Join-Path $output 'RETRY_DIAGNOSIS.md'
+Copy-Item -LiteralPath $collector -Destination $collectorOutput -Force
+Copy-Item -LiteralPath $retryGuide -Destination $guideOutput -Force
+$assets = @($installerOutput, $zip, $collectorOutput, $guideOutput) | Get-Item | Sort-Object Name
 $checksumPath = Join-Path $output 'SHA256SUMS'
 $checksums = $assets | ForEach-Object {
     $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()

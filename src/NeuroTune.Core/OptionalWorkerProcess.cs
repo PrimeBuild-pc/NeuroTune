@@ -10,6 +10,11 @@ namespace NeuroTune;
 // Non-admin, short-lived worker, not a filesystem sandbox. All descendants die with its owner/job.
 internal static class OptionalWorkerProcess
 {
+    internal sealed class ExitException(int exitCode, string message, Exception? innerException = null) : InvalidOperationException(message, innerException)
+    {
+        internal int ExitCode { get; } = exitCode;
+    }
+
     internal static async Task<string> RunAsync(string executable, IReadOnlyList<string> arguments, string directory,
         string input, IReadOnlyDictionary<string, string> environment, TimeSpan timeout, Action<string>? progress, CancellationToken cancellationToken,
         Func<StreamReader, StreamWriter, CancellationToken, Task<string>>? interact = null)
@@ -76,7 +81,7 @@ internal static class OptionalWorkerProcess
                     catch (Exception) when (deadline.IsCancellationRequested) { throw new OperationCanceledException(deadline.Token); }
                     deadline.Token.ThrowIfCancellationRequested();
                     if (process.ExitCode == DesktopDenied) throw new InvalidOperationException(TokenUnavailable);
-                    if (process.ExitCode != 0) throw new InvalidOperationException($"Optional worker failed (exit {process.ExitCode}). {(await errors)[..Math.Min(2000, (await errors).Length)]}");
+                    if (process.ExitCode != 0) throw new ExitException(process.ExitCode, $"Optional worker failed (exit {process.ExitCode}). {(await errors)[..Math.Min(2000, (await errors).Length)]}");
                     return await output;
 
                     async Task<string> InteractAsync()
@@ -90,7 +95,9 @@ internal static class OptionalWorkerProcess
                             var exit = exited ? $" Worker exit code 0x{process.ExitCode:X8}." : "";
                             job.Dispose();
                             var said = await Task.WhenAny(errors, Task.Delay(2000)) == errors && errors.IsCompletedSuccessfully ? errors.Result.Trim() : "";
-                            throw new InvalidOperationException(error.Message + exit + (said.Length == 0 ? "" : $" Worker said: {said[^Math.Min(600, said.Length)..]}"), error);
+                            var message = error.Message + exit + (said.Length == 0 ? "" : $" Worker said: {said[^Math.Min(600, said.Length)..]}");
+                            if (exited) throw new ExitException(process.ExitCode, message, error);
+                            throw new InvalidOperationException(message, error);
                         }
                         catch { job.Dispose(); throw; }
                         finally { writer.Close(); }

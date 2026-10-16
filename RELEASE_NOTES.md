@@ -1,3 +1,44 @@
+# NeuroTune v0.9.0-alpha.2
+
+## Pi startup diagnostics and tester retry package
+
+**Unsigned Windows 11 x64 prerelease for controlled testing.** This release
+improves diagnosis of the reported startup failure; it does not claim the
+underlying block on the tester's PC is fixed. Keep existing recovery data and
+independent backups. No automatic provider, model or elevated-worker fallback.
+
+- Pi startup failures no longer blame model output or recommend changing API
+  keys/models before any investigation request was sent.
+- Safe startup causes now distinguish a missing/unreadable bundled runtime,
+  unavailable non-admin token, numeric Windows launch error and worker exit code.
+  Raw stderr/private paths are not exported into the diagnosis.
+- Startup deadline expiry is reported as a startup failure, not a slow model.
+- Packaging verifies a local generate/handle/done roundtrip using the copied
+  Node runtime, without credentials, provider calls or system tools.
+- `Collect-NeuroTune-Diagnostics.ps1` exports a small reviewable JSON with the
+  last ten run summaries and runtime file hashes/versions. It never copies API
+  credentials/settings, full profiles, raw journals, ETL or Windows files.
+  Text redaction is best-effort; review the JSON before sharing it.
+
+### Downloads
+
+- `NeuroTune_0.9.0-alpha.2_x64-setup.exe`: installer; close NeuroTune first.
+- `NeuroTune-0.9.0-alpha.2-win-x64.zip`: complete portable directory.
+- `Collect-NeuroTune-Diagnostics.ps1` and `RETRY_DIAGNOSIS.md`: diagnostic export
+  script and exact retry instructions, also included in the portable archive.
+- `SHA256SUMS`: hashes for all four downloadable files above.
+
+### Validation and remaining limits
+
+403 .NET tests passed (6 optional tests skipped), 80 UI/Pi tests passed, and
+formatting plus packaged-runtime protocol checks passed before release build.
+No live provider request, installer/upgrade acceptance or system-writing test
+was performed for this correction. A retry on the affected PC is still needed.
+The optional AMD Radeon object-code component retains its separate EULA as
+explained in the preceding release notes below. Earlier releases are unchanged.
+
+---
+
 # NeuroTune v0.9.0-alpha.1
 
 ## v2: an agentic tuner with typed, reversible writes
