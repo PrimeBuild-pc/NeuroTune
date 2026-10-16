@@ -84,11 +84,18 @@ catch { $issues += 'Run journals could not be listed. Check administrator access
 $files = @('NeuroTune.exe', 'agent\NeuroTune.Agent.exe', 'agent\pi\node.exe', 'agent\pi\agent.mjs') | ForEach-Object {
     $relative = $_
     $path = Join-Path $InstallDirectory $relative
-    if (Test-Path -LiteralPath $path -PathType Leaf) {
-        $file = Get-Item -LiteralPath $path
-        [ordered]@{ name = $relative; present = $true; bytes = $file.Length; version = $file.VersionInfo.FileVersion; sha256 = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash }
+    try {
+        if (Test-Path -LiteralPath $path -PathType Leaf) {
+            $file = Get-Item -LiteralPath $path
+            if ($file.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Linked runtime file.' }
+            [ordered]@{ name = $relative; present = $true; bytes = $file.Length; version = $file.VersionInfo.FileVersion; sha256 = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash }
+        }
+        else { [ordered]@{ name = $relative; present = $false } }
     }
-    else { [ordered]@{ name = $relative; present = $false } }
+    catch {
+        $issues += 'One runtime file could not be inspected; no raw exception or path was exported.'
+        [ordered]@{ name = $relative; present = $null; status = 'unreadable-or-refused' }
+    }
 }
 $windows = Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
 $report = [ordered]@{
