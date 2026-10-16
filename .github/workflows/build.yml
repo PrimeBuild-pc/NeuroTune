@@ -64,7 +64,10 @@ jobs:
           }
       - name: Verify MIT and release metadata
         shell: pwsh
-        run: ./scripts/test-release-metadata.ps1
+        run: |
+          ./scripts/test-release-metadata.ps1
+          ./scripts/Collect-NeuroTune-Diagnostics.ps1 -SelfTest
+          ./scripts/test-diagnostics-launcher.ps1
       - name: Publish Tauri agent resources
         run: npm run agent:publish
         working-directory: ui

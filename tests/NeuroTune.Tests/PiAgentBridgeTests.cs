@@ -53,6 +53,49 @@ public sealed class PiAgentBridgeTests
     }
 
     [TestMethod]
+    public void Startup_failures_retain_only_safe_local_causes_and_numeric_codes()
+    {
+        var cases = new (Exception Error, string Cause)[]
+        {
+            (new InvalidOperationException(PiAgentBridge.MissingRuntime), "runtime is missing"),
+            (new InvalidOperationException(OptionalWorkerProcess.TokenUnavailable), "medium-integrity UAC token"),
+            (new System.ComponentModel.Win32Exception(5, "secret-host-path"), "Win32 5"),
+            (new OptionalWorkerProcess.ExitException(unchecked((int)0xC0000135), "secret-stderr"), "exit 0xC0000135"),
+            (new UnauthorizedAccessException("secret-host-path"), "Access to the bundled Pi runtime was denied"),
+            (new IOException("secret-host-path"), "path was refused"),
+            (new OperationCanceledException("secret-host-path"), "before the investigation deadline")
+        };
+        foreach (var (error, cause) in cases)
+        {
+            var reason = LlmClient.PlannerFailureReason(error, "Pi agent startup", LlmClient.Defaults(LlmProvider.DeepSeek));
+            Assert.Contains(cause, reason);
+            Assert.Contains("no model request was sent", reason);
+            Assert.DoesNotContain("secret-", reason);
+            Assert.DoesNotContain("returned output", reason);
+        }
+    }
+
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task Early_worker_exit_retains_its_code_without_exporting_stderr(bool interactive)
+    {
+        RequireHelpers();
+        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        var script = "[Console]::Error.WriteLine('secret-stderr'); exit 37";
+        var error = await Assert.ThrowsAsync<OptionalWorkerProcess.ExitException>(() => OptionalWorkerProcess.RunAsync(
+            Path.Combine(windows, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
+            ["-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", Convert.ToBase64String(Encoding.Unicode.GetBytes(script))],
+            Path.GetTempPath(), "", new Dictionary<string, string> { ["SystemRoot"] = windows }, TimeSpan.FromSeconds(10), null, CancellationToken.None,
+            interactive ? (reader, writer, token) => PiAgentBridge.ExchangeAsync(reader, writer, 2,
+                _ => throw new AssertFailedException("A failed startup must not call a model."), (_, _) => Task.FromResult(true), token) : null));
+        Assert.AreEqual(37, error.ExitCode);
+        var reason = PiAgentBridge.StartupFailureReason(error);
+        Assert.Contains("exit 0x00000025", reason);
+        Assert.DoesNotContain("secret-stderr", reason);
+    }
+
+    [TestMethod]
     public async Task Bundled_Pi_stops_immediately_when_host_transport_fails()
     {
         var clock = Stopwatch.StartNew();

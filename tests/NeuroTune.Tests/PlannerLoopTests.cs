@@ -92,6 +92,21 @@ public sealed class PlannerLoopTests
     }
 
     [TestMethod]
+    [DataRow(LlmProvider.OpenRouter, "google/gemma-4-26b-a4b-it:free")]
+    [DataRow(LlmProvider.DeepSeek, "deepseek-flash")]
+    public void Pi_startup_failure_is_not_attributed_to_a_model_that_was_never_called(LlmProvider provider, string model)
+    {
+        var settings = LlmClient.Defaults(provider); settings.Model = model;
+        var error = new InvalidOperationException("secret-worker-output-and-host-path");
+        var reason = LlmClient.PlannerFailureReason(error, "Pi agent startup", settings);
+        Assert.Contains("Pi agent", reason);
+        Assert.Contains("no model request was sent", reason);
+        Assert.DoesNotContain(model, reason);
+        Assert.DoesNotContain("Choose another model", reason);
+        Assert.DoesNotContain("secret-", reason);
+    }
+
+    [TestMethod]
     public async Task Unusable_model_output_is_attributed_to_the_model_without_echoing_it()
     {
         var (listener, server, settings) = StartServer(["secret-not-json"]);
