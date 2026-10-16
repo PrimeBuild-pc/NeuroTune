@@ -36,6 +36,24 @@ startup diagnostic report: use the script below.
 
 ## 2. Export the right diagnostics
 
+### Easiest: double-click the BAT (no commands)
+
+Download **NeuroTune-Diagnostics.zip** from the release. Right-click it and choose
+**Extract All**. Keep the extracted files together. After the analysis fails or
+finishes, double-click **Raccogli-log-NeuroTune.bat**, approve the Windows UAC
+prompt using the same Windows account as NeuroTune, and wait. The window stays
+open and shows where the Desktop JSON was saved. Send that JSON after reviewing
+it, plus the error screenshot. Do not open the BAT from inside the ZIP and do
+not open the PS1 manually. The BAT only launches the existing collector; it does
+not start AI, download anything or change permanent execution policy. Decline or
+report an organization/security block instead of weakening Windows protection.
+
+**Italiano:** scarica lo ZIP, premi **Estrai tutto**, fai doppio clic su
+**Raccogli-log-NeuroTune.bat**, conferma **Si** e invia il JSON creato sul Desktop.
+Il file PS1 deve restare nella cartella, ma non devi aprirlo.
+
+### Optional: manual PowerShell command
+
 Download `Collect-NeuroTune-Diagnostics.ps1` from the **same release** (or use
 the copy at the root of the portable ZIP). Review the script and its SHA256SUMS
 entry. Right-click Start → **Terminal (Admin)** / **Windows PowerShell (Admin)**,

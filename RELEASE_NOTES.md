@@ -26,7 +26,11 @@ independent backups. No automatic provider, model or elevated-worker fallback.
 - `NeuroTune-0.9.0-alpha.2-win-x64.zip`: complete portable directory.
 - `Collect-NeuroTune-Diagnostics.ps1` and `RETRY_DIAGNOSIS.md`: diagnostic export
   script and exact retry instructions, also included in the portable archive.
-- `SHA256SUMS`: hashes for all four downloadable files above.
+- `NeuroTune-Diagnostics.zip`: double-click BAT launcher plus the collector and
+  retry guide; extract all files before running `Raccogli-log-NeuroTune.bat`.
+  The original alpha.2 app assets are unchanged; the supplemental ZIP has its
+  own `NeuroTune-Diagnostics-SHA256SUMS` when added to the published release.
+- `SHA256SUMS`: hashes for the original downloadable files above.
 
 ### Validation and remaining limits
 
