@@ -38,7 +38,7 @@ Include the affected version, reproduction steps, expected impact, and a contact
 
 ## Known Limitations
 
-NeuroTune currently runs with administrator privileges because it changes system settings. A compromised Windows account or tampered executable can bypass application-level controls. Alpha builds are unsigned and must be checked against the SHA-256 value produced by the build pipeline.
+NeuroTune currently runs with administrator privileges because it changes system settings. The bundled Node/Pi investigation process inherits the host's token, including administrator privileges, rather than requiring a filtered UAC token. Its protocol exposes no shell/file tools and Apply still requires user approval, but these are application controls, not an OS sandbox: a compromised Node/Pi runtime can modify the system or access data with the host's privileges. Optional System One/CLM workers and non-admin read tools retain their reduced-privilege launch policy. A compromised Windows account or tampered executable can bypass application-level controls. Alpha builds are unsigned and must be checked against the SHA-256 value produced by the build pipeline.
 
 Legacy `%LocalAppData%\NeuroTune\operations` and `runs` journals are not automatically imported or trusted. Before upgrading, finish/review recovery with the previous build and archive these directories only after preserving independent backups and resolving old writes. The new build blocks journal operations while legacy entries remain, including manifests that claim a completed rollback: those unprotected fields are not proof of current Windows state. Do not copy legacy JSON into the protected store or delete pending recovery data to bypass this gate.
 

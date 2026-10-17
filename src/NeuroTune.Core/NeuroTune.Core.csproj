@@ -6,7 +6,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AssemblyName>NeuroTune.Core</AssemblyName>
     <RootNamespace>NeuroTune</RootNamespace>
-    <Version>0.9.0-alpha.2</Version>
+    <Version>0.9.0-alpha.3</Version>
     <Authors>PrimeBuild</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/PrimeBuild-pc/NeuroTune</RepositoryUrl>

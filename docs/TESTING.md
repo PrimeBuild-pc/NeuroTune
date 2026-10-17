@@ -171,7 +171,11 @@ With separate explicit authorization and the exact candidate installer:
 The default investigator uses Pi CORE (`@earendil-works/pi-agent-core`), not
 the full Pi coding CLI/TUI. Host transport/OAuth, fixed readers and validations
 remain authoritative; there is no shell/file tool, persisted Pi session or agent
-fallback. A short-lived non-admin subprocess is not a filesystem/network sandbox.
+fallback. Pi inherits the host token (administrator when elevated), not a filtered
+UAC token. It is not an OS sandbox; a compromised runtime has the host's privileges.
+Verify a complete mocked turn and cancellation from both normal and elevated
+hosts, including a host that cannot launch non-admin helpers. Optional workers
+and read tools must retain their existing reduced-privilege policy.
 Release packages bundle Node/CORE and notices: end users need no npm, global Pi
 or local model installation.
 
@@ -196,7 +200,7 @@ npm run build
 and dependency notices, checks runtime version/syntax and runs the packaged
 bridge through one local generate/handle/done roundtrip with a minimal environment.
 That roundtrip uses a synthetic host response, no credentials, provider or system
-tools; it does not certify non-admin startup on another PC. If the official Node
+tools; it does not certify host-token startup on another PC. If the official Node
 license is already beside `node.exe`, no override is needed. **Only when it is missing**, obtain the official license matching the
 exact Node version/distribution (official distribution or its matching
 [nodejs/node](https://github.com/nodejs/node) release tag), review it, and set

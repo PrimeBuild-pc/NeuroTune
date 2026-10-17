@@ -7,7 +7,7 @@ using Microsoft.Win32.SafeHandles;
 
 namespace NeuroTune;
 
-// Non-admin, short-lived worker, not a filesystem sandbox. All descendants die with its owner/job.
+// Short-lived worker, non-admin by default, not a filesystem sandbox. All descendants die with its owner/job.
 internal static class OptionalWorkerProcess
 {
     internal sealed class ExitException(int exitCode, string message, Exception? innerException = null) : InvalidOperationException(message, innerException)
@@ -17,12 +17,13 @@ internal static class OptionalWorkerProcess
 
     internal static async Task<string> RunAsync(string executable, IReadOnlyList<string> arguments, string directory,
         string input, IReadOnlyDictionary<string, string> environment, TimeSpan timeout, Action<string>? progress, CancellationToken cancellationToken,
-        Func<StreamReader, StreamWriter, CancellationToken, Task<string>>? interact = null)
+        Func<StreamReader, StreamWriter, CancellationToken, Task<string>>? interact = null, bool inheritHostToken = false)
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(timeout);
         using var job = NewJob();
-        using var token = NonAdminToken();
+        // Only the bundled Pi bridge opts into the host token; read tools and optional workers stay non-admin.
+        using var token = inheritHostToken ? null : NonAdminToken();
         var security = new SecurityAttributes { Length = Marshal.SizeOf<SecurityAttributes>(), Inherit = true };
         Check(CreatePipe(out var stdinRead, out var stdinWrite, ref security, 0));
         using (stdinRead) using (stdinWrite)
@@ -80,7 +81,7 @@ internal static class OptionalWorkerProcess
                     try { await Task.WhenAll(process.WaitForExitAsync(deadline.Token), output, errors); }
                     catch (Exception) when (deadline.IsCancellationRequested) { throw new OperationCanceledException(deadline.Token); }
                     deadline.Token.ThrowIfCancellationRequested();
-                    if (process.ExitCode == DesktopDenied) throw new InvalidOperationException(TokenUnavailable);
+                    if (!inheritHostToken && process.ExitCode == DesktopDenied) throw new InvalidOperationException(TokenUnavailable);
                     if (process.ExitCode != 0) throw new ExitException(process.ExitCode, $"Optional worker failed (exit {process.ExitCode}). {(await errors)[..Math.Min(2000, (await errors).Length)]}");
                     return await output;
 
@@ -91,7 +92,7 @@ internal static class OptionalWorkerProcess
                         {
                             // A worker that quits early usually says why on stderr; keep a short tail instead of a bare protocol error.
                             var exited = process.WaitForExit(500);
-                            if (exited && process.ExitCode == DesktopDenied) { job.Dispose(); throw new InvalidOperationException(TokenUnavailable, error); }
+                            if (!inheritHostToken && exited && process.ExitCode == DesktopDenied) { job.Dispose(); throw new InvalidOperationException(TokenUnavailable, error); }
                             var exit = exited ? $" Worker exit code 0x{process.ExitCode:X8}." : "";
                             job.Dispose();
                             var said = await Task.WhenAny(errors, Task.Delay(2000)) == errors && errors.IsCompletedSuccessfully ? errors.Result.Trim() : "";
@@ -194,7 +195,7 @@ internal static class OptionalWorkerProcess
         if (value.Any(character => character is '"' or '\0' or '\r' or '\n')) throw new ArgumentException("Invalid optional-worker argument.");
         return '"' + value + new string('\\', value.Length - value.TrimEnd('\\').Length) + '"';
     }
-    private static void Check(bool success) { if (!success) throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not start/control the non-admin optional worker."); }
+    private static void Check(bool success) { if (!success) throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not start/control the worker."); }
 
     [StructLayout(LayoutKind.Sequential)] private struct SecurityAttributes { public int Length; public IntPtr Descriptor; [MarshalAs(UnmanagedType.Bool)] public bool Inherit; }
     [StructLayout(LayoutKind.Sequential)] private struct MandatoryLabel { public IntPtr Sid; public uint Attributes; }

@@ -159,15 +159,17 @@ public sealed class SystemOneTests
         Assert.ThrowsExactly<InvalidOperationException>(() => LlmClient.ParseComparisonExplanation("""{"summary":""}"""));
     }
     [TestMethod]
-    public async Task Optional_worker_deadline_stops_its_process_tree_or_refuses_unavailable_token()
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task Optional_worker_deadline_stops_its_process_tree_or_refuses_unavailable_token(bool inheritHostToken)
     {
         var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
         var script = "Start-Sleep -Seconds 30";
         var started = System.Diagnostics.Stopwatch.StartNew();
         var execution = OptionalWorkerProcess.RunAsync(Path.Combine(windows, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
             ["-NoProfile", "-NonInteractive", "-EncodedCommand", Convert.ToBase64String(Encoding.Unicode.GetBytes(script))], Path.GetTempPath(), "",
-            new Dictionary<string, string> { ["SystemRoot"] = windows }, TimeSpan.FromMilliseconds(700), null, CancellationToken.None);
-        if (WorkerTokenUnavailable())
+            new Dictionary<string, string> { ["SystemRoot"] = windows }, TimeSpan.FromMilliseconds(700), null, CancellationToken.None, inheritHostToken: inheritHostToken);
+        if (!inheritHostToken && WorkerTokenUnavailable())
         {
             var error = await Assert.ThrowsAsync<InvalidOperationException>(() => execution);
             Assert.AreEqual(OptionalWorkerProcess.TokenUnavailable, error.Message);

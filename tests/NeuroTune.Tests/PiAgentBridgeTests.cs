@@ -96,6 +96,37 @@ public sealed class PiAgentBridgeTests
     }
 
     [TestMethod]
+    public async Task Pi_worker_can_inherit_host_privileges_without_inheriting_secret_environment()
+    {
+        const string secret = "NEUROTUNE_PI_TEST_SECRET";
+        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        var script = "$p=[Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent()); [Console]::Write($p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator).ToString().ToLower()+'|secret='+$env:NEUROTUNE_PI_TEST_SECRET)";
+        Environment.SetEnvironmentVariable(secret, "not-for-pi");
+        try
+        {
+            var result = await OptionalWorkerProcess.RunAsync(
+                Path.Combine(windows, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
+                ["-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand", Convert.ToBase64String(Encoding.Unicode.GetBytes(script))],
+                Path.GetTempPath(), "", new Dictionary<string, string> { ["SystemRoot"] = windows },
+                TimeSpan.FromSeconds(10), null, CancellationToken.None, inheritHostToken: true);
+            Assert.AreEqual(LogService.IsAdministrator().ToString().ToLowerInvariant() + "|secret=", result);
+        }
+        finally { Environment.SetEnvironmentVariable(secret, null); }
+    }
+
+    [TestMethod]
+    public async Task Bundled_Pi_completes_a_host_validated_turn_without_non_admin_helpers()
+    {
+        var generated = 0; var handled = 0;
+        await PiAgentBridge.RunAsync(2,
+            turn => { Assert.AreEqual(1, turn); generated++; return Task.FromResult("{\"kind\":\"diagnosis\"}"); },
+            (turn, response) => { Assert.AreEqual(1, turn); Assert.AreEqual("{\"kind\":\"diagnosis\"}", response); handled++; return Task.FromResult(true); },
+            CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.AreEqual(1, generated);
+        Assert.AreEqual(1, handled);
+    }
+
+    [TestMethod]
     public async Task Bundled_Pi_stops_immediately_when_host_transport_fails()
     {
         var clock = Stopwatch.StartNew();
@@ -107,7 +138,6 @@ public sealed class PiAgentBridgeTests
     [TestMethod]
     public async Task Cancellation_stops_the_bundled_Pi_child_and_preserves_cancellation()
     {
-        RequireHelpers();
         using var stop = new CancellationTokenSource();
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var operation = PiAgentBridge.RunAsync(2, async _ => { started.SetResult(); await Task.Delay(Timeout.Infinite, stop.Token); return ""; },

@@ -1,17 +1,20 @@
-# Retry diagnosis — v0.9.0-alpha.2
+# Retry diagnosis — v0.9.0-alpha.3
 
-This unsigned prerelease improves startup diagnostics, not a proven repair of
-the tester's underlying startup block. Use Windows 11 x64. Do not disable
+This unsigned prerelease runs Pi with NeuroTune's own token, including
+administrator privileges when elevated, removing its filtered-token startup
+dependency. It is not an OS sandbox: a compromised Node/Pi runtime can act with
+the host's privileges despite Apply approvals. The affected PC still needs a
+fresh test; success is not guaranteed. Use Windows 11 x64. Do not disable
 Defender/SmartScreen, change folder permissions or install global Pi/Node to
 work around an error. Never delete recovery journals or reset credentials for
 this test. No Apply is needed.
 
 ## 1. Install and retry once
 
-1. Download `NeuroTune_0.9.0-alpha.2_x64-setup.exe` from this release and verify
+1. Download `NeuroTune_0.9.0-alpha.3_x64-setup.exe` from this release and verify
    it against `SHA256SUMS` using `Get-FileHash -Algorithm SHA256` in PowerShell.
 2. Close NeuroTune completely, install the new version, and reopen it. Confirm
-   **v0.9.0-alpha.2** at the bottom of the app. Existing settings/recovery remain.
+   **v0.9.0-alpha.3** at the bottom of the app. Existing settings/recovery remain.
 3. Keep the same provider and exact model used in the failed test (for example
    DeepSeek / `deepseek-flash`). Do not send or paste the API key in feedback.
 4. If an interrupted prewrite diagnosis is retained, choose **Finish without
@@ -72,7 +75,7 @@ For the portable build or a non-default installation, also specify the folder
 containing `NeuroTune.exe`:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\Downloads\Collect-NeuroTune-Diagnostics.ps1" -InstallDirectory "C:\Path\To\NeuroTune-0.9.0-alpha.2-win-x64"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:USERPROFILE\Downloads\Collect-NeuroTune-Diagnostics.ps1" -InstallDirectory "C:\Path\To\NeuroTune-0.9.0-alpha.3-win-x64"
 ```
 
 The script prints the exact output path and creates one

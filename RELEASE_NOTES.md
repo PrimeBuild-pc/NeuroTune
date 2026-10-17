@@ -1,3 +1,26 @@
+# NeuroTune v0.9.0-alpha.3
+
+## Pi host-token startup and diagnostic BAT
+
+**Unsigned Windows 11 x64 prerelease for controlled testing.** This removes the
+filtered-token dependency behind the reported Pi startup failure; exact-candidate
+installation and diagnosis on the affected PC remain unverified. Keep backups
+and existing recovery data. No provider/model fallback is introduced.
+
+- Pi CORE now inherits NeuroTune's own token (administrator when elevated),
+  avoiding the filtered-token startup dependency. This is the Pi launch policy,
+  not a retry or automatic fallback. Optional workers and read tools retain their
+  existing privilege policy. Filtered environment/handles, job cancellation,
+  protocol validation and Apply approvals remain in place. A compromised Node/Pi
+  runtime now has the host's privileges; application approvals are not an OS sandbox.
+- Regression checks cover host-token privileges, secret-environment filtering,
+  mocked Pi completion, cancellation and worker deadlines. Clean-PC installer
+  acceptance is still required.
+- Includes the updated installer, complete portable ZIP and
+  `NeuroTune-Diagnostics.zip` with `Raccogli-log-NeuroTune.bat`, the PowerShell
+  collector and retry guide. Extract the diagnostic ZIP before double-clicking
+  the BAT; review the Desktop JSON before sharing. `SHA256SUMS` covers all assets.
+
 # NeuroTune v0.9.0-alpha.2
 
 ## Pi startup diagnostics and tester retry package

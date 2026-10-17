@@ -14,8 +14,10 @@ coding-tool set or additional provider credential store. Model-written code runs
 only as the read-only `powershell-read` command described below or, in Expert
 mode, as a declared script (`script.declared`, see Execution vetoes).
 
-The packaged Node/CORE process is short-lived, non-admin and cancelled with its
-owner, not a filesystem/network sandbox. It does not require user npm, global
+The packaged Node/CORE process is short-lived and cancelled with its owner.
+It inherits NeuroTune's token, including administrator privileges when elevated;
+it does not depend on a filtered UAC token and is not an OS sandbox. A compromised
+runtime can bypass application-level controls with the host's privileges. It does not require user npm, global
 Pi or a local model, and never substitutes another agent/provider if startup,
 protocol, budget or inference fails. Local observations may remain available
 but are explicitly incomplete, not a successful agent diagnosis or Apply authority.
@@ -91,7 +93,7 @@ Prepared report text and file names/hashes are retained in the normal run eviden
 | Approval and identity | Apply belongs to a persisted run and matches its approved IDs. High-risk actions require separate confirmation. Risk presets select, never authorize a write. |
 | Recovery/backup | Verified restore point, original-state snapshots, Registry exports and an operation journal remain mandatory. Failure leads to verified rollback or visible recovery. |
 | Baselines and comparison | Since v2 F4 measurements are context, not a gate: approval works from `BaselinePending`, and Keep works from `CandidatePending` without a comparison. Comparison still rejects invalid/mismatched captures and enforces drift/thermal constraints; any accepted comparison matching the run is recorded for the decision, not as causal proof. Single records of a run's operation can be restored while the run waits for measurement or a decision. |
-| Recorder/tool separation | Optional inference and SCEWIN export use recording interlocks. Elevated local-worker launches use a LUA-filtered, medium-integrity copy of NeuroTune's own token (Administrators deny-only, privileges removed); if the desktop refuses it, the worker is declined, with no station/desktop ACL changes or administrator fallback. SCEWIN additionally requires explicit consent, elevation, approved staged hashes and fixed export arguments; no security bypass exists. |
+| Recorder/tool separation | Optional inference and SCEWIN export use recording interlocks. Pi inherits the host token; optional System One/CLM workers and non-admin read tools still use a LUA-filtered, medium-integrity copy of NeuroTune's own token (Administrators deny-only, privileges removed); if the desktop refuses it, the worker is declined, with no station/desktop ACL changes or administrator fallback. SCEWIN additionally requires explicit consent, elevation, approved staged hashes and fixed export arguments; no security bypass exists. |
 
 `LlmClient.ParseDiagnosis` validates structure, evidence provenance and capability kinds, **not universal semantic goal-optimality**. There is no separate universal `DiagnosisValidator`. Preserving consent, credentials, privilege separation, backups, quality checks and verification does not require imposing tuning conclusions on the investigator.
 

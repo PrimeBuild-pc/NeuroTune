@@ -4,7 +4,7 @@ using System.Text.Json;
 
 namespace NeuroTune;
 
-// Pi is a short-lived non-admin child; credentials and provider requests stay in the host.
+// Pi is a short-lived child with the host's privileges; credentials and provider requests stay in the host.
 internal static class PiAgentBridge
 {
     internal const string MissingRuntime = "The bundled Pi agent runtime is missing. Rebuild/reinstall NeuroTune; no alternate agent was used.";
@@ -42,7 +42,7 @@ internal static class PiAgentBridge
             if (Environment.GetEnvironmentVariable(name) is { } value) environment[name] = value;
         await OptionalWorkerProcess.RunAsync(executable, [script], directory, "", environment,
             TimeSpan.FromMinutes(31), null, cancellationToken,
-            (reader, writer, token) => ExchangeAsync(reader, writer, maxTurns, generate, handle, token));
+            (reader, writer, token) => ExchangeAsync(reader, writer, maxTurns, generate, handle, token), inheritHostToken: true);
     }
 
     internal static async Task<string> ExchangeAsync(StreamReader reader, StreamWriter writer, int maxTurns,
