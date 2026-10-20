@@ -1,0 +1,14 @@
+node_modules/
+artifacts/
+*.tgz
+coverage/
+.neurotune/
+# Machine reports and captures belong outside source control.
+inventory*.json
+before*.json
+after*.json
+*.etl
+*.csv
+!tests/fixtures/*.csv
+# Reproducible navigation artifacts; generate locally with Graphify.
+graphify-out/

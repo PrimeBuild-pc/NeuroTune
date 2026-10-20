@@ -1,0 +1,3 @@
+* text=auto eol=lf
+# Preserve the exact reviewed upstream collector bytes and provenance hash.
+skills/neurotune/scripts/Collect-Hardware.ps1 -text whitespace=cr-at-eol
