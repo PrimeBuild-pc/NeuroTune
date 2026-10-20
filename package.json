@@ -1,12 +1,12 @@
 {
   "name": "neurotune-skill",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "description": "Evidence-led Windows performance investigation in your existing AI harness",
   "type": "module",
   "license": "MIT",
   "engines": { "node": ">=22" },
   "bin": { "neurotune": "skills/neurotune/scripts/cli.mjs" },
-  "files": ["skills/", "scripts/install.mjs", "docs/", "README.md", "SECURITY.md", "LICENSE", "NOTICE.md"],
+  "files": [".claude-plugin/", "skills/", "scripts/install.mjs", "docs/", "README.md", "SECURITY.md", "LICENSE", "NOTICE.md"],
   "keywords": ["pi-package", "agent-skill", "windows", "performance", "neurotune"],
   "pi": { "skills": ["./skills/neurotune"] },
   "scripts": {
@@ -14,6 +14,8 @@
     "check": "node scripts/check.mjs",
     "test:collector": "node scripts/test-collector.mjs",
     "test:package": "node scripts/test-package.mjs",
+    "test:pi": "node scripts/test-pi.mjs",
+    "test:claude": "node scripts/test-claude.mjs",
     "skill:install": "node scripts/install.mjs",
     "pack:local": "npm pack --ignore-scripts"
   }

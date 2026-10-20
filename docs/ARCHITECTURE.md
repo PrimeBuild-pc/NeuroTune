@@ -21,7 +21,7 @@ Future, separate: human approval UI -> privileged typed-action broker
                  (not reachable through today's CLI)
 ```
 
-The **seam** is the versioned JSON command interface, not a model SDK. A skill is the first **adapter**: it teaches a harness when and how to invoke that interface. An MCP adapter is justified only by a second, concrete host that cannot conveniently run the CLI; it must reuse the same implementation and advertise the same authority limits.
+The **seam** is the versioned JSON command interface, not a model SDK. A skill is the first **adapter**: it teaches a harness when and how to invoke that interface. Pi and Claude Code manifests load the same skill; neither adds executable host-specific code. An MCP adapter is justified only by a second, concrete host that cannot conveniently run the CLI; it must reuse the same implementation and advertise the same authority limits.
 
 Modules:
 
@@ -33,7 +33,7 @@ Modules:
 | `frames.mjs` | CSV validation, numerical aggregation, comparison gates | Pure functions + CLI workflow |
 | `plan.mjs` | Citation/shape checks; no executable authority | Valid and hostile proposals |
 | `cli.mjs` | Strict arguments and JSON envelope | Subprocess tests |
-| `SKILL.md` + references | Consent, investigation, interpretation and stop criteria | Static packaging checks + future model evaluations |
+| `SKILL.md` + references | Consent, investigation, interpretation and stop criteria | Packaging and real host discovery checks; model cases authored, execution pending |
 
 The modules have depth: CSV interpretation, comparison validity and missing-value semantics live once rather than being restated by every model. No generic tool registry, service container or plugin loader is needed for six commands.
 

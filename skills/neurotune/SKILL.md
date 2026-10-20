@@ -4,7 +4,7 @@ description: Investigate Windows gaming performance, stutter and hardware config
 license: MIT
 compatibility: Requires Node.js 22 or newer and a harness with file and command tools. Live inventory requires Windows and Windows PowerShell 5.1; offline frame analysis is portable.
 metadata:
-  version: 0.1.0-alpha.1
+  version: 0.1.0-alpha.2
 ---
 
 # NeuroTune

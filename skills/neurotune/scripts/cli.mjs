@@ -15,7 +15,7 @@ const commands = {
   'plan-check': { input: {}, evidence: { multiple: true } }
 };
 const help = {
-  name: 'neurotune', version: '0.1.0-alpha.1', schemaVersion: 1,
+  name: 'neurotune', version: '0.1.0-alpha.2', schemaVersion: 1,
   usage: [
     'neurotune doctor',
     'neurotune collect --out <new inventory.json>',

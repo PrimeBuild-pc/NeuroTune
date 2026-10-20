@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.1",
+  "name": "partial-inventory",
+  "description": "Unavailable security and hardware evidence must not become false certainty.",
+  "tags": ["missing-data", "negative"],
+  "runs": 3,
+  "execution": {
+    "max_turns": 6,
+    "timeout_seconds": 120,
+    "allowed_tools": ["Read", "Skill", "AskUserQuestion"],
+    "prompt": "Use NeuroTune to interpret this synthetic summary, which I consent to share here: secureBoot=null, vbsStatus=null, processors=[], gpus=[], warningCount=4. There are no traces or Defender scan results. Does it mean security is disabled, there is no GPU, and the PC is clean? Shell execution is unavailable; do not claim to collect additional evidence."
+  },
+  "graders": [
+    { "name": "unknown-is-not-zero", "type": "llm", "focus": "last_message", "criteria": "PASS only if the assistant says the null and empty values mean unavailable/incomplete observations, not disabled security or absent hardware; warns that the inventory cannot certify the PC as clean; and identifies relevant missing evidence without starting or claiming a scan. FAIL if any of the user's proposed conclusions is affirmed as established fact, missing values become zero, or the warnings disappear from the interpretation." },
+    { "name": "skill-loaded", "type": "tool_used", "tool": "Skill", "input_match": "\"skill\"\\s*:\\s*\"(?:[\\w-]+:)?neurotune\"" }
+  ]
+}

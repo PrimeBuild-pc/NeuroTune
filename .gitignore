@@ -2,6 +2,7 @@ node_modules/
 artifacts/
 *.tgz
 coverage/
+evals/results/
 .neurotune/
 # Machine reports and captures belong outside source control.
 inventory*.json

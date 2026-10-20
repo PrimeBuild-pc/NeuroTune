@@ -2,7 +2,7 @@
 
 ## Current decision
 
-A new sibling repository, `NeuroTune.Skill`, implements the read-only M0 milestone. The original NeuroTune application and its recovery stores were not migrated or modified. See [ADR 0001](decisions/0001-skill-first.md) for the alternatives and [ROADMAP.md](ROADMAP.md) for the next gates.
+The sibling repository `NeuroTune.Skill` implements M0 and the host-acceptance infrastructure of M1. Current version: **0.1.0-alpha.2**. The original NeuroTune application and its recovery stores were not migrated or modified. See [ADR 0001](decisions/0001-skill-first.md) for the alternatives and [ROADMAP.md](ROADMAP.md) for the next gates.
 
 The project is intentionally not a full optimization executor. Do not fill that gap with shell commands or permissive approval flags. The useful deliverable is an installable investigation skill backed by deterministic local analysis.
 
@@ -16,7 +16,23 @@ The project is intentionally not a full optimization executor. Do not fill that 
 - Synthetic unit/CLI/installer tests, explicit live collector and archive smoke tests.
 - Windows/Linux, Node 22/24 CI definition, not yet run remotely.
 
-## Verification log
+## Alpha.2 continuation
+
+- Added `.claude-plugin/plugin.json`: the existing standard skill loads as `/neurotune:neurotune`, without hooks, agents, servers, permission grants or a new runtime.
+- Real Pi 1.3.0 RPC checks passed for explicit skill and local-package discovery. The isolated session exposes exactly one skill and reports zero tokens, tools and assistant messages.
+- Real Claude Code 2.1.304 strict validation and `plugin details` passed: one skill, zero agents/hooks/MCP/LSP servers. Validation of a raw `SKILL.md` path was found to be the wrong CLI invocation; the documented smoke check uses the plugin root and component inventory.
+- `npm test`: **42/42 passed**. Added distribution-version, native eval-definition and synthetic-fixture contract checks. Numerical behavior and collection remain unchanged.
+- `npm run check` and `npm run test:package` passed. The 26-file offline archive includes the hidden Claude manifest and excludes evaluation cases/results.
+- Refreshed Graphify and its wiki: 197 nodes, 389 edges, 13 communities; zero missing endpoints and two existing self-loops. This is structural navigation, without LLM/API extraction.
+- Nine native Claude eval cases are authored under `evals/`, using the documented schema rather than a custom inference runner. They include a private unread fixture, a hostile device-name file and a useful positive control. **These model evaluations have not run.**
+- Upgraded the user's shared `~/.agents/skills/neurotune` copy to alpha.2 after verifying every installed alpha.1 file against the expected source. The previous copy is retained under ignored `artifacts/installed-backups/`, outside harness discovery. The new copy matches source byte-for-byte and `doctor` passed.
+- No live collection was repeated for this metadata/testing milestone. The M0 collector acceptance below remains historical evidence, not a fresh hardware certification.
+
+Read [COMPATIBILITY.md](COMPATIBILITY.md) for repeatable host commands and [EVALUATION.md](EVALUATION.md) for approved live-evaluation setup, costs, limits and grading. Host smoke processes use temporary configuration and withhold inherited credentials. No user harness settings are changed.
+
+M1 remains open for actual model behavior, different model families, CLI-backed runs, real session resumption and measured efficiency. Do not report nine authored cases as nine passes. No paid-provider call, background agent or model switch was used in this continuation.
+
+## M0 verification log
 
 Initial local Windows / Node 24.20.0 run: 37 tests passed after correcting the installer to copy directory entries into its exclusively reserved destination. The first run caught Node's `cp` refusing an existing destination when `errorOnExist` was set; the failure was fixed and rerun.
 
@@ -45,8 +61,8 @@ The local distribution is built into `artifacts/` with SHA-256 checksums. Artifa
 
 1. Read this handoff, architecture and the M1 gate; inspect Git status before edits.
 2. Query the local Graphify graph for source navigation. It is AST-only: document meaning is not semantically indexed. Explicitly read the roadmap and security contract when needed.
-3. Run `npm test` and `npm run check`; use `npm run test:package` for a clean offline archive install.
-4. Start M1 with synthetic harness evaluations. Keep `cli.mjs` and artifact contracts under one integrator if work is later delegated.
+3. Run `npm test` and `npm run check`; use `npm run test:package` for a clean offline archive install. Optional `test:pi` and `test:claude` require explicit paths to installed host binaries.
+4. Continue M1 with the prepared synthetic cases after choosing the approved model/judge/budget. Keep `cli.mjs` and artifact contracts under one integrator if work is later delegated.
 5. For M2/M3, inspect the original project's graph and source tests, not only this package. Preserve its pending-recovery path.
 
 ## Original repository navigation

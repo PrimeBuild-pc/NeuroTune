@@ -1,0 +1,8 @@
+{
+  "name": "neurotune",
+  "version": "0.1.0-alpha.2",
+  "description": "Read-only Windows performance investigation with local evidence and deterministic frame analysis.",
+  "author": { "name": "PrimeBuild" },
+  "license": "MIT",
+  "keywords": ["windows", "performance", "evidence", "read-only"]
+}

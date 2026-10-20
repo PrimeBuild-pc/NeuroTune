@@ -4,7 +4,7 @@
 
 NeuroTune Skill removes the desktop UI, embedded agent and provider configuration from the investigation loop. Your harness supplies the model, conversation and permissions. A small local CLI supplies deterministic evidence and calculations.
 
-**Status: 0.1.0-alpha.1 — usable read-only foundation, not feature parity with the desktop app.** No system settings are changed. No model/API credentials, cloud calls, background service or npm dependencies are required by this package. Your harness's inference may still incur costs and transmit tool results.
+**Status: 0.1.0-alpha.2 — read-only foundation with verified Pi/Claude loading, not feature parity with the desktop app.** No system settings are changed. No model/API credentials, cloud calls, background service or npm dependencies are required by this package. Your harness's inference may still incur costs and transmit tool results.
 
 ## What works
 
@@ -12,7 +12,7 @@ NeuroTune Skill removes the desktop UI, embedded agent and provider configuratio
 - PresentMon-compatible CSV analysis: average present cadence, frame-time percentiles and stutter counts.
 - Before/after comparisons with workload, duration, stream identity and duplicate-source checks.
 - Evidence-linked advisory plan validation. Invented fact IDs and authority fields are rejected.
-- A self-contained Agent Skills directory, a Pi package manifest, and a JSON CLI usable by other tool-capable harnesses.
+- A self-contained Agent Skills directory, Pi package and Claude Code plugin manifests, and a JSON CLI usable by other tool-capable harnesses.
 
 **Not implemented:** Apply/rollback, live ETW capture, privileged broker, MCP transport, GPU/BIOS tuning, security remediation or automatic diagnosis outside a harness. Imported comparisons are descriptive, not proof that an optimization worked.
 
@@ -44,12 +44,22 @@ pi install "C:/path/to/NeuroTune.Skill"
 
 Pi loads the local package in place. Keep that directory available. Do not also install a copy into a discovered skill directory: duplicate names can shadow each other.
 
-### Offline archive
-
-A local build produces `neurotune-skill-0.1.0-alpha.1.tgz`. Extract it in a new directory, then run the same copy installer:
+### Claude Code plugin (alternative, no copy)
 
 ```powershell
-tar -xzf "neurotune-skill-0.1.0-alpha.1.tgz"
+claude --plugin-dir "C:/path/to/NeuroTune.Skill"
+```
+
+Then invoke `/neurotune:neurotune`. This loads the same skill with a namespace, not another agent or provider. No hook, MCP server, startup command or permission grant is installed. For persistent standalone skill discovery, use the copy installer with `$HOME/.claude/skills` instead.
+
+See the [compatibility matrix](docs/COMPATIBILITY.md) for what was actually tested. Loading a skill successfully does not certify that a model follows it.
+
+### Offline archive
+
+A local build produces `neurotune-skill-0.1.0-alpha.2.tgz`. Extract it in a new directory, then run the same copy installer:
+
+```powershell
+tar -xzf "neurotune-skill-0.1.0-alpha.2.tgz"
 node package/scripts/install.mjs --skills-dir "$HOME/.agents/skills"
 ```
 
@@ -121,10 +131,14 @@ skills/neurotune/     Installable, self-contained runtime and workflow
   SKILL.md           Small harness-independent entry point
   scripts/           JSON CLI, pure analysis, fixed Windows collector
   references/        Inventory, measurements and advisory plans
+.claude-plugin/      Claude Code metadata; no host-specific runtime
 scripts/             Copy installer and verification tools
 tests/               Unit, subprocess and installation tests
+evals/               Nine native behavioral cases (source only; not yet run)
 docs/                Architecture, migration gates and continuation notes
 ```
+
+Optional host checks, using already-installed binaries, are documented in [compatibility](docs/COMPATIBILITY.md). They issue no model prompts and do not access user credentials. The [behavioral evaluation guide](docs/EVALUATION.md) describes the separate, explicitly approved model runs; `npm test` never starts them.
 
 Read [architecture](docs/ARCHITECTURE.md), [decisions](docs/decisions/0001-skill-first.md), [roadmap](docs/ROADMAP.md) and [handoff](docs/HANDOFF.md) before expanding scope. [Provenance](NOTICE.md) records exactly what was reused from the MIT-licensed NeuroTune desktop project.
 

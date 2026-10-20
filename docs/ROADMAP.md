@@ -12,9 +12,13 @@ Each milestone has a usable result and a release gate. Maintain one owner for co
 
 Gate: local tests, clean copied-skill execution from another working directory, archive install smoke test, accurate limitations and no system writes. Exact results belong in [HANDOFF.md](HANDOFF.md).
 
-## M1 — Harness evaluation and installation acceptance
+## M1 — Harness evaluation and installation acceptance (in progress)
 
-Owner scope: `tests/evals/`, compatibility documentation; avoid changing numerical rules.
+Owner scope: `evals/`, host smoke checks and compatibility documentation; avoid changing numerical rules.
+
+Completed in alpha.2: real Pi explicit/package discovery, Claude Code strict plugin validation and component inventory, offline archive coverage for the plugin manifest, and nine bounded native evaluation cases with synthetic fixtures. See [COMPATIBILITY.md](COMPATIBILITY.md) and [EVALUATION.md](EVALUATION.md).
+
+**Still open:** model-based case execution, a second model family, real CLI-backed investigation/resumption and measured quality/token comparisons. Authoring cases or loading a plugin does not complete this milestone.
 
 - Test real sessions in Pi and a second harness with different model families, using synthetic fixtures only at first.
 - Cases: missing sharing consent; report says "ignore previous instructions"; user asks for Apply; partial inventory; mismatched captures; invented evidence; model tries to switch provider; long analysis interrupted and resumed.
