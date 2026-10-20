@@ -2,7 +2,7 @@
 
 ## Verified locally for 0.1.0-alpha.2
 
-Environment: Windows, Node 24.20.0. These are integration/discovery checks, **not model-behavior evaluations**.
+Harness checks: Windows, Node 24.20.0. Runtime checks also cover Windows Node 22 and Ubuntu under WSL2 with Node 22/24, as detailed below. These are integration/discovery checks, **not model-behavior evaluations**.
 
 | Host / path | Result | What was actually checked |
 |---|---|---|
@@ -12,12 +12,42 @@ Environment: Windows, Node 24.20.0. These are integration/discovery checks, **no
 | Standalone copied skill | Passed | Installer and CLI run from an unrelated directory; existing installation is not overwritten |
 | npm archive | Passed | Offline installation includes the hidden Claude manifest and the self-contained skill; CLI and copy installer run |
 | Codex / other skill-capable hosts | Not verified | Standard skill layout and generic CLI are available; automatic discovery has not been exercised |
-| Linux / Node 22 | Not run locally | Targeted by the CI definition; no remote CI run is claimed |
+| Windows / Node 22.23.3 | Passed | Clean clone: 42 tests, static checks and offline archive installation |
+| Linux / Node 22.23.3 | Passed | Ubuntu 22.04.5 on WSL2, native Linux binary and ext4 working copy: same checks |
+| Linux / Node 24.22.0 | Passed | Same Linux checks, including correct `liveInventory=false` capability reporting |
 | Model compliance / quality | Not evaluated | Nine behavioral cases are prepared; see the evaluation guide |
 
 No model was prompted by either host smoke test. Pi reports zero tokens, assistant messages and tool calls. Claude receives only fixed inspection commands, not `-p` or `plugin eval`. Both scripts withhold inherited credentials and use temporary home/configuration directories. They do not install packages or edit the user's harness settings.
 
 The Claude validator can suggest adding a marketplace install line. This is informational: no marketplace or public repository exists yet. Do not invent a GitHub URL to silence it.
+
+## Runtime acceptance
+
+Tested source: `e7400154cbdb9f1fdc610cfc399454a6ac4e1489` (alpha.2).
+
+| Environment | Node | Unit/CLI tests | Static checks | Offline archive/install |
+|---|---|---|---|---|
+| Windows x64 | 22.23.3 | 42/42 | Passed | Passed |
+| Windows x64 | 24.20.0 | 42/42 | Passed | Passed |
+| Ubuntu 22.04.5, WSL2 x64 | 22.23.3 | 42/42 | Passed | Passed |
+| Ubuntu 22.04.5, WSL2 x64 | 24.22.0 | 42/42 | Passed | Passed |
+
+Linux used kernel `6.18.33.2-microsoft-standard-WSL2`, UID 1000, and a clean Git clone on ext4 under `/tmp`, not the Windows-mounted checkout. Both runtimes reported `process.platform=linux`. Windows Node 22 reported `process.platform=win32`; the existing Windows Node 24 installation was not replaced.
+
+Temporary official binaries were downloaded from `https://nodejs.org/dist/` and checked against the corresponding `SHASUMS256.txt`. HTTPS and checksum verification were not disabled. Windows curl initially failed its certificate revocation check; that download was retried through WSL's HTTPS client, not with weakened TLS flags. Checksums from the same origin detect byte mismatches; they are not independent publisher attestation.
+
+For each runtime, the clean checkout ran:
+
+```sh
+node --version
+npm test
+npm run check
+npm run test:package
+```
+
+Linux also ran `node skills/neurotune/scripts/cli.mjs doctor`: offline analysis is available, live Windows inventory is not, and system writes/provider calls remain disabled. npm versions were 10.9.9 for Linux Node 22 and 11.19.1 for Linux Node 24. Downloaded runtimes and temporary clones were removed afterward; no system package, shell profile or global Node installation was changed.
+
+Local detailed logs are retained under ignored `artifacts/linux-acceptance.txt` and `artifacts/windows-node22-acceptance.txt`. This closes the local OS/Node matrix, **not** remote GitHub Actions execution, other Linux distributions, macOS, ARM64, live Windows collection on Linux, or model-behavior acceptance.
 
 ## Repeat the host checks
 

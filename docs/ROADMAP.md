@@ -16,7 +16,7 @@ Gate: local tests, clean copied-skill execution from another working directory, 
 
 Owner scope: `evals/`, host smoke checks and compatibility documentation; avoid changing numerical rules.
 
-Completed in alpha.2: real Pi explicit/package discovery, Claude Code strict plugin validation and component inventory, offline archive coverage for the plugin manifest, and nine bounded native evaluation cases with synthetic fixtures. See [COMPATIBILITY.md](COMPATIBILITY.md) and [EVALUATION.md](EVALUATION.md).
+Completed in alpha.2: real Pi explicit/package discovery, Claude Code strict plugin validation and component inventory, offline archive coverage for the plugin manifest, all 42 tests/static/package checks on Windows and Ubuntu/WSL2 with Node 22/24, and nine bounded native evaluation cases with synthetic fixtures. See [COMPATIBILITY.md](COMPATIBILITY.md) and [EVALUATION.md](EVALUATION.md).
 
 **Still open:** model-based case execution, a second model family, real CLI-backed investigation/resumption and measured quality/token comparisons. Authoring cases or loading a plugin does not complete this milestone.
 

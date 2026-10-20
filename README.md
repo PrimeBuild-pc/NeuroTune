@@ -124,7 +124,7 @@ npm run test:collector
 npm run pack:local
 ```
 
-The test suite uses synthetic data, invokes the actual CLI, and verifies installation outside the repository. Live collection is opt-in, not part of `npm test`. The CI definition targets Node 22/24 on Windows/Linux; remote runs have not occurred yet. Hardware acceptance and model behavior require separate tests.
+The test suite uses synthetic data, invokes the actual CLI, and verifies installation outside the repository. Live collection is opt-in, not part of `npm test`. All 42 tests, static checks and offline package installation passed locally on Windows and Ubuntu/WSL2 with Node 22/24; see the [exact runtime matrix](docs/COMPATIBILITY.md). Remote CI runs have not occurred yet. Hardware acceptance and model behavior require separate tests.
 
 ```text
 skills/neurotune/     Installable, self-contained runtime and workflow

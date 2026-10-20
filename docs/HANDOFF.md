@@ -32,6 +32,19 @@ Read [COMPATIBILITY.md](COMPATIBILITY.md) for repeatable host commands and [EVAL
 
 M1 remains open for actual model behavior, different model families, CLI-backed runs, real session resumption and measured efficiency. Do not report nine authored cases as nine passes. No paid-provider call, background agent or model switch was used in this continuation.
 
+## Cross-platform acceptance follow-up
+
+Tested alpha.2 source commit: `e7400154cbdb9f1fdc610cfc399454a6ac4e1489`.
+
+- Existing `Ubuntu-22.04` is WSL2 (Ubuntu 22.04.5 LTS); no new distribution or VM was installed. WSL's default version setting was 1, but this actual distribution is version 2. Docker's distribution was not used.
+- No native Linux Node was installed. Temporary official Linux x64 Node 22.23.3 and 24.22.0 archives were downloaded over HTTPS and matched against upstream SHA-256 checksums before execution.
+- Both Linux versions passed **42/42 tests**, `npm run check` and `npm run test:package` from a clean clone on ext4, as UID 1000. `doctor` correctly reported `liveInventory=false`, `offlineAnalysis=true`, `systemWrites=false`, `providerCalls=false`.
+- Temporary official Windows x64 Node 22.23.3 passed the same checks from a separate clean clone. Its download used WSL HTTPS after Windows curl failed a revocation check; no TLS verification was disabled. Existing Windows Node 24.20.0 acceptance completes the four-cell local OS/runtime matrix.
+- Temporary runtimes/clones were removed. No global Node installation, shell profile, Windows feature or harness setting was changed. Raw test logs are in ignored `artifacts/linux-acceptance.txt` and `artifacts/windows-node22-acceptance.txt`.
+- This follow-up changes acceptance documentation only. The alpha.2 runtime, installed skill and existing distribution archive are unchanged. Remote CI, real model evals and hardware/privileged acceptance remain unverified.
+
+See [COMPATIBILITY.md](COMPATIBILITY.md) for exact versions and scope. The next M1 step is an explicitly selected model/judge and permitted account usage for the existing synthetic evals; do not silently use paid API credentials or assume unlimited subscription usage.
+
 ## M0 verification log
 
 Initial local Windows / Node 24.20.0 run: 37 tests passed after correcting the installer to copy directory entries into its exclusively reserved destination. The first run caught Node's `cp` refusing an existing destination when `errorOnExist` was set; the failure was fixed and rerun.
@@ -53,7 +66,7 @@ The local distribution is built into `artifacts/` with SHA-256 checksums. Artifa
 
 - Passing code tests does not prove a model obeys the consent workflow or resists prompt injection.
 - The Windows host smoke test is read-only, not an elevated-writer test.
-- No Linux/Node 22 execution is claimed until CI or a matching local environment runs it.
+- The local Windows/Linux Node 22/24 matrix passed; this does not imply remote CI, other distributions/architectures or Linux-hosted Windows collection passed.
 - No real-game performance improvement, hardware benchmarking, recovery parity or security certification was measured.
 - No GitHub push, npm publication or paid-provider call is needed for this milestone.
 
