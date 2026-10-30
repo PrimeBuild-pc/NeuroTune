@@ -1,6 +1,7 @@
 {
   "name": "NeuroTune",
   "owner": { "name": "PrimeBuild" },
+  "description": "Evidence-led Windows 11 gaming PC triage skill: debloat, services, drivers, interrupt latency and frame-time analysis.",
   "plugins": [
     {
       "name": "neurotune",
