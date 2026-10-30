@@ -1,4 +1,6 @@
 node_modules/
+native/**/bin/
+native/**/obj/
 artifacts/
 *.tgz
 coverage/
@@ -13,3 +15,6 @@ after*.json
 !tests/fixtures/*.csv
 # Reproducible navigation artifacts; generate locally with Graphify.
 graphify-out/
+# Local tool scratch state, not project content.
+.scratch/
+.playwright-mcp/
