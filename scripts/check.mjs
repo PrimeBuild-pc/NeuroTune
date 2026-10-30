@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 const root = fileURLToPath(new URL('../', import.meta.url));
 async function files(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
-  return (await Promise.all(entries.filter(entry => !['.git', 'graphify-out', 'node_modules', 'artifacts', 'results'].includes(entry.name)).map(entry => {
+  return (await Promise.all(entries.filter(entry => !['.git', 'graphify-out', 'node_modules', 'artifacts', 'results', '.scratch', '.playwright-mcp'].includes(entry.name)).map(entry => {
     const file = path.join(directory, entry.name);
     return entry.isDirectory() ? files(file) : [file];
   }))).flat();

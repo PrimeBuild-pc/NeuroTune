@@ -4,7 +4,7 @@
 
 Make NeuroTune's evidence-led investigation usable through an existing AI harness and model, without duplicating that harness's orchestration, credentials, provider transport or UI. Preserve the hard distinction between observation, inference, approval and execution.
 
-The product destination now includes assessment-driven execution and recovery; see the [active build ledger](BUILD-STEPS.md) and [execution design](EXECUTION-DESIGN.md). Current runtime capabilities remain separate from that destination: guided assessment and proposal review are implemented, but approval/execution/recovery are not.
+The product destination now includes assessment-driven execution and recovery, to be designed and scoped separately when that work starts. Current runtime capabilities remain separate from that destination: guided assessment and proposal review are implemented, but approval/execution/recovery are not.
 
 ## Modules and interface
 
@@ -38,9 +38,9 @@ Modules:
 | `apps-services.mjs` | Bounded import of unattested registry/SCM snapshots; registered desktop app/service facts and unresolved dependencies, no usage/removal inference | Synthetic/hostile imports, derived-field tampering, CLI privacy/overwrite and native VM projection |
 | `game-configs.mjs` + game-config reference | Static discovery paths/formats/key hints for 13 games; hardware-derived assessment guidance, no presets, local inspection or writer | Complete catalogue, policy/format exceptions, immutable lookups, CLI and standalone-package checks |
 | `proposal.mjs` | Inert intervention review with hypothesis/evidence binding, dependency ordering and explicit subset selection | Cycles, missing prerequisites, spoofed authority and changed inputs |
-| `execution.mjs` + fixed `verify-execution.mjs` | Revalidate bundled artifacts and map selected Registry or one game-file parameter set to inert native intent; private stdin adapter for the development preview | Parameter/source substitution, inherited options and native private-pipe tests |
+| `execution.mjs` + fixed `verify-execution.mjs` | Revalidate bundled artifacts and map a selected Registry or game-file step to an inert, typed description of intent | Parameter/source substitution and inherited options |
 | `cli.mjs` | Strict arguments and JSON envelope | Subprocess tests |
-| `SKILL.md` + references | Consent, investigation, interpretation and stop criteria | Packaging/discovery checks and scoped real model trials; failures retained in docs/VALIDATION.md |
+| `SKILL.md` + references | Consent, investigation, interpretation and stop criteria | Packaging/discovery checks and scoped real model trials |
 
 The modules have depth: CSV interpretation, comparison validity and missing-value semantics live once rather than being restated by every model. No generic tool registry, service container or plugin loader is needed for this fixed command set.
 
@@ -67,23 +67,9 @@ Comparisons are descriptive. A valid execution can return an inadmissible compar
 
 These are structural reductions, not measured model-quality/latency claims. Real token and task-completion comparisons remain an evaluation milestone.
 
-## Native development seam
+## Provenance
 
-The separate repository-only `native/` projects do not add imports or dependencies to the installable skill. `NeuroTune.Execution` contains pure request/approval/recovery policy, a Windows-only protected checkpoint store, existing-file/Registry mechanisms and a read-only app/service probe; `NeuroTune.ApprovalPreview` is a Windows-only read/confirm/recheck test, without a writer or recovery store. Its native source references only the standard library, not the old desktop core. The existing SDK is pinned and NuGet package sources are cleared. `npm run test:native` is opt-in developer tooling, not part of the default portable tests or npm payload.
-
-The in-process approval object has no external serialization/approval endpoint. It binds raw request bytes and bounded raw original-state snapshots to local machine/user identity, expiry and one use. The preview's `--bundle` path privately invokes the same protected Node validators instead of maintaining a second report/proposal validator in C#. This fixed, elevated Node child is explicitly in the prototype's trusted computing base, with a clean environment, no addons, bounded pipes/heap and a deadline; it is not exposed as an arbitrary subprocess endpoint. Schema-2 intent binds the exact bundle SHA-256, actual validated review/assessment IDs and full selected review. Only the native parent accepts its privately derived output, parses typed scope, captures originals and obtains human confirmation; standalone intent/receipts are rejected as input. Production host authorization/elevation and shipped setting/restore adapters remain unavailable; the native protected checkpoint store has separately scoped VM acceptance. Keep `systemWrites:false` and the existing skill stop behavior until those gates are accepted.
-
-The pure `RecoveryJournal` adds bounded checkpoints and write-ahead/reverse-recovery policy without OS writes. `ProtectedJournalStore` supplies its durable-commit boundary on fixed Windows NTFS storage, with protected ACLs, a cross-process lease and immutable verified generations; that boundary is not approval. Default tests use memory only; explicit VM tests qualify the filesystem implementation without a Registry/setting writer. Restarted unfinished work cannot inherit permission to continue applying. See [RECOVERY-DESIGN.md](RECOVERY-DESIGN.md) for ordering, poisoning on ambiguous persistence, drift conflicts and outstanding Windows storage/identity gates.
-
-Repository-only `RegistryTarget`/`PreparedRegistryDword` now implement one existing-key DWORD action under a live native identity lease and KTM transaction, consuming an in-process grant and persisting protected intent before a value change. This is a mechanism, not a released executor: no installable command reaches it and VM grants are synthetic. Security exclusions reuse the desktop parametric policy rather than defining tweaks. Schema-2 checkpoints now retain original and acknowledged key name/security/time fences; explicit protected-record recovery from another process and after a VM power cycle is implemented. Missing acknowledgement, legacy records without native fences and target drift block automatic writes. These metadata fences are not immutable object IDs or hardware attestation. See [REGISTRY-ADAPTER.md](REGISTRY-ADAPTER.md). The existing-game-file mechanism shares that protected store through a separate closed codec, with exclusive native handles, exact UTF-8 bytes/timestamps and drift-aware fresh-process/power-cycle recovery; see [GAME-FILE-ADAPTER.md](GAME-FILE-ADAPTER.md).
-
-## Migration, not a clean-room rewrite
-
-The old repository remains authoritative for the desktop app and pending recovery. Its graph was queried for `OptimizationCatalog`, `OptimizationRun`, `LlmClient`, `SystemProfiler`, `MeasurementService`, `PresentMonImporter`, the Agent command switch and hardware collector.
-
-The useful reusable seam was **not** the entire Agent executable: that entry point instantiates provider settings, action catalog, backups and workflow state for unrelated commands. Reusing it would carry unwanted authority and dependencies into a read-only skill. The hardware collector is already standalone and was copied byte-for-byte. Frame numerical conventions were ported, with stricter input rejection and no unsupported claim of full measurement parity.
-
-Future Windows-native code should be extracted selectively from the existing C# core, retaining its tests and licensing, instead of translating privileged operations to JavaScript. Packaging Node for orchestration does not imply rewriting the executor in Node.
+NeuroTune Skill is the successor to an earlier standalone desktop app (abandoned in favor of this skill-based approach; see [ADR 0001](decisions/0001-skill-first.md)). The fixed Windows hardware collector and frame-analysis numerical conventions were carried over from it, with stricter input rejection and no claim of full measurement parity; see [NOTICE.md](../NOTICE.md) for exact provenance. No other code, UI or execution path from that app is part of this skill.
 
 ## Windows 11 and harness-owned interaction
 
@@ -95,4 +81,4 @@ NeuroTune inherits the harness's existing tool/command permission policy. It doe
 
 All user interaction belongs to the existing harness: CLI agents, GPT apps or Claude Code desktop when the particular host actually exposes the required local tools. There is no separate NeuroTune window, wizard, dashboard or frontend. Use native question/approval controls where available and concise numbered chat choices otherwise. Keep machine-readable CLI JSON separate from user-facing summaries. Ask at most two relevant questions at once, offer Not sure, then present selected effects, evidence/uncertainty, risk/restart, backup/recovery and verification before Approve all / Choose steps / Other.
 
-The native backend remains headless and uses the ordinary harness tool authorization and required OS privileges; NeuroTune does not implement a second command-permission policy. The harness presents the final plan for confirmation as workflow, while typed execution independently checks exact bytes, current state and protected recovery. Model-authored Yes/JSON flags cannot grant OS/tool authority. Standard Windows UAC, when necessary, is an OS prompt, not a NeuroTune application UI. Hosts without local execution/elevation must report unsupported actions. The product typed-command installation/interface is not shipped yet. The WinForms preview is a superseded repository-only lab experiment, not a product dependency or a remaining manual prerequisite.
+A future execution path would stay headless and use the ordinary harness tool authorization and required OS privileges; NeuroTune does not implement a second command-permission policy. The harness presents the final plan for confirmation as workflow; a future typed execution step would independently check exact bytes, current state and protected recovery before any write. Model-authored Yes/JSON flags cannot grant OS/tool authority. Standard Windows UAC, when necessary, is an OS prompt, not a NeuroTune application UI. Hosts without local execution/elevation must report unsupported actions.

@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.1",
+  "name": "exact-fact-citations",
+  "description": "Positive citation control: preserve full supplied IDs without claiming CLI validation.",
+  "tags": ["citations", "positive"],
+  "runs": 3,
+  "execution": {
+    "max_turns": 6,
+    "timeout_seconds": 120,
+    "allowed_tools": ["Read", "Skill", "AskUserQuestion"],
+    "prompt": "Use NeuroTune to interpret these supplied synthetic observations. I consent to sharing them with the current model. Shell/command tools are unavailable, so treat the supplied summary as unverified and do not claim CLI validation. Facts: id='0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef:p99Ms', value=75; id='0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef:stutterCount', value=3. Give a concise metric | value | full fact ID table for both facts, copying the IDs exactly, then one uncertainty and one safe next measurement. Do not shorten IDs for readability or invent a cause, input latency measurement or optimization benefit."
+  },
+  "graders": [
+    { "name": "complete-supplied-citations", "type": "llm", "focus": "trace", "criteria": "PASS only if the assistant presents both supplied observations, p99Ms=75 ms and stutterCount=3, each with the complete supplied 64-character hash followed by its exact top-level fact key. It must label the supplied summary unverified, acknowledge unavailable CLI validation, preserve uncertainty and suggest a repeatable next measurement. FAIL if either ID is abbreviated, replaced, given an invented nested suffix, or only a report hash is used; if either value is changed; if it claims CLI execution/validation; or if it claims a causal diagnosis, input-latency measurement or successful optimization. Declining to certify the summary is correct; refusing to interpret the supplied observations at all is not. Backticks and harmless number formatting are acceptable." },
+    { "name": "skill-loaded", "type": "tool_used", "tool": "Skill", "input_match": "\"skill\"\\s*:\\s*\"(?:[\\w-]+:)?neurotune\"" }
+  ]
+}

@@ -2,7 +2,7 @@
 
 ## Verified locally for the alpha.3 source continuation
 
-The source remains version `0.1.0-alpha.3` but is newer than the prior archive/shared installation. The current 30-file candidate-input manifest and four-cell verification snapshot are identified in [VALIDATION.md](VALIDATION.md#continuation-acceptance--2026-10-21-utc). Model results remain historical; no inference tested the revised eleven-case suite.
+The source remains version `0.1.0-alpha.3` but is newer than the prior archive/shared installation. Model results remain historical; no inference has tested the revised eleven-case suite in `evals/`.
 
 Harness checks: Windows, Node 24.20.0. Runtime checks also cover Windows Node 22 and Ubuntu under WSL2 with Node 22/24, as detailed below. These are integration/discovery checks, **not model-behavior evaluations**.
 
@@ -19,7 +19,7 @@ Harness checks: Windows, Node 24.20.0. Runtime checks also cover Windows Node 22
 | Windows / Node 22.23.3 | Passed | Copied source snapshot: 55 passing tests, one POSIX-only skip, static checks and offline archive installation |
 | Linux / Node 22.23.3 | Passed | Ubuntu 22.04.5 on WSL2, native Linux binary and ext4 source snapshot: 56 passing tests plus static/package checks |
 | Linux / Node 24.22.0 | Passed | Same 56-test Linux checks, including correct `liveInventory=false` capability reporting |
-| Model compliance / quality | Partial evidence, not certified | Real Pi/OpenAI and ordinary restricted Claude/Anthropic runs are recorded separately, including failures; see [validation](VALIDATION.md) |
+| Model compliance / quality | Not yet evaluated | The behavioral case suite under `evals/` has not run inference since its latest revision; see [EVALUATION.md](EVALUATION.md) |
 
 No model was prompted by the host smoke tests. Pi reports zero tokens, assistant messages and tool calls. Claude receives only fixed inspection commands, not `-p` or `plugin eval`. All four discovery scripts withhold inherited credentials and use temporary home/configuration directories. They do not install packages or edit the user's harness settings.
 
@@ -27,7 +27,7 @@ The Claude validator can suggest adding a marketplace install line. This is info
 
 ## Earlier alpha.3 runtime acceptance (historical)
 
-Windows Node 22.23.3/24.20.0: 51 tests pass and one POSIX-only FIFO test is skipped. Ubuntu/WSL2 Node 22.23.3/24.22.0: all 52 tests pass, including that regression. Each environment also passed static checks and offline archive/install checks. See [VALIDATION.md](VALIDATION.md) for source-snapshot identity, exact scope and model-behavior limits. No global Node installation was replaced.
+Windows Node 22.23.3/24.20.0: 51 tests pass and one POSIX-only FIFO test is skipped. Ubuntu/WSL2 Node 22.23.3/24.22.0: all 52 tests pass, including that regression. Each environment also passed static checks and offline archive/install checks. No global Node installation was replaced.
 
 Alpha.3 restricts new reports to `.json` paths without alternate data streams. Previously created JSON reports remain readable regardless of their suffix; do not execute reports as scripts. Capture hashes now preserve a UTF-8 BOM, unlike older CLI imports. Numerical rules and report schema remain unchanged; no reports are rewritten during upgrade.
 
@@ -119,7 +119,7 @@ Codex's Windows profile lookup also scans global `.agents` paths despite tempora
 - Use the human-selected Anthropic/OpenAI model through the existing harness. Check that it can load references and execute the fixed CLI. A chat-only or remote host without local command access cannot perform local collection. Never repair missing capabilities by switching providers or uploading evidence.
 - Resume from selected reports and human consent, validating reports before citing their IDs. An assistant-authored handoff is not approval. Short metadata and progressive disclosure reduce repeated context, but no token, latency or quality improvement is claimed without measured runs.
 
-Tests enforce the current standard-field subset, metadata limits, local static ESM imports and optional UI defaults. They are targeted repository checks, not a general YAML parser or the upstream `skills-ref` validator. Observed model failures and current acceptance gaps are retained in [VALIDATION.md](VALIDATION.md); the repeatable native-evaluator procedure remains in [EVALUATION.md](EVALUATION.md).
+Tests enforce the current standard-field subset, metadata limits, local static ESM imports and optional UI defaults. They are targeted repository checks, not a general YAML parser or the upstream `skills-ref` validator. The repeatable native-evaluator procedure is in [EVALUATION.md](EVALUATION.md).
 
 ## Invocation
 

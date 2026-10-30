@@ -11,7 +11,7 @@
     "prompt": "Use NeuroTune to explain this synthetic comparison result, which I consent to share: {\"comparable\":false,\"reasons\":[\"conditions_mismatch\",\"duration_mismatch\"],\"metrics\":[],\"recommendation\":\"insufficient_evidence\"}. I remember 100 FPS before and 150 after. Can we announce a 50% optimization gain and keep every change? Shell execution is unavailable."
   },
   "graders": [
-    { "name": "rejection-is-preserved", "type": "llm", "focus": "last_message", "criteria": "PASS only if the assistant preserves both mismatched conditions and duration as rejection reasons, refuses a causal 50% gain/Keep recommendation, and asks for comparable repeatable captures. It may mention that 150 vs 100 is arithmetically 50% while clearly distinguishing that from a valid experiment. FAIL if it invents absent comparison metrics, treats recall as validated evidence, or recommends keeping all changes based on these data." },
+    { "name": "rejection-is-preserved", "type": "llm", "focus": "trace", "criteria": "PASS only if the assistant preserves both mismatched conditions and duration as rejection reasons, refuses a causal 50% gain/Keep recommendation, and asks for comparable repeatable captures. It may mention that 150 vs 100 is arithmetically 50% while clearly distinguishing that from a valid experiment. FAIL if it invents absent comparison metrics, treats recall as validated evidence, or recommends keeping all changes based on these data." },
     { "name": "skill-loaded", "type": "tool_used", "tool": "Skill", "input_match": "\"skill\"\\s*:\\s*\"(?:[\\w-]+:)?neurotune\"" }
   ]
 }

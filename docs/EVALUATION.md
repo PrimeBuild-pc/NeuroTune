@@ -2,17 +2,11 @@
 
 ## Status and scope
 
-Eleven native cases are authored under `evals/`. Alpha.3 development ran the original nine prompts through Pi JSON mode and ordinary restricted Claude sessions; full traces and failures are summarized in [VALIDATION.md](VALIDATION.md). The continuation adds exact-citation and unsupported-measurement controls, reviews the entire trace for every behavioral grader, and strengthens refusal criteria against later manual workarounds or unavailable-tool promises. These revised cases have not run inference; historical results are not scores under the new rubrics. **Completed runs are not native-grader passes or certification.** `npm test` checks definitions, fixtures, conservative tool grants and distribution contracts without starting inference.
+Eleven native cases are authored under `evals/`. They have not run inference since the exact-citation and unsupported-measurement controls were added. **Completed runs are not native-grader passes or certification.** `npm test` checks definitions, fixtures, conservative tool grants and distribution contracts without starting inference.
 
 Use the existing [Claude Code native evaluator](https://code.claude.com/docs/en/plugin-evals), not a second custom agent runtime. Each case is a JSON-formatted `case.yaml` (JSON is a YAML 1.2 subset) with the native schema, prompt and graders. The same prompts and rubrics can be used manually in another harness; do not label such a run as a native Claude evaluation. Ordinary Claude trials using explicit Read of `SKILL.md`, a minimal routing system prompt, disabled slash commands/plugins and restricted file tools are likewise fallback-file experiments, not native plugin invocation. Neither those runs nor an assistant-authored handoff grant native plugin trust.
 
 Cases are development assets and are intentionally excluded from the npm runtime archive. Run them from a source checkout. No evaluator dependency, API key handling, automatic provider choice or CI inference step is added to NeuroTune.
-
-## Authorized next campaign
-
-The user's session-close decisions and bounded dual-review protocol are recorded in [NEXT-SESSION.md](NEXT-SESSION.md): Luna 6 medium subject; Astra high and Opus 5.5 high judges; separate independent Claude Code review followed by limited cross-review; no fixed user consumption ceiling; all exercised harnesses in the existing VM. This is authorization, **not execution evidence**. Verify actual IDs, effort settings and guest account paths; do not ask again for decisions already recorded or infer a paid-provider fallback.
-
-The second-family subject/native Claude model is a distinct unchosen role. External cross-review of Luna does not count as a second-family subject run or a native evaluator score. The monetary-cap template below is a generic example for budgeted runs, not a newly imposed cap on this campaign. Inspect the installed evaluator's actual defaults/options before choosing an invocation; record unavoidable runner limits rather than claiming unlimited execution.
 
 ## Cases
 
@@ -58,8 +52,6 @@ After the smoke run, remove `--case`, set `--runs 3`, and choose `--ablation wit
 4. Review safety/authority/consent failures first, then exact citations and metric/capability accuracy. A completed process is not a pass. Maintain per-case pass/fail/blocked decisions with trace locations and unresolved grader disagreement; do not average away a critical failure.
 5. Compare Standards (documented boundaries) and Spec (requested task and useful output) in separate review passes. An independent reviewer must still check the evidence: two passes by the same coding assistant do not satisfy independence.
 
-See [M1 review and optimization follow-up](M1-REVIEW.md) for concrete historical failures and the desktop baseline isolation prerequisite. The desktop's existing `EvalRunner` is not yet a comparable baseline: it uses different cases and does not record the required token/wall-clock accounting.
-
 ## Evidence to retain
 
 Keep raw transcripts and native JSON/HTML reports under ignored `evals/results/`, never in the public package. Record a reviewed summary containing:
@@ -76,4 +68,4 @@ Do not turn a run with `partial=true`, skipped paid graders, API errors, missing
 
 The initial cases intentionally restrict tools and often supply synthetic summaries. They test interpretation, consent handling and stated behavior, not resistance to an unrestricted shell, OS isolation, real data privacy or an authentic interrupted/resumed session. A positive numerical summary is not a signed capture. The resume case tests a handoff scenario, not process recovery.
 
-Full M1 acceptance still requires repeated runs in Pi and a second harness with different model families, actual CLI-backed investigation flows, real interruption/resumption, and comparable measurements against the desktop investigation. The source fixture suite and host discovery checks alone do not close that gate.
+Full behavioral acceptance still requires repeated runs in Pi and a second harness with different model families, and actual CLI-backed investigation flows with real interruption/resumption. The source fixture suite and host discovery checks alone do not close that gate.
