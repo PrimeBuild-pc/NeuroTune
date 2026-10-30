@@ -28,12 +28,23 @@ export function* csvRows(input) {
   requireInput(!quoted, 'Unterminated CSV quote.');
   if (row.length || field.length || closed) { row.push(field.trim()); yield row; }
 }
-function processKey(value) {
+export function processKey(value) {
   requireInput(text(value), 'A process name is required.');
   return path.win32.basename(value).replace(/\.exe$/iu, '').toLowerCase();
 }
 const percentile = (sorted, p) => sorted[Math.ceil(sorted.length * p) - 1];
 const metricKeys = ['frameCount', 'durationMs', 'meanMs', 'averageFps', 'p50Ms', 'p95Ms', 'p99Ms', 'stutterCount'];
+
+export function frameMetrics(frames) {
+  requireInput(Array.isArray(frames) && frames.length >= 120 && frames.length <= 1000000, 'Select 120–1000000 valid frames.');
+  requireInput(frames.every(value => typeof value === 'number' && Number.isFinite(value) && value >= 0.05 && value <= 10000), 'Selected frame times must be within 0.05–10000 ms.');
+  frames.sort((a, b) => a - b);
+  const durationMs = frames.reduce((sum, value) => sum + value, 0);
+  const meanMs = durationMs / frames.length, p50Ms = percentile(frames, 0.5);
+  return { frameCount: frames.length, durationMs, meanMs, averageFps: 1000 / meanMs,
+    p50Ms, p95Ms: percentile(frames, 0.95), p99Ms: percentile(frames, 0.99),
+    stutterCount: frames.filter(value => value > Math.max(50, p50Ms * 2)).length };
+}
 
 export function analyzeFrames(csv, { process, conditions }) {
   requireInput(typeof csv === 'string' && csv.length > 0 && Buffer.byteLength(csv) <= MAX_BYTES, 'CSV must contain at most 10 MiB.');
@@ -60,9 +71,7 @@ export function analyzeFrames(csv, { process, conditions }) {
     if (processKey(fields[processColumn]) !== target) { excludedFrames++; continue; }
     const raw = fields[frameIndex];
     requireInput(/^(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/iu.test(raw), 'Selected frames contain an invalid number.');
-    const milliseconds = Number(raw);
-    requireInput(Number.isFinite(milliseconds) && milliseconds >= 0.05 && milliseconds <= 10000, 'Selected frame times must be within 0.05–10000 ms.');
-    frames.push(milliseconds);
+    frames.push(Number(raw));
     requireInput(frames.length <= 1000000, 'At most 1000000 selected frames are supported.');
     if (pidIndex >= 0) {
       requireInput(/^\d+$/u.test(fields[pidIndex]), 'Selected frames have a missing or invalid ProcessID.');
@@ -79,18 +88,12 @@ export function analyzeFrames(csv, { process, conditions }) {
     }
   }
   requireInput(processes.size <= 1 && swapChains.size <= 1, 'Multiple process instances or swap chains: filter the CSV to one capture stream first.');
-  requireInput(frames.length >= 120, 'At least 120 valid selected frames are required.');
-  frames.sort((a, b) => a - b);
-  const durationMs = frames.reduce((sum, value) => sum + value, 0);
-  const meanMs = durationMs / frames.length, p50Ms = percentile(frames, 0.5);
   return seal({
     schemaVersion: 1, kind: 'frames', sourceHash: sha256(csv), provenance: 'imported-unverified',
     process: target, conditions, frameColumn, presentModes: [...modes].sort(),
     streamIdentity: { processIdPresent: pidIndex >= 0, swapChainPresent: swapIndex >= 0 },
     excludedFrames,
-    metrics: { frameCount: frames.length, durationMs, meanMs, averageFps: 1000 / meanMs,
-      p50Ms, p95Ms: percentile(frames, 0.95), p99Ms: percentile(frames, 0.99),
-      stutterCount: frames.filter(value => value > Math.max(50, p50Ms * 2)).length }
+    metrics: frameMetrics(frames)
   });
 }
 
@@ -110,7 +113,8 @@ export function validateFrames(report) {
   requireInput(Object.values(m).every(value => typeof value === 'number' && Number.isFinite(value) && value >= 0), 'Invalid metrics.');
   requireInput(Number.isSafeInteger(m.frameCount) && m.frameCount >= 120 && m.frameCount <= 1000000, 'Invalid frame count.');
   requireInput(Number.isSafeInteger(m.stutterCount) && m.stutterCount <= m.frameCount, 'Invalid stutter count.');
-  requireInput(m.meanMs >= 0.05 && m.meanMs <= 10000 && m.p50Ms >= 0.05 && m.p50Ms <= m.p95Ms && m.p95Ms <= m.p99Ms && m.p99Ms <= 10000, 'Invalid frame-time range.');
+  // Match the derived-metric tolerance below; valid 0.05 ms inputs can sum just below the bound.
+  requireInput(m.meanMs >= 0.05 - 1e-8 && m.meanMs <= 10000 && m.p50Ms >= 0.05 && m.p50Ms <= m.p95Ms && m.p95Ms <= m.p99Ms && m.p99Ms <= 10000, 'Invalid frame-time range.');
   requireInput(Math.abs(m.durationMs / m.frameCount - m.meanMs) < 1e-8 && Math.abs(1000 / m.meanMs - m.averageFps) < 1e-8, 'Inconsistent metrics.');
   return report;
 }

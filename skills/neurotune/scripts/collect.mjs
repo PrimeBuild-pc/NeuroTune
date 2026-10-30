@@ -4,13 +4,14 @@ import { mkdtemp, rm, access } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { InputError, readJson, rejectLinkedAncestors, requireInput, writeJson } from './io.mjs';
+import { InputError, readJson, rejectLinkedAncestors, reportOutputPath, requireInput, writeJson } from './io.mjs';
 import { normalizeInventory } from './evidence.mjs';
 
 export async function collectInventory(output) {
   requireInput(process.platform === 'win32', 'Live inventory requires Windows. Offline analysis works on other platforms.');
-  await rejectLinkedAncestors(output);
-  try { await access(output); throw new InputError('Output already exists; choose a new file.', 'output_exists'); }
+  const target = reportOutputPath(output);
+  await rejectLinkedAncestors(target);
+  try { await access(target); throw new InputError('Output already exists; choose a new file.', 'output_exists'); }
   catch (error) { if (error.code !== 'ENOENT') throw error; }
   const directory = await mkdtemp(path.join(tmpdir(), 'neurotune-'));
   try {
@@ -25,7 +26,7 @@ export async function collectInventory(output) {
     }
     const report = normalizeInventory(await readJson(rawPath));
     requireInput(report.facts.windowsBuild !== null && report.facts.processors.length > 0, 'Essential Windows inventory is unavailable.');
-    await writeJson(output, report);
+    await writeJson(target, report);
     return { schemaVersion: 1, kind: 'collection-receipt', saved: true, reportId: report.id,
       warningCount: report.warningCount, sharedFacts: false,
       next: 'Review the file locally. Obtain permission before running evidence or reading it into a model context.' };

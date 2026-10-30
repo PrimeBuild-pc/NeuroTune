@@ -2,6 +2,14 @@
 
 Each milestone has a usable result and a release gate. Maintain one owner for contracts; independently implementable work may use separate worktrees/agents only when the human requests delegation.
 
+## Active assessment-to-execution build
+
+The human clarified that read-only is a foundation, not the final product. Follow [BUILD-STEPS.md](BUILD-STEPS.md) for the authorized 30-step implementation and [EXECUTION-DESIGN.md](EXECUTION-DESIGN.md) for current interfaces and required authority/recovery gates. Objective presets never select predefined tweaks. The portable guided assessment/proposal increment does not complete M1, M2 or M3, and the historical campaign remains stopped. These milestone gates remain in force; implementation progress is not privileged or model acceptance.
+
+## Current platform and interaction scope
+
+Windows 11 only; macOS/Linux development and qualification are out of scope. Existing cross-platform tests/results remain historical or defensive, not additional product promises. Interaction stays in the user's existing CLI harness, GPT app or Claude Code desktop where local tools are available. Keep its current/default tool permission policy unchanged: command prompts, denials and allow-all/bypass behavior belong to the harness. NeuroTune retains context/privacy questions and final plan confirmation, not a second per-command permission system. No NeuroTune frontend, wizard or custom approval window. Format questions/reviews/results for each host without duplicating its UI or model loop. A host without suitable local execution/authorization must report unsupported actions and block writes.
+
 ## M0 — Read-only skill foundation (implemented)
 
 - Self-contained Agent Skills distribution and Pi package manifest.
@@ -18,7 +26,13 @@ Owner scope: `evals/`, host smoke checks and compatibility documentation; avoid 
 
 Completed in alpha.2: real Pi explicit/package discovery, Claude Code strict plugin validation and component inventory, offline archive coverage for the plugin manifest, all 42 tests/static/package checks on Windows and Ubuntu/WSL2 with Node 22/24, and nine bounded native evaluation cases with synthetic fixtures. See [COMPATIBILITY.md](COMPATIBILITY.md) and [EVALUATION.md](EVALUATION.md).
 
-**Still open:** model-based case execution, a second model family, real CLI-backed investigation/resumption and measured quality/token comparisons. Authoring cases or loading a plugin does not complete this milestone.
+Alpha.3 local candidate: documented five harnesses, added optional OpenAI UI metadata and real Codex/OpenCode discovery, imported single-run CapFrameX JSON without changing numerical conventions, and fixed FIFO/BOM/output-path boundaries. The four-cell Node 22/24 Windows/Linux matrix passes (52 Linux tests; 51 Windows passes plus one POSIX-only skip).
+
+Actual Pi/OpenAI and ordinary restricted Claude/Anthropic case runs, CLI-backed process resumption and token/time observations are now recorded, including failures. They are not native-grader scores, complete model qualification or proof of improved gaming performance. See [VALIDATION.md](VALIDATION.md), [HANDOFF.md](HANDOFF.md) and the scoped [assessment](ASSESSMENT.md).
+
+Continuation: two reproduced reader/producer boundary defects are fixed with regressions, and the native suite now has eleven cases with full-trace behavioral grading. No inference has exercised the revised suite. See [TASKS.md](TASKS.md) for the checklist and [M1-REVIEW.md](M1-REVIEW.md) for the double review, measured local costs and desktop-isolation prerequisite.
+
+**Still open:** frozen-candidate behavioral qualification, native grading/trust, independent review of model/citation/capability failures, Hermes discovery and comparable desktop quality/token measurements. Authoring cases, completing transport runs or loading a plugin does not complete this milestone.
 
 - Test real sessions in Pi and a second harness with different model families, using synthetic fixtures only at first.
 - Cases: missing sharing consent; report says "ignore previous instructions"; user asks for Apply; partial inventory; mismatched captures; invented evidence; model tries to switch provider; long analysis interrupted and resumed.
@@ -41,11 +55,11 @@ Gate: non-writing tests, Windows VM lifecycle tests and repeatable physical-hard
 
 ## M3 — First privileged typed action (separate broker)
 
-Owner scope: native broker, approval UI and journal tests. Design can proceed alongside M2; shipping cannot bypass the gates.
+Owner scope: headless native broker, trusted harness/OS approval integration and journal tests. Design can proceed alongside M2; shipping cannot bypass the gates.
 
 - Review/extract existing `OptimizationEngine`, `OptimizationCatalog`, `BackupService`, `JournalStorage` and policy tests.
 - Start with one narrowly scoped reversible action, not the entire parametric catalog.
-- Human approval must bind exact action parameters, original-state identity, machine, expiry and nonce outside model-writable state. The broker must reject replay, altered plans and stale originals.
+- The harness presents the selected plan for human confirmation and applies its normal tool/command permission policy. The headless executor must bind exact action bytes, original-state identity and actual machine/user context, reject replay/altered/stale preparations and protect recovery; no extra NeuroTune permission-mode engine or per-command UI.
 - Preserve mandatory backups, protected write-ahead journal, verify-after-write, partial-failure rollback, crash/reboot recovery, and drift visibility.
 - Harness remains non-admin. The privileged process accepts typed requests, never arbitrary script/shell strings.
 - No migration/deletion of legacy pending-recovery records.

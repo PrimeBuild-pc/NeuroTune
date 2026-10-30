@@ -12,6 +12,15 @@ test('deterministic metrics match the legacy nearest-rank convention', () => {
   assert.deepEqual(validateFrames(actual), actual);
   assert.deepEqual(report(), actual);
 });
+test('minimum valid intervals survive report validation without rounding the computed metrics', () => {
+  const actual = report({ frameTime: 0.05 });
+  assert.ok(actual.metrics.meanMs < 0.05, 'Exercise floating-point accumulation below the input bound.');
+  assert.deepEqual(validateFrames(actual), actual);
+  const { id, ...payload } = actual;
+  const meanMs = 0.049;
+  assert.throws(() => validateFrames(seal({ ...payload, metrics: { ...payload.metrics,
+    meanMs, durationMs: meanMs * payload.metrics.frameCount, averageFps: 1000 / meanMs } })), /range/);
+});
 test('p99 and stutters retain slow frames rather than trimming them', () => {
   const input = csv().replaceAll(',10,Hardware', ',10,Hardware') + '\ngame.exe,42,0x1,100,Hardware: Independent Flip,1\ngame.exe,42,0x1,100,Hardware: Independent Flip,1';
   const actual = analyzeFrames(input, options);

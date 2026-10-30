@@ -8,3 +8,17 @@
 - When `graphify-out/graph.json` exists, run `graphify query "<question>"` before source exploration; use the wiki for broad navigation and follow located sources. After code changes, run `graphify update .`. AST-only graphs do not index document meaning; read the architecture and roadmap explicitly.
 - Tests use synthetic hardware/capture fixtures. Keep real reports, traces, credentials, local installs and build archives out of Git and npm payloads.
 - See `docs/ROADMAP.md` for separable work units. Delegate only on explicit human request, include these Graphify rules in exploration prompts, and appoint one owner for shared contracts.
+
+## Agent skills
+
+### Issue tracker
+
+For ticket work, use local Markdown under `.scratch/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+For triage, use the five standard role names. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout; before exploration, follow `docs/agents/domain.md`.

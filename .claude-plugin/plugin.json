@@ -1,8 +1,8 @@
 {
   "name": "neurotune",
-  "version": "0.1.0-alpha.2",
-  "description": "Read-only Windows performance investigation with local evidence and deterministic frame analysis.",
+  "version": "0.1.0-alpha.3",
+  "description": "End-to-end Windows 11 gaming PC triage: debloat, services, drivers, interrupt latency and frame-time analysis, with evidence-linked findings and a reviewable plan. Read-only.",
   "author": { "name": "PrimeBuild" },
   "license": "MIT",
-  "keywords": ["windows", "performance", "evidence", "read-only"]
+  "keywords": ["windows", "performance", "gaming", "debloat", "evidence", "read-only"]
 }

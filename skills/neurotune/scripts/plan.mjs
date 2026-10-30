@@ -1,4 +1,4 @@
-import { evidence } from './evidence.mjs';
+import { evidence, validateEvidenceIds } from './evidence.mjs';
 import { exactKeys, requireInput, text } from './io.mjs';
 
 export function validatePlan(plan, reports) {
@@ -17,10 +17,7 @@ export function validatePlan(plan, reports) {
       requireInput(text(hypothesis[key], 2000), 'Hypotheses require a claim, uncertainty, next measurement and rollback description.');
     }
     requireInput(['low', 'medium', 'high', 'unknown'].includes(hypothesis.risk), 'Invalid risk category.');
-    const refs = hypothesis.evidenceIds;
-    requireInput(Array.isArray(refs) && refs.length > 0 && refs.length <= 20 && refs.every(ref => typeof ref === 'string') && new Set(refs).size === refs.length, 'Each hypothesis requires unique evidence IDs.');
-    requireInput(refs.every(ref => known.has(ref)), 'A hypothesis cites unknown evidence.');
-    requireInput(refs.some(ref => known.get(ref) !== null && !(Array.isArray(known.get(ref)) && known.get(ref).length === 0)), 'Unavailable evidence alone cannot support a hypothesis.');
+    validateEvidenceIds(hypothesis.evidenceIds, known);
   }
   return { schemaVersion: 1, kind: 'plan-validation', structurallyValid: true, executable: false,
     hypothesisCount: plan.hypotheses.length, reportIds: [...new Set(reports.map(report => report.id))],

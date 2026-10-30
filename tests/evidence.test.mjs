@@ -39,6 +39,8 @@ test('unknown evidence and missing-only evidence are rejected', () => {
   const report = normalizeInventory(rawInventory), proposal = plan(report);
   proposal.hypotheses[0].evidenceIds = ['invented:processors'];
   assert.throws(() => validatePlan(proposal, [report]), /unknown/);
+  proposal.hypotheses[0].evidenceIds = [`${report.id}:processors[0].name`];
+  assert.throws(() => validatePlan(proposal, [report]), /unknown/, 'A valid parent fact does not create addressable child facts.');
   proposal.hypotheses[0].evidenceIds = [`${report.id}:secureBoot`];
   assert.throws(() => validatePlan(proposal, [report]), /Unavailable/);
 });

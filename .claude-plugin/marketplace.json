@@ -1,0 +1,11 @@
+{
+  "name": "NeuroTune",
+  "owner": { "name": "PrimeBuild" },
+  "plugins": [
+    {
+      "name": "neurotune",
+      "source": ".",
+      "description": "End-to-end Windows 11 gaming PC triage: debloat, services, drivers, interrupt latency and frame-time analysis, with evidence-linked findings and a reviewable plan. Read-only."
+    }
+  ]
+}

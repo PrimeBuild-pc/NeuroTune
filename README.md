@@ -36,7 +36,7 @@ NeuroTune is an [Agent Skill](https://www.anthropic.com/news/agent-skills) for W
 
 ## Why
 
-Most frontier models already roughly follow a sane investigation flow on their own. NeuroTune exists to make that flow **repeatable, evidence-bound and consent-gated** rather than to replace the model's own judgment — a thin skill layer, not a second agent. It is the successor to an earlier standalone desktop app project ([`NeuroTune`](https://github.com/PrimeBuild-pc/NeuroTune), now retired): same investigation goal, no app, no provider lock-in, no separate UI to maintain.
+Most frontier models already roughly follow a sane investigation flow on their own. NeuroTune exists to make that flow **repeatable, evidence-bound and consent-gated** rather than to replace the model's own judgment — a thin skill layer, not a second agent. There is no bundled list of apps, services or tweaks to apply: the model classifies what it actually finds on the machine (safe to remove / ask the user / never touch), because a static list goes stale with every Windows update and OEM image. The skill's job is to make sure nothing gets silently skipped, not to think for the model — so a smaller or local model will still reason less reliably about any one finding than a frontier model would; NeuroTune narrows that gap, it does not close it. It is the successor to an earlier standalone desktop app project ([`NeuroTune`](https://github.com/PrimeBuild-pc/NeuroTune), now retired): same investigation goal, no app, no provider lock-in, no separate UI to maintain.
 
 ## How it works
 
@@ -44,7 +44,7 @@ The skill walks a conversation through six steps, each gated on explicit consent
 
 1. **Scope and guide** — `doctor`/`goals`/`help` establish objectives and capabilities; at most two plain-language questions at a time.
 2. **Consent** — nothing is collected or shared without being asked first; collecting local inventory and sharing it into the model's context are two separate approvals.
-3. **Evidence** — every inventory, frame or app/service report is run through `evidence` and cited as `metric | value | full fact ID`, never pasted raw.
+3. **Evidence** — every inventory, frame or app/service report is run through `evidence` and cited as `metric | value | full fact ID`, never pasted raw. Apps, services, startup items and drivers are read live through the harness's own command tool and worked through a fixed coverage checklist, so a category never gets silently skipped.
 4. **Measure** — imports PresentMon CSV or a single CapFrameX JSON run; it does not record captures itself.
 5. **Challenge** — states one plausible explanation plus at least one alternative, and names the measurement that would falsify it.
 6. **Assess and review** — produces an evidence-linked plan or intervention proposal for the human to approve, choose from, or reject; no step in that proposal is ever executed by the skill.
@@ -59,12 +59,14 @@ Full workflow detail lives in [`skills/neurotune/SKILL.md`](skills/neurotune/SKI
 - Objective presets and short guided question batches — no predefined tweak bundles.
 - Structured assessments bound to validated source reports, with missing coverage and uncertainty stated explicitly.
 - Hardware-specific game-config discovery guidance for 13 games (candidate paths/formats/keys, not static presets).
+- Live-read apps, background services, startup items and driver versions via the harness's own command tool, classified per machine (safe to remove / ask the user / never touch) — no bundled debloat list to go stale.
+- Live interrupt/DPC counters and IRQ-to-device mapping for stutter not explained by frame-time capture alone, with an optional LatencyMon pass or in-game PresentMon/FrameView capture for more precision.
 - Evidence-linked advisory plans and intervention-proposal review, including dependency checks on selected steps. Invented fact IDs are rejected.
 - A self-contained Agent Skills directory, Pi package and Claude Code plugin manifest, plus a JSON CLI any tool-capable harness can call directly.
 
 ## Not implemented
 
-Apply/rollback, live ETW capture, a privileged broker, tool acquisition/installation, driver/firmware updates, MCP transport, GPU/BIOS tuning, security remediation, or automatic diagnosis outside a harness. Imported comparisons are descriptive, not proof an optimization worked. Read-only is the current runtime limit, not the destination — see [`docs/ROADMAP.md`](docs/ROADMAP.md) and the [build ledger](docs/BUILD-STEPS.md) for what assessment-driven execution would require (genuine approval, recovery, authority gates).
+Apply/rollback, live ETW capture, a privileged broker, tool acquisition/installation, driver/firmware updates, MCP transport, GPU/BIOS tuning, security remediation, or automatic diagnosis outside a harness. Imported comparisons are descriptive, not proof an optimization worked. Read-only is the current runtime limit, not the destination — see [`docs/ROADMAP.md`](docs/ROADMAP.md) for what assessment-driven execution would require (genuine approval, recovery, authority gates).
 
 ## Install
 
@@ -72,13 +74,14 @@ Requires **Node.js 22+**. Live inventory additionally requires Windows with Wind
 
 | Harness | Command |
 |---|---|
+| Claude Code (one command, no clone) | `/plugin marketplace add PrimeBuild-pc/NeuroTune` then `/plugin install neurotune@NeuroTune` |
 | Pi / any Agent-Skills-compatible harness | `node scripts/install.mjs --skills-dir "$HOME/.agents/skills"` |
 | Project-scoped skill | `node scripts/install.mjs --skills-dir "C:/path/to/project/.agents/skills"` |
 | Pi package (no copy) | `pi install "C:/path/to/NeuroTune.Skill"` |
-| Claude Code plugin (no copy) | `claude --plugin-dir "C:/path/to/NeuroTune.Skill"` then `/neurotune:neurotune` |
+| Claude Code plugin (local clone, no copy) | `claude --plugin-dir "C:/path/to/NeuroTune.Skill"` then `/neurotune:neurotune` |
 | No Agent Skills support | Point the model at `skills/neurotune/SKILL.md` and ask it to follow the workflow (needs local file + command tools) |
 
-The copy installer writes to `<skills-dir>/neurotune` and never touches harness settings. Reload/restart the harness afterward. See the [full per-harness table](docs/COMPATIBILITY.md) for Pi, Claude Code, OpenCode, Codex and Hermes, and [`docs/BUILD-STEPS.md`](docs/BUILD-STEPS.md) for the offline-archive install path.
+The copy installer writes to `<skills-dir>/neurotune` and never touches harness settings. Reload/restart the harness afterward. See the [full per-harness table](docs/COMPATIBILITY.md) for Pi, Claude Code, OpenCode, Codex and Hermes.
 
 ## Use it
 
@@ -139,7 +142,7 @@ npm run test:collector # explicit read-only live Windows smoke test
 npm run pack:local      # build an offline-installable npm archive
 ```
 
-`npm test` uses synthetic data only; live collection is opt-in. See [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) for the exact per-OS/Node test matrix, [`docs/VALIDATION.md`](docs/VALIDATION.md) and [`docs/ASSESSMENT.md`](docs/ASSESSMENT.md) for recorded model-behavior runs (including failures), and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) / [`docs/decisions/0001-skill-first.md`](docs/decisions/0001-skill-first.md) / [`docs/ROADMAP.md`](docs/ROADMAP.md) before expanding scope.
+`npm test` uses synthetic data only; live collection is opt-in. See [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) for the exact per-OS/Node test matrix, and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) / [`docs/decisions/0001-skill-first.md`](docs/decisions/0001-skill-first.md) / [`docs/ROADMAP.md`](docs/ROADMAP.md) before expanding scope.
 
 ## License and provenance
 

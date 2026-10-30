@@ -28,6 +28,13 @@ for (const file of all.filter(file => file.endsWith('.md'))) {
 const skill = await readFile(path.join(root, 'skills/neurotune/SKILL.md'), 'utf8');
 assert.match(skill, /^---\r?\nname: neurotune\r?\ndescription: .+\r?\n/u);
 assert.ok(skill.match(/^description: (.+)$/mu)[1].length <= 1024);
+const frontmatter = skill.match(/^---\r?\n([\s\S]+?)\r?\n---\r?\n/u)?.[1];
+assert.ok(frontmatter, 'Skill must have bounded YAML frontmatter.');
+const fields = [...frontmatter.matchAll(/^([a-z][a-z-]*):/gmu)].map(match => match[1]);
+assert.deepEqual(fields.sort(), ['compatibility', 'description', 'license', 'metadata', 'name'], 'Keep the shared skill on standard fields, without host-specific permission grants or model overrides.');
+assert.ok(frontmatter.match(/^compatibility: (.+)$/mu)?.[1].length <= 500);
+assert.match(frontmatter, /^metadata:\r?\n  version: [a-z0-9.-]+$/mu);
+assert.ok(skill.split('\n').length < 500, 'Keep detailed guidance in branch references.');
 const pkg = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
 assert.ok(!pkg.dependencies && !pkg.devDependencies, 'This milestone intentionally has no npm dependencies.');
 assert.ok(skill.includes(`version: ${pkg.version}`));
