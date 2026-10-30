@@ -7,7 +7,7 @@
   "engines": { "node": ">=22" },
   "bin": { "neurotune": "skills/neurotune/scripts/cli.mjs" },
   "files": [".claude-plugin/", "skills/", "scripts/install.mjs", "docs/", "README.md", "SECURITY.md", "LICENSE", "NOTICE.md"],
-  "keywords": ["pi-package", "agent-skill", "windows", "performance", "neurotune"],
+  "keywords": ["pi-package", "agent-skill", "agent-skills", "claude-code", "claude-code-plugin", "pi-agent", "opencode", "codex", "windows", "windows-11", "gaming", "pc-gaming", "performance", "optimization", "debloat", "cleanup", "bloatware", "stutter", "fps", "frame-time", "latency", "drivers", "evidence", "neurotune"],
   "pi": { "skills": ["./skills/neurotune"] },
   "scripts": {
     "test": "node --test tests/*.test.mjs",

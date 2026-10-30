@@ -1,6 +1,6 @@
 ---
 name: neurotune
-description: Investigate and triage Windows 11 gaming PC performance end to end - hardware/driver inventory, background app and service cleanup, startup items, interrupt/latency symptoms, PresentMon/CapFrameX frame-time analysis and per-game config tuning - with evidence-linked, consent-gated findings and a reviewable plan. Use for "optimize my PC for gaming", stutter/FPS investigations, debloat or cleanup requests, competitive-vs-quality tuning, or before/after capture comparisons. Read-only in this build: proposals are reviewed, never applied automatically.
+description: Investigate and triage Windows 11 gaming PC performance end to end - hardware/driver inventory, background app and service cleanup, startup items, interrupt/latency symptoms, PresentMon/CapFrameX frame-time analysis and per-game config tuning - with evidence-linked, consent-gated findings and a reviewable plan. Use for "optimize my PC for gaming", "why is my PC slow/stuttering", "clean up bloatware/unused programs", "speed up my gaming PC", stutter/FPS investigations, debloat or cleanup requests, competitive-vs-quality tuning, or before/after capture comparisons. Read-only in this build: proposals are reviewed, never applied automatically.
 license: MIT
 compatibility: Requires Node.js 22 or newer and a harness with file and command tools. Live inventory requires Windows 11 and Windows PowerShell 5.1; offline frame analysis is portable.
 metadata:
