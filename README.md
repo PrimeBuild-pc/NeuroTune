@@ -137,7 +137,6 @@ docs/                  Architecture, roadmap, compatibility and continuation not
 npm test              # unit + CLI tests
 npm run check          # static checks
 npm run test:package   # installation-outside-repo checks
-npm run test:native    # optional native contract tests (pinned .NET SDK)
 npm run test:collector # explicit read-only live Windows smoke test
 npm run pack:local      # build an offline-installable npm archive
 ```
