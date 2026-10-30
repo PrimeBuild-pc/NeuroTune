@@ -76,7 +76,6 @@ Requires **Node.js 22+**. Live inventory additionally requires Windows with Wind
 |---|---|
 | Claude Code (one command, no clone) | `/plugin marketplace add PrimeBuild-pc/NeuroTune` then `/plugin install neurotune@NeuroTune` |
 | Pi / any Agent-Skills-compatible harness | `node scripts/install.mjs --skills-dir "$HOME/.agents/skills"` |
-| Project-scoped skill | `node scripts/install.mjs --skills-dir "C:/path/to/project/.agents/skills"` |
 | Pi package (no copy) | `pi install "C:/path/to/NeuroTune.Skill"` |
 | Claude Code plugin (local clone, no copy) | `claude --plugin-dir "C:/path/to/NeuroTune.Skill"` then `/neurotune:neurotune` |
 | No Agent Skills support | Point the model at `skills/neurotune/SKILL.md` and ask it to follow the workflow (needs local file + command tools) |
