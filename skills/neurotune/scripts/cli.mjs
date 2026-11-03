@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
-import { collectInventory } from './collect.mjs';
+import { collectInventory, measureLatency, scanSystem } from './collect.mjs';
+import { importLatencyMon } from './latency.mjs';
+import { MAX_SCAN_BYTES, systemFindings } from './system.mjs';
 import { evidence } from './evidence.mjs';
 import { analyzeFrames, compareFrames } from './frames.mjs';
 import { analyzeCapFrameX } from './capframex.mjs';
 import { normalizeAppsServices } from './apps-services.mjs';
 import { gameConfigReferences } from './game-configs.mjs';
-import { InputError, MAX_REPORT_BYTES, readJson, readText, requireInput, writeJson } from './io.mjs';
+import { InputError, MAX_REPORT_BYTES, readBytes, readJson, readText, requireInput, writeJson } from './io.mjs';
 import { validatePlan } from './plan.mjs';
 import { buildAssessment, goalOptions, toolCapabilities } from './assessment.mjs';
 import { reviewProposal } from './proposal.mjs';
@@ -19,6 +21,10 @@ const commands = {
   assess: { input: {}, evidence: { multiple: true }, out: {} },
   'proposal-check': { input: {}, assessment: {}, evidence: { multiple: true }, select: { multiple: true } },
   collect: { out: {} },
+  'scan-system': { out: {} },
+  'system-findings': { input: {} },
+  'measure-latency': { seconds: {}, out: {} },
+  latencymon: { input: {}, out: {} },
   'apps-services': { input: {}, out: {} },
   evidence: { input: {} },
   frames: { input: {}, process: {}, conditions: {}, out: {} },
@@ -27,7 +33,7 @@ const commands = {
   'plan-check': { input: {}, evidence: { multiple: true } }
 };
 const help = {
-  name: 'neurotune', version: '0.2.0-beta.1', schemaVersion: 1,
+  name: 'neurotune', version: '0.3.0-beta.1', schemaVersion: 1,
   usage: [
     'neurotune doctor',
     'neurotune goals',
@@ -36,6 +42,10 @@ const help = {
     'neurotune assess --input <intake.json> --evidence <report.json> [--evidence ...] --out <new assessment.json>',
     'neurotune proposal-check --input <proposal.json> --assessment <assessment.json> --evidence <report.json> [--evidence ...] --select <all or step-id> [--select ...]',
     'neurotune collect --out <new inventory.json>',
+    'neurotune scan-system --out <new scan.json>',
+    'neurotune system-findings --input <scan.json>',
+    'neurotune measure-latency --seconds <5-300> --out <new latency.json>   (administrator)',
+    'neurotune latencymon --input <saved LatencyMon report.txt> --out <new latency.json>',
     'neurotune apps-services --input <native-snapshot.json> --out <new apps-services.json>',
     'neurotune evidence --input <inventory.json or frames.json or apps-services.json>',
     'neurotune frames --input <PresentMon.csv> --process <game.exe> --conditions <description> --out <new frames.json>',
@@ -44,7 +54,7 @@ const help = {
     'neurotune plan-check --input <plan.json> --evidence <report.json> [--evidence ...]'
   ],
   policy: 'This CLI only reads, analyzes and validates; it never changes the system. Applying user-confirmed steps happens through the harness tools, following references/apply.md. No provider calls or arbitrary commands. Report outputs require .json filenames without alternate data streams and never overwrite existing files.',
-  privacy: 'Except local-write receipts and doctor/help/goals/tools/game-configs, results contain user evidence in your harness context. Obtain sharing consent before reading intake, evidence, assessment or proposal files.'
+  privacy: 'Except local-write receipts and doctor/help/goals/tools/game-configs, results contain user evidence in your harness context. Obtain sharing consent before reading intake, evidence, assessment, proposal or scan files, or running system-findings.'
 };
 
 try {
@@ -94,6 +104,20 @@ try {
       }
     } else if (command === 'collect') {
       data = await collectInventory(values.out);
+    } else if (command === 'scan-system') {
+      data = await scanSystem(values.out);
+    } else if (command === 'system-findings') {
+      const bytes = await readBytes(values.input, MAX_SCAN_BYTES);
+      let raw;
+      try { raw = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes).replace(/^﻿/u, '')); } catch { throw new InputError('Scan must be UTF-8 JSON.'); }
+      data = systemFindings(raw, bytes);
+    } else if (command === 'measure-latency') {
+      requireInput(/^\d{1,3}$/u.test(values.seconds), 'Seconds must be a whole number from 5 to 300.');
+      data = await measureLatency(values.out, Number(values.seconds));
+    } else if (command === 'latencymon') {
+      const report = await importLatencyMon(values.input);
+      await writeJson(values.out, report);
+      data = { schemaVersion: 1, kind: 'latency-receipt', saved: true, reportId: report.id, sharedFacts: false };
     } else if (command === 'apps-services') {
       const report = normalizeAppsServices(await readJson(values.input));
       await writeJson(values.out, report);

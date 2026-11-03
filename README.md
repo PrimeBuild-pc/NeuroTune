@@ -44,15 +44,12 @@ Most frontier models already roughly follow a sane investigation flow on their o
 
 ## How it works
 
-The skill walks a conversation through seven steps, each gated on explicit consent, never run silently in a batch:
-
-1. **Scope and guide** — `doctor`/`goals`/`help` establish objectives and capabilities; at most two plain-language questions at a time.
-2. **Consent** — nothing is collected or shared without being asked first; collecting local inventory and sharing it into the model's context are two separate approvals.
-3. **Evidence** — every inventory, frame or app/service report is run through `evidence` and cited as `metric | value | full fact ID`, never pasted raw. Apps, services, startup items and drivers are read live through the harness's own command tool and worked through a fixed coverage checklist, so a category never gets silently skipped.
-4. **Measure** — imports PresentMon CSV or a single CapFrameX JSON run; it does not record captures itself.
-5. **Challenge** — states one plausible explanation plus at least one alternative, and names the measurement that would falsify it.
-6. **Assess and review** — produces an evidence-linked proposal with risk, restart needs and undo limits for each step; you approve all, choose steps, or reject.
-7. **Apply and verify** — for confirmed steps only: back up the original state, apply one step at a time, read it back, report before/after, no automatic reboot. Ask later to undo, and it restores from the saved state after checking what changed.
+1. **Start** — you say what you want (a game, stutter, input lag, more FPS). NeuroTune asks once for permission to analyze the PC and share the summary with the model.
+2. **Full analysis** — a read-only scan of the whole system: hardware and firmware, every device in Device Manager (including disabled and disconnected ones), drivers and the driver store, driver latency (DPC/ISR per driver and per CPU, like LatencyMon, with a built-in Windows kernel trace or an imported LatencyMon report), MSI mode and interrupt affinity, USB chains of your mouse and keyboard, services, scheduled tasks, startup apps, installed apps, Windows Update, privacy and background activity, gaming settings, leftovers of risky "optimizer" tweaks, network adapters, audio devices, installed games and their configs. Frame-time captures are analyzed too, if you have one.
+3. **Connect the dots** — findings are linked, not just listed: a slow driver → its device → its interrupt mode and CPU → what shares that CPU or USB controller. You get a short audit: serious problems first.
+4. **Ask and plan** — interactive questions only about what it cannot know (which apps and devices you use, which startup items and audio devices to keep, whether to touch game configs). Then three presets built from *your* findings — Conservative, Balanced, Maximum — shown as one numbered list you approve as is or edit by number ("remove 4 and 9").
+5. **Apply and report** — the original state of each item is saved first, then changed with your harness's own tools and checked. A `report.md` with before/after and how to undo stays in the session folder. It tells you when to restart; it never restarts by itself.
+6. **After the restart** — if something is wrong, ask NeuroTune: it restores everything, a single step, or fixes the specific problem.
 
 Full workflow detail lives in [`skills/neurotune/SKILL.md`](skills/neurotune/SKILL.md).
 
@@ -62,7 +59,7 @@ Full workflow detail lives in [`skills/neurotune/SKILL.md`](skills/neurotune/SKI
   <img src="assets/eval-results.svg" alt="Bar charts: cases passed and agent tokens per case, with and without the skill, for Claude Haiku 5.5 and DeepSeek V4.1 Flash" width="760">
 </p>
 
-Measured on 2026-11-03 with the eleven behavior cases in [`evals/`](evals/) (consent, prompt injection, invented evidence, unsupported measurements, shortcut requests, resumption), three runs each, with and without the skill:
+Measured on 2026-11-03 on version 0.2.0-beta.1 (before the full-analysis workflow) with the eleven behavior cases in [`evals/`](evals/) (consent, prompt injection, invented evidence, unsupported measurements, shortcut requests, resumption), three runs each, with and without the skill:
 
 | Model | Cases passed, with / without | Agent tokens per case, with / without |
 |---|---|---|
@@ -83,14 +80,15 @@ Measured on 2026-11-03 with the eleven behavior cases in [`evals/`](evals/) (con
 - Structured assessments bound to validated source reports, with missing coverage and uncertainty stated explicitly.
 - Hardware-specific game-config discovery guidance for 13 games (candidate paths/formats/keys, not static presets).
 - Live-read apps, background services, startup items and driver versions via the harness's own command tool, classified per machine (safe to remove / ask the user / never touch) — no bundled debloat list to go stale.
-- Live interrupt/DPC counters and IRQ-to-device mapping for stutter not explained by frame-time capture alone, with an optional LatencyMon pass or in-game PresentMon/FrameView capture for more precision.
+- Driver latency like LatencyMon: per-driver and per-CPU DPC/ISR timing from a built-in Windows kernel trace (`measure-latency`, no extra software), or an imported LatencyMon report (`latencymon`).
+- A full read-only system scan (`scan-system`) condensed into a compact findings summary (`system-findings`): devices, driver store, MSI/affinity, USB input chains, services, tasks, startup, apps, updates, privacy, gaming settings, risky leftovers, network, audio, installed games.
 - Evidence-linked advisory plans and intervention-proposal review, including dependency checks on selected steps. Invented fact IDs are rejected.
 - Confirmed changes with a per-step backup and journal (Registry, services, Windows settings, scheduled tasks, startup items, game configs, apps, drivers), read-back verification and guided undo.
 - A self-contained Agent Skills directory, Pi package and Claude Code plugin manifest, plus a JSON CLI any tool-capable harness can call directly.
 
 ## Not implemented
 
-Live ETW capture, tool acquisition/installation, firmware/BIOS changes, MCP transport, security remediation, automatic reboots or diagnosis outside a harness. Imported comparisons are descriptive, not proof an optimization worked. Backups are what the agent saved: Registry values, service start types, settings and config files restore exactly; removed apps and drivers may not come back with their data. Apply/recovery has been exercised in a VM and on one real PC, not yet across failure paths such as denied elevation or an interrupted session — see [`docs/ROADMAP.md`](docs/ROADMAP.md).
+General ETW/WPA analysis beyond DPC/ISR timing, tool acquisition/installation, vendor driver installation, firmware/BIOS changes, MCP transport, security remediation, automatic reboots or diagnosis outside a harness. Imported comparisons are descriptive, not proof an optimization worked. Backups are what the agent saved: Registry values, service start types, settings and config files restore exactly; removed apps and drivers may not come back with their data. Apply/recovery has been exercised in a VM and on one real PC, not yet across failure paths such as denied elevation or an interrupted session — see [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Install
 

@@ -8,7 +8,7 @@ collect --out "C:\Users\you\Documents\inventory-01.json"
 evidence --input "C:\Users\you\Documents\inventory-01.json"
 ```
 
-The output directory must already exist. Collection is Windows-only, read-only and normally non-admin. It runs the bundled fixed PowerShell collector with `-NoProfile -NonInteractive -File`; no shell code is accepted. Execution policy is not bypassed. CIM reads can be slow or unavailable; the process has a 90-second deadline. An error is not permission to escalate privileges.
+The output directory must already exist. Collection is Windows-only, read-only and normally non-admin. It runs the bundled fixed PowerShell collector with `-NoProfile -NonInteractive -ExecutionPolicy Bypass -File`; the policy override applies to that process only and the machine policy is unchanged. No shell code is accepted. CIM reads can be slow or unavailable; the process has a 90-second deadline. An error is not permission to escalate privileges.
 
 Collection stages a raw report in the user's temporary directory, projects it to an allowlist, saves the compact report and deletes staging files in a finally block. An interrupted process may leave staging files. The stored facts include Windows build, architecture, Secure Boot/VBS availability, memory capacity, CPU model/core counts, GPU model/driver version and hypervisor presence. Null is unavailable. Core counts of zero from missing source properties are not affirmative hardware measurements. Warning count exposes partial collection, not a complete explanation of each unavailable subsystem.
 

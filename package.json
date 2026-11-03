@@ -1,6 +1,6 @@
 {
   "name": "neurotune-skill",
-  "version": "0.2.0-beta.1",
+  "version": "0.3.0-beta.1",
   "description": "Evidence-led Windows performance investigation in your existing AI harness",
   "type": "module",
   "license": "MIT",

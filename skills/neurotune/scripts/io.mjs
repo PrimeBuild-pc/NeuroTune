@@ -36,6 +36,12 @@ export function verifySeal(report) {
 }
 
 export async function readText(file, maxBytes = MAX_BYTES) {
+  const bytes = await readBytes(file, maxBytes);
+  // Preserve the BOM for source hashes; parsers decide how to handle it.
+  try { return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes); }
+  catch { throw new InputError('Input must be UTF-8 text.'); }
+}
+export async function readBytes(file, maxBytes = MAX_BYTES) {
   // On POSIX, opening a FIFO must not block before the regular-file check.
   const handle = await open(file, constants.O_RDONLY | (constants.O_NONBLOCK ?? 0));
   try {
@@ -50,9 +56,7 @@ export async function readText(file, maxBytes = MAX_BYTES) {
       length += bytesRead;
     }
     requireInput(length <= maxBytes, 'Input exceeds the size limit.');
-    // Preserve the BOM for source hashes; parsers decide how to handle it.
-    try { return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(buffer.subarray(0, length)); }
-    catch { throw new InputError('Input must be UTF-8 text.'); }
+    return buffer.subarray(0, length);
   } finally { await handle.close(); }
 }
 export async function readJson(file, maxBytes = MAX_BYTES) {
