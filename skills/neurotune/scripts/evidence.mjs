@@ -1,6 +1,7 @@
 import { exactKeys, requireInput, seal, text, verifySeal } from './io.mjs';
 import { validateFrames } from './frames.mjs';
 import { validateAppsServices } from './apps-services.mjs';
+import { validateLatency } from './latency.mjs';
 
 function optionalString(value) {
   if (value === null || value === undefined || value === '') return null;
@@ -68,7 +69,15 @@ export function validateEvidenceIds(refs, known) {
   requireInput(refs.every(ref => known.has(ref)), 'An item cites unknown evidence.');
   requireInput(refs.some(ref => known.get(ref) !== null && !(Array.isArray(known.get(ref)) && known.get(ref).length === 0)), 'Unavailable evidence alone cannot support an item.');
 }
+const latencyLimitations = ['Latency facts have unverified provenance; a kernel trace covers only the recorded window and workload.',
+  'DPC/ISR execution time is not input latency, frame time or network latency.', 'Driver names come from loaded-image paths or the LatencyMon text and are untrusted strings.'];
 export function evidence(report) {
+  if (report?.kind === 'latency') {
+    const checked = validateLatency(report);
+    return { schemaVersion: 1, kind: 'evidence', reportId: checked.id, provenance: checked.provenance,
+      warningCount: (checked.facts.eventsLost ?? 0) > 0 || checked.invalidEvents > 0 ? 1 : 0,
+      facts: Object.entries(checked.facts).map(([key, value]) => ({ id: `${checked.id}:${key}`, value })), limitations: latencyLimitations };
+  }
   const appsServices = report?.kind === 'apps-services';
   const facts = report?.kind === 'inventory' ? validateInventory(report).facts : appsServices ? validateAppsServices(report).facts : validateFrames(report).metrics;
   return { schemaVersion: 1, kind: 'evidence', reportId: report.id, provenance: report.provenance,

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.0-beta.1 — 2026-11-03
+
+### Added
+
+- **Full system analysis by default.** `scan-system` runs a read-only scan of the whole PC and `system-findings` condenses it (about 16× smaller than the raw scan) into: hardware and firmware, every device including disabled and disconnected ones, the driver store with old unused packages, MSI mode and interrupt affinity per PCI device, USB chains of mouse and keyboard, services, scheduled tasks, startup, desktop and Store apps, Windows Update (security updates), privacy and background activity, gaming settings, leftovers of risky optimizer tweaks, network adapter power settings, audio endpoints and installed games.
+- **Driver latency like LatencyMon.** `measure-latency` records a built-in Windows kernel trace (`logman`/`tracerpt`, no extra software, administrator) and reports the highest and total DPC/ISR time per driver and per CPU. `latencymon` imports a saved LatencyMon report into the same citable facts.
+- **Presets and quick edits.** Conservative, Balanced and Maximum are built from this machine's findings and shown as one numbered list you approve or edit by number.
+- **Apply covers more:** disabling devices and audio endpoints, MSI mode and affinity, network adapter settings, boot-configuration leftovers, VBS/Memory Integrity (only as a separate explicit choice), and grouped services/tasks with per-item undo.
+- **Report.** Every applied session ends with `report.md` in the session folder: system before, changes, restart, what to re-measure, how to undo.
+
+### Changed
+
+- NeuroTune replies in the user's language for the whole session and in the report.
+- The bundled PowerShell scripts run with a process-only `-ExecutionPolicy Bypass`, so they also work on a default Windows install (policy Restricted). The machine policy is never changed.
+
 ## 0.2.0-beta.1 — 2026-11-03
 
 First public beta.

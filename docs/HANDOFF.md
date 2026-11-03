@@ -46,6 +46,17 @@ Do as much as practical to support reversibility without pretending every operat
 
 The logs further below are historical; their versions, case counts and test totals are not current qualification results.
 
+## Release 0.3.0-beta.1: full system analysis
+
+The default workflow is now: consent once → full read-only analysis → connected findings and audit → interactive questions → Conservative/Balanced/Maximum presets built from this machine's findings, approved as is or edited by number → apply with backups → `report.md` → restore or fix after the restart.
+
+- New bundled scripts and commands: `Collect-System.ps1` + `scan-system` / `system-findings` (devices, driver store, MSI/affinity, USB input chains, services, tasks, startup, apps, updates, privacy, gaming settings, risky leftovers, network, audio, games; summary about 16× smaller than the raw scan) and `Measure-Latency.ps1` + `measure-latency` (built-in `logman`/`tracerpt` kernel trace with dpc,isr,img; per-driver and per-CPU DPC/ISR facts; raw trace deleted). `latencymon` imports a saved LatencyMon report into the same sealed `latency` report. Ideas for driver-store, MSI/affinity, USB-chain and risky-tweak checks come from the author's TweakHub; no code was copied.
+- Bundled scripts run with a process-only `-ExecutionPolicy Bypass`, because a default Windows client policy (Restricted) blocked the collector in the VM. Machine policy is unchanged.
+- References rewritten: system-review.md (full analysis, interpretation per area, classification, coverage), measurements.md (driver latency thresholds and driver-to-device mapping), assessment.md (presets and quick edits), apply.md (devices, audio endpoints, MSI/affinity, network adapter settings, BCD leftovers, VBS/HVCI as explicit choice, grouped services/tasks, `report.md`).
+- Verified: `npm test` 93 passed / 1 skipped; check, package (44 files) and `claude plugin validate` pass. In the VM: the scan (16 s, 148 KB → 9 KB findings) and a 15 s trace (12,623 DPC / 7,680 ISR, 0 lost, every routine attributed to a driver). Agent trials: DeepSeek in Pi in the VM ran the whole analysis by itself and correctly declined to tune a VM; Haiku on the user's PC (read only, isolated session) ran scan, 60 s trace and Fortnite config discovery, found a mouse receiver sharing a USB controller with an audio interface and a USB disk, MSI off on HD Audio, a leftover `DisablePagingExecutive`, CPU 0 above 3% DPC, and produced the three presets with quick-edit instructions. Nothing was applied; host snapshot identical afterwards; VM reset.
+- Known issues: both models shorten fact IDs in long tables despite the rule; Haiku once answered in Spanish (language rule added after); the LatencyMon parser follows the documented report layout and still needs a real saved report to confirm.
+- Not yet run on this version: the behavior eval suite, and an Apply trial of the new categories (devices, MSI, network settings) in the VM.
+
 ## Release 0.2.0-beta.1
 
 First public beta: version bumped in package, plugin, skill and CLI; README beta warning, copy-paste prompt and corrected provenance (the old desktop app's history is not published at this repository); SECURITY points to GitHub private vulnerability reporting; CHANGELOG and issue templates (session report, bug report) added. Released from branch `release/0.2.0-beta.1` through a pull request, tagged `v0.2.0-beta.1` and published as a GitHub pre-release. Not published to npm.

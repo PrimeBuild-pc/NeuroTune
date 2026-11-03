@@ -51,3 +51,23 @@ Present the final list in plain language with these choices:
 - **Other**: revise the plan, request more measurements or stop.
 
 For each step, state before the choice what will be backed up and whether it can be undone fully, partially or not at all (see [apply.md](apply.md#before-asking-for-confirmation)). `approvalGranted:false` and `executable:false` in the technical result mean the review file itself is not a confirmation: only the user's own reply is. A review hash or a model-written approval field never confirms anything. After the choice, follow [apply.md](apply.md); never announce an applied change, a backup or a restore that you did not actually perform and verify.
+
+## Presets and quick edits
+
+After the analysis and the user's answers, build three presets from **this machine's** classified findings ([system-review.md](system-review.md#3-classify-every-candidate)). They are levels of the same evidence-based list, not fixed tweak bundles:
+
+- **Conservative:** Safe items with full undo and no restart risk: privacy and background defaults, restoring risky leftovers to Windows defaults, startup apps the user said they do not need, network adapter power saving, extra audio endpoints the user does not use.
+- **Balanced:** Conservative, plus confirmed-unused third-party services set to Manual and their scheduled tasks disabled, Store apps the user does not use removed, MSI mode for devices the latency trace implicates, outdated vendor drivers flagged for the user to update, game config edits the user accepted.
+- **Maximum:** Balanced, plus confirmed-unused services set to Disabled instead of Manual, more background tasks disabled, unused devices disabled, old unused driver packages removed after export, interrupt-affinity experiments backed by the trace.
+
+Never in any preset: Critical items, security protections (VBS/Memory Integrity is a separate, explicit offer), anything the user said they use. If a preset would be empty or identical to the previous one, say so instead of padding it.
+
+Show the chosen preset as one numbered list, grouped by area, with a count and the number of restarts at the top. Each line: number, the change in plain words, the finding behind it, risk, restart, undo (full/partial/none). Long groups can be one line with their items listed compactly ("12. Set 9 third-party services to Manual: A, B, C, ...").
+
+Then let the user answer in a few words:
+
+- "ok" / "approve" → that exact list.
+- "remove 3, 7–9", "only 1–5", "keep B in 12", "12 to Manual instead of Disabled", "add 14 from Maximum" → apply the edit, show only the changed lines and the new totals, and confirm once more.
+- Anything that adds a higher-risk item, changes a target or method, or touches something the user said they use counts as a new item and needs that confirmation.
+
+For `proposal-check`, make one proposal step per area (for example `services-manual`, `startup`, `msi-mode`), listing the exact targets in `target` and `proposedChange` within the length limits; keep at most 20 steps. The approved numbered list, not the step grouping, is what you apply.

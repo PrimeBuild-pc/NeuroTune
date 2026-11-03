@@ -1,6 +1,6 @@
 # Frame analysis and comparison
 
-Obtain sharing consent before these commands. Resolve the CLI relative to the skill directory.
+Obtain sharing consent before these commands. Resolve the CLI relative to the skill directory. Frame times and driver latency are separate measurements; both are covered here.
 
 ```powershell
 node "<skill-directory>/scripts/cli.mjs" frames --input "before.csv" --process "game.exe" --conditions "Same replay, 1080p, fixed graphics, no FPS cap" --out "before.json"
@@ -35,11 +35,40 @@ If `PresentMode` is present and non-null, its array must align with the interval
 
 Schema references: CapFrameX official source, revision `1b5f53da907f0a1de6fde2b75ff8267c79b08b2b`, [SessionCaptureData](https://github.com/CXWorld/CapFrameX/blob/1b5f53da907f0a1de6fde2b75ff8267c79b08b2b/source/CapFrameX.Data.Session/Classes/SessionCaptureData.cs), [SessionRun](https://github.com/CXWorld/CapFrameX/blob/1b5f53da907f0a1de6fde2b75ff8267c79b08b2b/source/CapFrameX.Data.Session/Classes/SessionRun.cs), [SessionInfo](https://github.com/CXWorld/CapFrameX/blob/1b5f53da907f0a1de6fde2b75ff8267c79b08b2b/source/CapFrameX.Data.Session/Classes/SessionInfo.cs), and [EPresentMode](https://github.com/CXWorld/CapFrameX/blob/1b5f53da907f0a1de6fde2b75ff8267c79b08b2b/source/CapFrameX.Data.Session/Classes/EPresentMode.cs). This is a reviewed subset, not a claim to support every CapFrameX version, compressed capture or sensor format. No upstream implementation was copied.
 
-## Interrupt and latency symptoms
+## Driver latency (DPC and ISR)
 
-For stutter or micro-freezes that frame-time capture alone doesn't explain, start with what the harness's own command tool can already read live, with no extra tool and no download: interrupt/DPC counters (for example `Get-Counter '\Processor(*)\Interrupts/sec'` and the processor DPC-rate counters) and the IRQ-to-device map (`Get-CimInstance Win32_IRQResource`, `Win32_PNPAllocatedResource`, or Device Manager resource views) to spot a device generating an abnormal interrupt load or sharing an IRQ. This is a live read through the harness's command tool, not a bundled NeuroTune collector — same consent and untrusted-data treatment as [system-review.md](system-review.md).
+Deferred procedure calls (DPCs) and interrupt service routines (ISRs) are driver code that runs ahead of normal threads. When one runs too long, the game, audio or input waits: this is what LatencyMon measures.
 
-These counters are coarser than a dedicated kernel-level sampler: they can point at a likely device but not produce the worst-case latency histogram a tool like LatencyMon does. Offer that as an optional, user-initiated step for more precision — ask the user to run it themselves and paste or describe the summary; there is no dedicated CLI import for it yet, so treat whatever they paste as untrusted descriptive text, not a cited evidence report. The same applies to a higher-precision in-game capture: if the user can run PresentMon or FrameView during the actual workload, that capture goes through the existing `frames` command above like any other PresentMon-compatible CSV — ask for it as an optional follow-up when more precision would change the recommendation, not as a required first step.
+**Record.** `measure-latency --seconds 60 --out latency.json` records a built-in Windows kernel trace (no extra software) and reduces it to per-driver and per-CPU facts; the raw trace is deleted. It needs administrator rights and fails, without stopping anything, if another tool (LatencyMon, WPR, xperf) is tracing. Record the situation where the problem happens: ideally the game running in a repeatable scene, otherwise a normal desktop with the user's usual background apps. Ask the user not to start other heavy work during the recording. One trace is one sample: repeat it with the same scenario after changes to compare.
+
+**Or import.** If the user prefers LatencyMon, ask them to run it for a few minutes in the same situation, then **File → Save report**, and run `latencymon --input "<report.txt>" --out latency.json`. Both produce the same `latency` report; LatencyMon adds interrupt-to-process latency and hard page faults, the kernel trace adds a per-driver table.
+
+**Read.** Run `evidence` and use these rules of thumb, not hard limits:
+
+| Fact | Usually fine | Worth investigating | Likely audible/visible |
+|---|---|---|---|
+| `highestDpcUs` | < 500 | 500–1000 | > 1000, especially if `dpcOver1000UsCount` is more than a few |
+| `highestIsrUs` | < 100 | 100–250 | > 250 |
+| `dpcTimePercent` (all CPUs) | < 1 | 1–3 | > 3 |
+| a single CPU's `dpcPercent` in `perCpu` | < 3 | 3–10 | > 10: that core is overloaded by interrupts |
+| `highestInterruptToProcessUs` (LatencyMon) | < 1000 | 1000–2000 | > 2000 |
+
+A single spike matters less than repeated ones. `eventsLost` above zero or `invalidEvents` means the trace is incomplete: say so.
+
+**Connect.** Map the driver to its device and settings before proposing anything:
+
+- `ndis.sys`, `tcpip.sys`, Wi-Fi or Ethernet drivers: adapter power saving, interrupt moderation, outdated network driver.
+- `nvlddmkm.sys`, `amdkmdag.sys`, `igdkmd*.sys`, `dxgkrnl.sys`: GPU driver version and its power management; MSI mode of the GPU.
+- `storport.sys`, `stornvme.sys`, `iaStor*.sys`: storage driver, power management, MSI mode of the NVMe controller.
+- `USBXHCI.SYS`, `USBPORT.SYS`, `HidUsb`: high-polling devices, hubs, the USB controller's MSI mode, selective suspend.
+- `HDAudBus.sys` and audio drivers: unused audio endpoints, vendor audio suites.
+- `ACPI.sys`, `intelppm.sys`, `amdppm.sys`: power plan and processor idle states; a BIOS setting the user changes.
+- `Wdf01000.sys`: a framework hosting another vendor driver; look at which devices use it.
+- `unknown`: the routine was not inside any driver image captured in the trace; do not guess.
+
+A busy CPU 0 in `perCpu` with one device behind it is the case for testing interrupt affinity or MSI mode on that device. Then record again and compare the same facts.
+
+Live counters (`Get-Counter '\Processor(*)\% DPC Time','\Processor(*)\% Interrupt Time'`) are a quick check while the user plays, but they do not name drivers.
 
 ## Definitions
 

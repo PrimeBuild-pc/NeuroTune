@@ -1,6 +1,6 @@
 {
   "name": "neurotune",
-  "version": "0.2.0-beta.1",
+  "version": "0.3.0-beta.1",
   "description": "End-to-end Windows 11 gaming PC triage: debloat, services, drivers, interrupt latency and frame-time analysis, with evidence-linked findings, a reviewed plan and backed-up, user-confirmed changes.",
   "author": { "name": "PrimeBuild" },
   "license": "MIT",

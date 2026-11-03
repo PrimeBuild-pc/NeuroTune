@@ -39,6 +39,8 @@ Modules:
 | `apps-services.mjs` | Bounded import of unattested registry/SCM snapshots; registered desktop app/service facts and unresolved dependencies, no usage/removal inference | Synthetic/hostile imports, derived-field tampering, CLI privacy/overwrite and native VM projection |
 | `game-configs.mjs` + game-config reference | Static discovery paths/formats/key hints for 13 games; hardware-derived assessment guidance, no presets, local inspection or writer | Complete catalogue, policy/format exceptions, immutable lookups, CLI and standalone-package checks |
 | `proposal.mjs` | Inert intervention review with hypothesis/evidence binding, dependency ordering and explicit subset selection | Cycles, missing prerequisites, spoofed authority and changed inputs |
+| `Collect-System.ps1` + `system.mjs` | Read-only full system scan (`scan-system`) and its compact summary (`system-findings`): devices, driver store, MSI/affinity, USB input chains, services, tasks, startup, apps, updates, privacy, gaming settings, risky leftovers, network, audio, games | VM scan; synthetic scan fixture covering every flag |
+| `Measure-Latency.ps1` + `latency.mjs` | Built-in kernel trace (`logman`/`tracerpt`, dpc+isr+img) reduced to per-driver and per-CPU DPC/ISR facts (`measure-latency`); LatencyMon report import (`latencymon`) into the same sealed `latency` report | VM trace; synthetic tracerpt CSV and LatencyMon reports (UTF-16, Windows-1252, locale decimals), tampering |
 | `cli.mjs` | Strict arguments and JSON envelope | Subprocess tests |
 | `SKILL.md` + references | Consent, investigation, interpretation, apply/backup/recovery instructions and stop criteria | Packaging/discovery checks, scoped real model trials and VM apply/recovery trials |
 
