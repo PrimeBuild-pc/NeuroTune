@@ -1,12 +1,12 @@
 {
   "name": "neurotune-skill",
-  "version": "0.1.0-alpha.3",
+  "version": "0.2.0-beta.1",
   "description": "Evidence-led Windows performance investigation in your existing AI harness",
   "type": "module",
   "license": "MIT",
   "engines": { "node": ">=22" },
   "bin": { "neurotune": "skills/neurotune/scripts/cli.mjs" },
-  "files": [".claude-plugin/", "skills/", "scripts/install.mjs", "docs/", "README.md", "SECURITY.md", "LICENSE", "NOTICE.md"],
+  "files": [".claude-plugin/", "skills/", "scripts/install.mjs", "docs/", "README.md", "CHANGELOG.md", "SECURITY.md", "LICENSE", "NOTICE.md"],
   "keywords": ["pi-package", "agent-skill", "agent-skills", "claude-code", "claude-code-plugin", "pi-agent", "opencode", "codex", "windows", "windows-11", "gaming", "pc-gaming", "performance", "optimization", "debloat", "cleanup", "bloatware", "stutter", "fps", "frame-time", "latency", "drivers", "evidence", "neurotune"],
   "pi": { "skills": ["./skills/neurotune"] },
   "scripts": {

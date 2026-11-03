@@ -1,0 +1,70 @@
+name: Session report
+description: Tell us how a NeuroTune session went, good or bad. This is how the skill gets better.
+title: "[session] "
+labels: ["session-report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for sharing. **Remove anything private** before posting: user names, serial numbers, account IDs, file paths with your name. Do not paste full hardware reports or API keys.
+  - type: input
+    id: harness
+    attributes:
+      label: Harness and version
+      placeholder: "Claude Code 2.1.314, Pi 1.5.0, OpenCode ..."
+    validations:
+      required: true
+  - type: input
+    id: model
+    attributes:
+      label: Model
+      placeholder: "claude-haiku-5-5 (effort medium), deepseek-flash, a local model ..."
+    validations:
+      required: true
+  - type: dropdown
+    id: loaded
+    attributes:
+      label: Did the skill load by itself?
+      options: ["Yes", "Only when I named NeuroTune", "No, I had to point at SKILL.md", "Not sure"]
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: What you asked for
+      description: Game, symptom (FPS, stutter, input lag), and roughly what your PC is.
+    validations:
+      required: true
+  - type: textarea
+    id: proposed
+    attributes:
+      label: What it proposed, and what you approved
+      description: The plan steps, and which ones you chose.
+  - type: dropdown
+    id: outcome
+    attributes:
+      label: How did applying go?
+      options: ["Did not apply anything", "Applied and verified", "Some steps failed", "Something broke", "Not sure"]
+    validations:
+      required: true
+  - type: dropdown
+    id: undo
+    attributes:
+      label: Did you try to undo?
+      options: ["No", "Yes, everything came back", "Yes, partly", "Yes, it failed"]
+  - type: textarea
+    id: measurements
+    attributes:
+      label: Before/after measurements (optional)
+      description: PresentMon/CapFrameX numbers or a LatencyMon summary from the same scene, if you have them. Say how many runs.
+  - type: textarea
+    id: journal
+    attributes:
+      label: Session journal excerpt (optional)
+      description: The relevant part of `journal.md` from the session folder, with private details removed.
+      render: markdown
+  - type: textarea
+    id: wrong
+    attributes:
+      label: Anything it did that it should not have?
+      description: Changed something without asking, read files you did not allow, invented numbers, skipped a backup...

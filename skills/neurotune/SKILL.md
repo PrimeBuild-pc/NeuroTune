@@ -4,7 +4,7 @@ description: Load this skill before answering whenever the user mentions NeuroTu
 license: MIT
 compatibility: Requires Node.js 22 or newer and a harness with file and command tools. Live inventory requires Windows 11 and Windows PowerShell 5.1; offline frame analysis is portable.
 metadata:
-  version: 0.1.0-alpha.3
+  version: 0.2.0-beta.1
 ---
 
 # NeuroTune

@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <img alt="status" src="https://img.shields.io/badge/status-alpha-orange">
+  <img alt="status" src="https://img.shields.io/badge/status-beta-orange">
   <img alt="mode" src="https://img.shields.io/badge/changes-confirmed%20%2B%20backed%20up-yellow">
   <img alt="node" src="https://img.shields.io/badge/node-%3E%3D22-brightgreen">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
@@ -19,6 +19,9 @@
 NeuroTune is an [Agent Skill](https://www.anthropic.com/news/agent-skills) for Windows gaming stutter and performance investigations. It runs inside your existing AI coding harness (Claude Code, Pi, OpenCode, Codex, or anything that can load a skill and run local commands) instead of being its own app. The harness supplies the model, the conversation and the permissions; NeuroTune supplies a small, deterministic local CLI for inventory, frame-time analysis and evidence-linked tuning plans.
 
 **Nothing changes until you confirm.** NeuroTune investigates, cites evidence for every claim and shows a plan with risks and how far each step can be undone. You approve all, pick steps or say no. For each confirmed step the agent first saves the original state in a local session folder, then applies it with your harness's own tools, checks the result and tells you how to undo it. The bundled CLI itself never writes to the system.
+
+> [!WARNING]
+> **Beta, use at your own risk.** With your confirmation the agent changes Windows settings, services, startup items, game configs, apps and drivers. AI models make mistakes. Backups make most changes reversible, but a removed app may lose its data and a driver change can leave a PC without display or network. Try it first on a machine you can restore, read each step before approving it, and keep the session folder it tells you about until you are happy. This is free software with no warranty (MIT).
 
 ## Contents
 
@@ -37,7 +40,7 @@ NeuroTune is an [Agent Skill](https://www.anthropic.com/news/agent-skills) for W
 
 ## Why
 
-Most frontier models already roughly follow a sane investigation flow on their own. NeuroTune exists to make that flow **repeatable, evidence-bound and consent-gated** rather than to replace the model's own judgment — a thin skill layer, not a second agent. There is no bundled list of apps, services or tweaks to apply: the model classifies what it actually finds on the machine (safe to remove / ask the user / never touch), because a static list goes stale with every Windows update and OEM image. The skill's job is to make sure nothing gets silently skipped, not to think for the model — so a smaller or local model will still reason less reliably about any one finding than a frontier model would; NeuroTune narrows that gap, it does not close it. It is the successor to an earlier standalone desktop app project ([`NeuroTune`](https://github.com/PrimeBuild-pc/NeuroTune), now retired): same investigation goal, no app, no provider lock-in, no separate UI to maintain.
+Most frontier models already roughly follow a sane investigation flow on their own. NeuroTune exists to make that flow **repeatable, evidence-bound and consent-gated** rather than to replace the model's own judgment — a thin skill layer, not a second agent. There is no bundled list of apps, services or tweaks to apply: the model classifies what it actually finds on the machine (safe to remove / ask the user / never touch), because a static list goes stale with every Windows update and OEM image. The skill's job is to make sure nothing gets silently skipped, not to think for the model — so a smaller or local model will still reason less reliably about any one finding than a frontier model would; NeuroTune narrows that gap, it does not close it. It replaces an earlier standalone NeuroTune desktop app by the same author, now retired and not published here: same investigation goal, no app, no provider lock-in, no separate UI to maintain.
 
 ## How it works
 
@@ -109,7 +112,17 @@ The copy installer writes to `<skills-dir>/neurotune` and never touches harness 
 /skill:neurotune Investigate stutter in my game. Collect locally first; ask before sharing hardware facts.
 ```
 
-Or in any harness without a slash command: *"Use the NeuroTune skill to make Fortnite run smoother on my PC. Ask before reading anything private, show me the plan with risks, and back up before changing anything I approve."*
+Or paste this into any harness that has NeuroTune installed, in any language:
+
+```text
+Use NeuroTune to make <game> run smoother on my PC.
+Ask before reading anything private, and before sharing it with the model.
+Show me what you found, then a plan with the risk of each step
+and how far it can be undone. Change nothing until I approve.
+Back up before every change, check the result, and do not reboot.
+```
+
+To undo later: *"Use NeuroTune to undo the changes from my last session."*
 
 The skill asks about symptoms and data sharing, selects relevant evidence, challenges its own explanation and produces a bounded next step — using the harness's current model and current command-permission settings, with no second permission system layered on top.
 
