@@ -1,4 +1,4 @@
 interface:
   display_name: "NeuroTune"
   short_description: "Triage and tune a Windows 11 gaming PC"
-  default_prompt: "Use $neurotune to optimize my gaming PC, investigate stutter, or compare captures. Ask before sharing private evidence; do not apply system changes."
+  default_prompt: "Use $neurotune to optimize my gaming PC, investigate stutter, or compare captures. Ask before sharing private evidence; change nothing until I confirm, and back up first."

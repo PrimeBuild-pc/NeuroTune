@@ -1,6 +1,6 @@
 # ADR 0001: New repository, skill-first, bounded local runtime
 
-Status: accepted for the first read-only milestone; revisit at the gates below.
+Status: accepted for the first read-only milestone. Revisit point 3 (writes) is superseded by [ADR 0002](0002-agent-applied-changes.md).
 
 ## Decision
 

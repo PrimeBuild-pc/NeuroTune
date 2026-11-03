@@ -10,7 +10,6 @@ import { InputError, MAX_REPORT_BYTES, readJson, readText, requireInput, writeJs
 import { validatePlan } from './plan.mjs';
 import { buildAssessment, goalOptions, toolCapabilities } from './assessment.mjs';
 import { reviewProposal } from './proposal.mjs';
-import { MAX_BUNDLE_BYTES, parseExecutionBundle } from './execution.mjs';
 
 const commands = {
   doctor: {},
@@ -19,7 +18,6 @@ const commands = {
   'game-configs': { game: {} },
   assess: { input: {}, evidence: { multiple: true }, out: {} },
   'proposal-check': { input: {}, assessment: {}, evidence: { multiple: true }, select: { multiple: true } },
-  'execution-check': { input: {} },
   collect: { out: {} },
   'apps-services': { input: {}, out: {} },
   evidence: { input: {} },
@@ -37,7 +35,6 @@ const help = {
     'neurotune game-configs --game <all or game-id>',
     'neurotune assess --input <intake.json> --evidence <report.json> [--evidence ...] --out <new assessment.json>',
     'neurotune proposal-check --input <proposal.json> --assessment <assessment.json> --evidence <report.json> [--evidence ...] --select <all or step-id> [--select ...]',
-    'neurotune execution-check --input <execution-bundle.json>',
     'neurotune collect --out <new inventory.json>',
     'neurotune apps-services --input <native-snapshot.json> --out <new apps-services.json>',
     'neurotune evidence --input <inventory.json or frames.json or apps-services.json>',
@@ -46,8 +43,8 @@ const help = {
     'neurotune compare --baseline <before.json> [--baseline ...] --candidate <after.json> [--candidate ...]',
     'neurotune plan-check --input <plan.json> --evidence <report.json> [--evidence ...]'
   ],
-  policy: 'Assessment and proposal review are available; selections grant no execution authority. No provider calls, arbitrary commands, Apply or rollback. Report outputs require .json filenames without alternate data streams and never overwrite existing files.',
-  privacy: 'Except local-write receipts and doctor/help/goals/tools/game-configs, results contain user evidence in your harness context. Obtain sharing consent before reading intake, evidence, assessment, proposal or execution-bundle files.'
+  policy: 'This CLI only reads, analyzes and validates; it never changes the system. Applying user-confirmed steps happens through the harness tools, following references/apply.md. No provider calls or arbitrary commands. Report outputs require .json filenames without alternate data streams and never overwrite existing files.',
+  privacy: 'Except local-write receipts and doctor/help/goals/tools/game-configs, results contain user evidence in your harness context. Obtain sharing consent before reading intake, evidence, assessment or proposal files.'
 };
 
 try {
@@ -84,8 +81,6 @@ try {
       data = toolCapabilities();
     } else if (command === 'game-configs') {
       data = gameConfigReferences(values.game);
-    } else if (command === 'execution-check') {
-      data = parseExecutionBundle(await readText(values.input, MAX_BUNDLE_BYTES));
     } else if (command === 'assess' || command === 'proposal-check') {
       requireInput(values.evidence.length <= 20, 'At most 20 evidence reports.');
       const reports = await Promise.all(values.evidence.map(file => readJson(file, MAX_REPORT_BYTES)));

@@ -8,7 +8,7 @@
 
 <p align="center">
   <img alt="status" src="https://img.shields.io/badge/status-alpha-orange">
-  <img alt="mode" src="https://img.shields.io/badge/mode-read--only-critical">
+  <img alt="mode" src="https://img.shields.io/badge/changes-confirmed%20%2B%20backed%20up-yellow">
   <img alt="node" src="https://img.shields.io/badge/node-%3E%3D22-brightgreen">
   <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="platform" src="https://img.shields.io/badge/platform-Windows%2011-0078D6">
@@ -18,12 +18,13 @@
 
 NeuroTune is an [Agent Skill](https://www.anthropic.com/news/agent-skills) for Windows gaming stutter and performance investigations. It runs inside your existing AI coding harness (Claude Code, Pi, OpenCode, Codex, or anything that can load a skill and run local commands) instead of being its own app. The harness supplies the model, the conversation and the permissions; NeuroTune supplies a small, deterministic local CLI for inventory, frame-time analysis and evidence-linked tuning plans.
 
-**It does not apply anything.** NeuroTune investigates, cites evidence for every claim and produces a plan a human reviews — it has no system writer, no privileged broker and no Apply/rollback step. See [Not implemented](#not-implemented) for the exact boundary.
+**Nothing changes until you confirm.** NeuroTune investigates, cites evidence for every claim and shows a plan with risks and how far each step can be undone. You approve all, pick steps or say no. For each confirmed step the agent first saves the original state in a local session folder, then applies it with your harness's own tools, checks the result and tells you how to undo it. The bundled CLI itself never writes to the system.
 
 ## Contents
 
 - [Why](#why)
 - [How it works](#how-it-works)
+- [Does it help?](#does-it-help)
 - [What it does](#what-it-does)
 - [Not implemented](#not-implemented)
 - [Install](#install)
@@ -40,16 +41,35 @@ Most frontier models already roughly follow a sane investigation flow on their o
 
 ## How it works
 
-The skill walks a conversation through six steps, each gated on explicit consent, never run silently in a batch:
+The skill walks a conversation through seven steps, each gated on explicit consent, never run silently in a batch:
 
 1. **Scope and guide** — `doctor`/`goals`/`help` establish objectives and capabilities; at most two plain-language questions at a time.
 2. **Consent** — nothing is collected or shared without being asked first; collecting local inventory and sharing it into the model's context are two separate approvals.
 3. **Evidence** — every inventory, frame or app/service report is run through `evidence` and cited as `metric | value | full fact ID`, never pasted raw. Apps, services, startup items and drivers are read live through the harness's own command tool and worked through a fixed coverage checklist, so a category never gets silently skipped.
 4. **Measure** — imports PresentMon CSV or a single CapFrameX JSON run; it does not record captures itself.
 5. **Challenge** — states one plausible explanation plus at least one alternative, and names the measurement that would falsify it.
-6. **Assess and review** — produces an evidence-linked plan or intervention proposal for the human to approve, choose from, or reject; no step in that proposal is ever executed by the skill.
+6. **Assess and review** — produces an evidence-linked proposal with risk, restart needs and undo limits for each step; you approve all, choose steps, or reject.
+7. **Apply and verify** — for confirmed steps only: back up the original state, apply one step at a time, read it back, report before/after, no automatic reboot. Ask later to undo, and it restores from the saved state after checking what changed.
 
 Full workflow detail lives in [`skills/neurotune/SKILL.md`](skills/neurotune/SKILL.md).
+
+## Does it help?
+
+<p align="center">
+  <img src="assets/eval-results.svg" alt="Bar charts: cases passed and agent tokens per case, with and without the skill, for Claude Haiku 5.5 and DeepSeek V4.1 Flash" width="760">
+</p>
+
+Measured on 2026-11-03 with the eleven behavior cases in [`evals/`](evals/) (consent, prompt injection, invented evidence, unsupported measurements, shortcut requests, resumption), three runs each, with and without the skill:
+
+| Model | Cases passed, with / without | Agent tokens per case, with / without |
+|---|---|---|
+| Claude Haiku 5.5, effort medium (native judge, 3 votes) | **32/33** / 23/33 | 28.4k / 22.2k (+28%) |
+| DeepSeek V4.1 Flash (substitute DeepSeek judge, 1 vote) | **33/33** / 29/33 | 24.7k / 26.4k (−6%) |
+
+- **Where it matters:** without the skill, Haiku offered `reg add` commands as a workaround when a file claimed `approved=true` (3 of 3 runs), and both models failed to say plainly that a requested latency measurement was unsupported. With the skill loaded, those cases passed.
+- **Token cost:** on these short cases the skill costs about the same. A full investigation of a real PC (inventory, capture analysis, plan) with Haiku cost about **3× more** with the skill ($0.054 vs $0.018 for two turns), because it runs the CLI, reads its references and validates the plan. In return the plan cited exact evidence, and the confirmed change was backed up, verified and then undone byte for byte. Without the skill the plan was similar, but its backup was an unverified `.bak` copy.
+- **Apply and undo** were exercised end to end in a disposable Windows 11 VM (DeepSeek, five steps) and on a real PC (Haiku, one step); both returned the machine to its original state.
+- **Limits:** synthetic cases with restricted tools, 33 runs per arm, two models and one full investigation. This is not a performance benchmark: no game got faster in these tests. Details and raw-result locations are in [`docs/EVALUATION.md`](docs/EVALUATION.md).
 
 ## What it does
 
@@ -62,11 +82,12 @@ Full workflow detail lives in [`skills/neurotune/SKILL.md`](skills/neurotune/SKI
 - Live-read apps, background services, startup items and driver versions via the harness's own command tool, classified per machine (safe to remove / ask the user / never touch) — no bundled debloat list to go stale.
 - Live interrupt/DPC counters and IRQ-to-device mapping for stutter not explained by frame-time capture alone, with an optional LatencyMon pass or in-game PresentMon/FrameView capture for more precision.
 - Evidence-linked advisory plans and intervention-proposal review, including dependency checks on selected steps. Invented fact IDs are rejected.
+- Confirmed changes with a per-step backup and journal (Registry, services, Windows settings, scheduled tasks, startup items, game configs, apps, drivers), read-back verification and guided undo.
 - A self-contained Agent Skills directory, Pi package and Claude Code plugin manifest, plus a JSON CLI any tool-capable harness can call directly.
 
 ## Not implemented
 
-Apply/rollback, live ETW capture, a privileged broker, tool acquisition/installation, driver/firmware updates, MCP transport, GPU/BIOS tuning, security remediation, or automatic diagnosis outside a harness. Imported comparisons are descriptive, not proof an optimization worked. Read-only is the current runtime limit, not the destination — see [`docs/ROADMAP.md`](docs/ROADMAP.md) for what assessment-driven execution would require (genuine approval, recovery, authority gates).
+Live ETW capture, tool acquisition/installation, firmware/BIOS changes, MCP transport, security remediation, automatic reboots or diagnosis outside a harness. Imported comparisons are descriptive, not proof an optimization worked. Backups are what the agent saved: Registry values, service start types, settings and config files restore exactly; removed apps and drivers may not come back with their data. Apply/recovery has been exercised in a VM and on one real PC, not yet across failure paths such as denied elevation or an interrupted session — see [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Install
 
@@ -88,7 +109,7 @@ The copy installer writes to `<skills-dir>/neurotune` and never touches harness 
 /skill:neurotune Investigate stutter in my game. Collect locally first; ask before sharing hardware facts.
 ```
 
-Or in any harness without a slash command: *"Use the NeuroTune skill to compare these before/after PresentMon captures. Explain uncertainty; do not apply tweaks."*
+Or in any harness without a slash command: *"Use the NeuroTune skill to make Fortnite run smoother on my PC. Ask before reading anything private, show me the plan with risks, and back up before changing anything I approve."*
 
 The skill asks about symptoms and data sharing, selects relevant evidence, challenges its own explanation and produces a bounded next step — using the harness's current model and current command-permission settings, with no second permission system layered on top.
 
@@ -110,7 +131,7 @@ Output is a single JSON envelope (`{ "ok": true, "data": ... }` / `{ "ok": false
 
 ## Safety and privacy
 
-The local CLI has no arbitrary command endpoint and no system writer — it does not authenticate reports, sandbox the harness, or establish consent cryptographically. Run it from a non-admin harness session and review the harness's own tool permissions.
+The local CLI has no arbitrary command endpoint and no system writer — it does not authenticate reports, sandbox the harness, or establish consent cryptographically. Changes you confirm are made by the agent through your harness, so its permission mode is what actually limits it: investigate from a non-admin session, elevate only for confirmed changes, and try it on a machine you can restore before trusting it with one you can't.
 
 `collect` returns a receipt without hardware facts; later evidence/analysis output does enter the harness context, under that harness/provider's own retention policy. Data minimization is not anonymization — treat device strings and imported files as untrusted data. See [`SECURITY.md`](SECURITY.md).
 
@@ -122,7 +143,7 @@ The original desktop app's protected journals, approvals and rollback are a sepa
 skills/neurotune/     Installable, self-contained runtime and workflow
   SKILL.md             Small, harness-independent entry point
   scripts/             JSON CLI, pure analysis, Windows collector
-  references/          Guided assessment/review, inventory, measurement and plan formats
+  references/          Guided assessment/review, apply/undo, inventory, measurement and plan formats
 .claude-plugin/        Claude Code plugin metadata (no host-specific runtime)
 scripts/               Copy installer and verification tools
 tests/                 Unit, subprocess and installation tests

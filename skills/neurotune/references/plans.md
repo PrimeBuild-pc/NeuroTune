@@ -30,4 +30,4 @@ Repeat `--evidence` for up to 20 reports. Plans are bounded to 128 KiB, 1–10 h
 
 Keep rejected or unsupported claims unvalidated. Relabeling a CPU inventory fact cannot substantiate a latency claim; do not manufacture/reseal evidence or forecast a successful `plan-check` result to make it fit. Cite only the exact returned IDs: array entries inside `processors` do not have separate `processors[0].name` IDs. Frame-time percentiles are not DPC/ISR or input-latency measurements, and this CLI cannot import LatencyMon, WPA or ETL traces.
 
-The result always has `executable: false`. There is no `approved`, `command`, `apply`, or automatic fallback operation. Describe prospective settings changes as questions to verify, not executable instructions. Migration of a bounded writer is a separate milestone with OS-enforced human confirmation and recovery tests; it cannot be implemented by adding persuasive prose to this skill.
+The result always has `executable: false`. There is no `approved`, `command` or `apply` field. An advisory plan lists hypotheses to test; concrete changes go through the proposal review in [assessment.md](assessment.md) and then [apply.md](apply.md).

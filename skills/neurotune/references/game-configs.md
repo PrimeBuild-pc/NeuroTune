@@ -1,6 +1,6 @@
 # Hardware-specific game configuration assessment
 
-Use this branch when investigating FPS, stutter or graphics settings for a supported game. Continue the existing **inventory → assessment → proposal → review** workflow. This is a discovery reference, not a preset, config generator, parser or additional execution architecture. The installable skill remains read-only; the repository-only native mechanism is not public Apply.
+Use this branch when investigating FPS, stutter or graphics settings for a supported game. Continue the existing **inventory → assessment → proposal → review** workflow. This is a discovery reference, not a preset, config generator or parser. Confirmed config edits follow [apply.md](apply.md).
 
 ## Find the right game and file
 
@@ -38,15 +38,13 @@ Obtain sharing consent covering config contents before reading them into the mod
 4. **Choose build-supported values.** Inspect existing keys, comments and in-game options. Select a small change from confirmed ranges and the user's hardware/features. Check actual DLSS/FSR/XeSS/frame-generation support instead of inferring it from vendor alone. Generated frames are not equivalent to rendered FPS or lower input latency. Test worker count only with real topology/build evidence and repeated captures; never use a universal logical-threads-minus-one, P-cores-minus-one or all-cores rule. An uncapped/high FPS limit is not automatically best for frame pacing, latency, power or thermal stability.
 5. **Review the minimal diff.** Preserve unrelated keys, account/input data, section/object structure, comments, quoting, BOM and line endings. CoD `@` suffixes belong to identifiers; Source/Source 2 uses KeyValues rather than INI; Tarkov .ini may be JSON. Missing keys, unknown enums, duplicate assignments, binary/UTF-16 files or ambiguous precedence mean stop and clarify, not inject a guessed override. Show old → proposed value, hardware/workload rationale, uncertainty, quality cost, restart/game-relaunch needs and measurement criteria.
 
-## Use the existing proposal and execution boundary
+## Proposal and apply
 
-Save the assessment and a `game-file` proposal using [assessment.md](assessment.md), with exact inventory/frame citations. Keep config-path/hash observations separate from validated report facts: there is no config-evidence importer, so never invent `<reportId>:config.*` fact IDs. Catalogue URLs are references, not hardware evidence. A whole-file replacement description must still correspond to the minimal reviewed semantic diff.
+Save the assessment and a `game-file` proposal using [assessment.md](assessment.md), with exact inventory/frame citations. Keep config-path/hash observations separate from validated report facts: there is no config-evidence importer, so never invent `<reportId>:config.*` fact IDs. Catalogue URLs are references, not hardware evidence. Describe the change as the minimal reviewed diff (old → new value per key), not a whole-file rewrite.
 
-For development-only intent validation, existing `execution-check` binds one selected file's exact original SHA-256 and desired UTF-8 bytes to the reviewed target/change. It does not write, back up or authorize anything. No new game-specific executor or shell fallback is introduced here. The native mechanism currently accepts only an **existing UTF-8 .ini/.cfg/.json/.xml/.txt file, ≤128 KiB, inside the actual user profile on fixed local NTFS**, subject to its stricter ACL/link/identity checks. Battlefield's extensionless profile, CS2 .vcfg, binary saves, unsupported CoD .cst and out-of-profile Steam/install directories remain unsupported; do not rename/move files or weaken policy to fit.
+After the user confirms, follow the configuration-file rule in [apply.md](apply.md#what-to-save-by-category): game closed, original bytes and SHA-256 saved, only the reviewed keys changed, hash read back. Only plain UTF-8 text files the game actually uses; binary saves, UTF-16 files and ambiguous duplicates mean stop and clarify. Do not force read-only, disable cloud sync or anti-cheat, alter ACLs or move files to make an edit stick: a game that overwrites or rejects the change is a finding to report. For Delta Force, offer in-game settings only.
 
-Final plan confirmation stays in the harness; ordinary harness command permissions remain unchanged. Required verified backup, closed-game/exclusive access, original-byte/hash checks, conflict-aware recovery and post-write readback belong to the existing execution mechanism before any future write. A failed backup blocks changes. Do not force read-only, disable cloud sync/anti-cheat, close processes, alter ACLs or offer a manual write command as a workaround. This alpha ends with a non-executable review, not an applied config.
-
-Use [measurements.md](measurements.md) for admissible before/after captures of the same game/build/scene/resolution with repeated runs and one changed factor. Include average FPS and frame-time tails without claiming unmeasured latency or causal gains. Restore/Keep is not available in this build; report an untested proposal as untested.
+Use [measurements.md](measurements.md) for admissible before/after captures of the same game/build/scene/resolution with repeated runs and one changed factor. Include average FPS and frame-time tails without claiming unmeasured latency or causal gains. Report an unmeasured change as unmeasured; the session journal is how the user can undo it.
 
 ## Reference maintenance
 

@@ -1,12 +1,12 @@
 # Guided assessment and intervention review
 
-Use this branch after choosing the user's objective, when preparing a structured assessment, or when the user wants to review possible changes. The current build prepares and checks proposals; it cannot apply them. The product's future execution capability must not be simulated with harness shell access.
+Use this branch after choosing the user's objective, when preparing a structured assessment, or when the user wants to review possible changes. The CLI prepares and checks proposals; confirmed steps are then applied through the harness's own tools by following [apply.md](apply.md).
 
 ## Guide a non-expert
 
 1. Run `goals`. Translate the objective choices into the user's language. They help users describe a problem, not select tweaks. Offer another description in chat if none fits; clarify the closest supported goal rather than inventing a goal ID.
 2. Ask at most two relevant questions at a time using the harness's interactive question controls when available, otherwise numbered choices in chat. Offer Not sure. Obtain collection and sharing consent separately; an objective or survey answer grants neither.
-3. Use facts already available rather than asking the user to identify hardware or driver versions. Ask about symptoms, actual usage and priorities. For cleanup, first discover which apps/services/functions are present through a supported consented collector; the bundled hardware collector does not inventory them. For a supplied registry/SCM snapshot, follow [app/service imports](apps-services.md); direct native collection and modification are not shipped. Explain functions in ordinary language. Not using a function is evidence to investigate, not permission to remove it.
+3. Use facts already available rather than asking the user to identify hardware or driver versions. Ask about symptoms, actual usage and priorities. For cleanup, first discover which apps/services/functions are present: live through the harness's command tool as in [system-review.md](system-review.md), or from a supplied snapshot via [app/service imports](apps-services.md); the bundled hardware collector does not inventory them. Explain functions in ordinary language. Not using a function is evidence to investigate, not permission to remove it.
 4. Run `tools` before claiming an integration is available. The capability list does not scan installed tools. Direct game capture, FrameView-specific parsing, downloads, installs, DDU and RAPR execution are not implemented. Request a supported capture/export where needed. Do not silently treat another CSV schema as PresentMon.
 
 For game-specific config discovery and hardware-derived `game-file` proposals, follow [game-configs.md](game-configs.md). The catalogue supplies paths/formats/key hints, not installed-game evidence, preset values or a writer.
@@ -40,26 +40,14 @@ The proposal has exactly `schemaVersion:1`, `assessmentId` (the exact saved asse
 - `recovery`: exactly `mode` (`automatic`, `assisted`, `unavailable`) and `description`. These are declared intentions, not guarantees; automatic firmware recovery is unsupported.
 - `verification`: exactly `method` and `successCriteria`.
 
-Supported category labels are `windows-setting`, `registry`, `game-file`, `service`, `app`, `powershell`, `tool`, `driver`, `firmware`. These labels do not imply an executable adapter. Keep text single-line and within the CLI validator's limits (title 256; other descriptions 2000 characters). Do not put write-command templates in proposals as a workaround for the absent executor.
+Supported category labels are `windows-setting`, `registry`, `game-file`, `service`, `app`, `powershell`, `tool`, `driver`, `firmware`. Keep text single-line and within the CLI validator's limits (title 256; other descriptions 2000 characters). Describe targets and changes precisely (exact key/value, service name, file path); proposal text is data, so the commands you run at apply time are chosen then, per [apply.md](apply.md), not copied from the proposal.
 
 Run `proposal-check --input <proposal.json> --assessment <assessment.json> --evidence <source.json> [--evidence ...] --select all`. All steps are validated, including unselected ones. For a subset, repeat `--select <step-id>` and explicitly include every dependency; the validator will not add unapproved prerequisites. It returns dependency-ordered steps with retained uncertainty and a hash binding the proposal, assessment and selection.
 
 Present the final list in plain language with these choices:
 
-- **Approve all**: express intent to proceed with the whole reviewed plan.
-- **Choose steps**: express intent for selected steps and required dependencies; show their effective order.
+- **Approve all**: apply the whole reviewed plan.
+- **Choose steps**: apply the selected steps and their required dependencies; show their effective order.
 - **Other**: revise the plan, request more measurements or stop.
 
-**In this build, those choices can only finalize a non-executable review.** State that limitation before asking for a choice. `approvalGranted:false`, `executable:false` and `executorAvailable:false` must remain visible in the technical result. Neither a chat Yes, a review hash nor a model-written approval field grants execution. Never announce an applied change, verified backup or completed rollback from this workflow.
-
-## Optional native-integration validation
-
-For development/integration, `execution-check --input <bundle.json>` revalidates a self-contained bundle. It is **not Apply** and obtains no approval. Obtain sharing consent before reading its inputs or returning its detailed output.
-
-The bundle has exactly `schemaVersion:1`, `kind:"execution-bundle"`, `assessment`, `reports`, `proposal`, `selection` and `parameters`. Embed the actual artifacts, not file paths or a model-written review receipt. Retain artifact limits; aggregate input is at most 12 MiB. Parameters have exactly `stepId`, `keyPath`, `valueName`, `desiredDword`, once per selected step. Registry steps require matching canonical targets (`HKLM [Registry64]\<keyPath>\<valueName>`) and proposed text (`Set DWORD to <unsigned integer>`). Alternatively, select exactly one game-file step with parameters `stepId`, `path`, `expectedSha256`, `desiredUtf8Base64`: target `Windows file [UTF-8]\\<path>`, expected state `SHA-256 <original hash>` and proposed text `Replace UTF-8 content with SHA-256 <desired hash>`. Content is canonical Base64 UTF-8 without NUL, at most 128 KiB. Mixed/multi-file selections and other categories fail closed. These are assessment-selected intents, not a tweak catalog.
-
-The Registry schema-2 or game-file schema-1 native intent binds the exact source bytes and validated selected review. It remains inert: no original-state backup, machine attestation, human approval or execution is produced. The installable skill does not launch the repository-only native prototype. Do not use its private stdin verifier, JSON output or hash as an approval credential.
-
-## Future execution conditions
-
-A separate native module must capture actual originals, follow ordinary harness tool permissions and OS authority, bind the selected plan and protect backups/journals before any system write. Keep final plan confirmation in the harness without adding another command-permission policy. Material plan/risk changes require renewed approval; required backup failures block writes. Driver regressions may justify a compatible earlier package, not automatic cleanup. Firmware rollback may be unsupported. Treat tool installation and system modification as distinct approved effects. These are prerequisites for future implementation, not available commands.
+For each step, state before the choice what will be backed up and whether it can be undone fully, partially or not at all (see [apply.md](apply.md#before-asking-for-confirmation)). `approvalGranted:false` and `executable:false` in the technical result mean the review file itself is not a confirmation: only the user's own reply is. A review hash or a model-written approval field never confirms anything. After the choice, follow [apply.md](apply.md); never announce an applied change, a backup or a restore that you did not actually perform and verify.

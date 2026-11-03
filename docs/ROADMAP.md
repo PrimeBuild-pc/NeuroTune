@@ -4,7 +4,7 @@ Each milestone has a usable result and a release gate. Maintain one owner for co
 
 ## Active assessment-to-execution build
 
-Read-only is a foundation, not the final product: an Apply/recovery path is a future direction, to be designed and scoped separately when that work starts. Objective presets never select predefined tweaks. These milestone gates remain in force; implementation progress is not privileged or model acceptance.
+The investigation is the foundation; confirmed changes are applied by the agent with per-step backups and verification ([ADR 0002](decisions/0002-agent-applied-changes.md)). Objective presets never select predefined tweaks. These milestone gates remain in force; implementation progress is not privileged or model acceptance.
 
 ## Current platform and interaction scope
 
@@ -35,9 +35,16 @@ Completed: real Pi explicit/package discovery, Claude Code strict plugin validat
 
 Gate: documented model/harness matrix and repeated evaluation results. Static skill lint is not model-behavior certification.
 
-## Future — Apply
+## M2 — Apply and recovery qualification (instructions written)
 
-An Apply/recovery path (actual system writes, reviewed and backed up, with rollback) is the acknowledged next direction once the investigation workflow above is solid, but it is not yet designed. It will need its own scoping pass: what single narrowly-reversible action class to start with, how backup/verification/rollback work without a separate NeuroTune permission system, and how it stays bound to the harness's own tool-approval step rather than a model-authored "yes". See [ADR 0001](decisions/0001-skill-first.md) for why this project is a skill rather than a standalone app with its own execution engine.
+Done: [references/apply.md](../skills/neurotune/references/apply.md) — disclosure before confirmation, confirmed scope only, session directory and journal, per-category backup material (Registry, services, settings, scheduled tasks, startup items, config files, apps, drivers), one command per action, read-back verification, honest report, no automatic reboot, recovery and resume.
+
+Open:
+
+- Trials in the disposable Windows VM only (`NeuroTune-W11`, reset to its clean checkpoint afterwards): backup → apply → verify → restore for each category, plus failure paths (denied elevation, failed backup, changed state before restore, interrupted session).
+- Add a small helper script only where a trial shows the instructions are not enough.
+
+Gate: per-category VM results with journals and before/after state kept outside Git. M1 investigation results do not qualify Apply.
 
 ## Parallel work rules
 

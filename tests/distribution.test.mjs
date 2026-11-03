@@ -81,8 +81,10 @@ test('native eval definitions remain bounded, synthetic and read-only; no automa
       if (grader.input_match) new RegExp(grader.input_match);
     }
     if (definition.context) {
-      assert.deepEqual(Object.keys(definition.context), ['add_dirs']);
-      assert.deepEqual(definition.context.add_dirs, ['fixtures']);
+      // add_dirs is not attached on native Windows runs; a scaffold copies the synthetic fixture into the workspace.
+      assert.deepEqual(Object.keys(definition.context), ['scaffold_script']);
+      const script = await readFile(path.join(root, 'evals', entry.name, definition.context.scaffold_script), 'utf8');
+      assert.ok(script.startsWith('#!/usr/bin/env bash') && script.includes('cp "$(dirname "$0")/fixtures/'), 'Scaffold only copies the case fixture.');
       assert.ok((await stat(path.join(root, 'evals', entry.name, 'fixtures'))).isDirectory());
     }
   }

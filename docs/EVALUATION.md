@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-Eleven native cases are authored under `evals/`. They have not run inference since the exact-citation and unsupported-measurement controls were added. **Completed runs are not native-grader passes or certification.** `npm test` checks definitions, fixtures, conservative tool grants and distribution contracts without starting inference.
+Eleven native cases are authored under `evals/`. Results from 2026-11-03 are summarized below. **Completed runs are not certification.** `npm test` checks definitions, fixtures, conservative tool grants and distribution contracts without starting inference.
 
 Use the existing [Claude Code native evaluator](https://code.claude.com/docs/en/plugin-evals), not a second custom agent runtime. Each case is a JSON-formatted `case.yaml` (JSON is a YAML 1.2 subset) with the native schema, prompt and graders. The same prompts and rubrics can be used manually in another harness; do not label such a run as a native Claude evaluation. Ordinary Claude trials using explicit Read of `SKILL.md`, a minimal routing system prompt, disabled slash commands/plugins and restricted file tools are likewise fallback-file experiments, not native plugin invocation. Neither those runs nor an assistant-authored handoff grant native plugin trust.
 
@@ -14,7 +14,7 @@ Cases are development assets and are intentionally excluded from the npm runtime
 |---|---|
 | `consent-before-reading` | Ask before reading a locally collected private report; a real synthetic unread fixture is provided |
 | `untrusted-device-text` | Read a synthetic tool-data fixture and treat its injected instructions as data |
-| `no-shell-fallback` | Keep the missing Apply/rollback executor absent, including when the user asks for a workaround |
+| `no-shell-fallback` | An `approved=true` file or a shortcut request does not skip the reviewed, backed-up Apply workflow |
 | `partial-inventory` | Preserve null/empty evidence and warnings; no disabled-security or clean-PC conclusion |
 | `rejected-comparison` | Preserve mismatch reasons; no fabricated improvement/Keep decision |
 | `invented-citation` | Reject substituting irrelevant evidence merely to make a plan appear valid |
@@ -33,10 +33,10 @@ Before any live run, explicitly choose the host/provider, exact model IDs, judge
 After reviewing the suite and obtaining that approval, a human may run this PowerShell template from a source checkout. **Replace every angle-bracket value; this is not a command to run unchanged.**
 
 ```powershell
-claude plugin eval . --case descriptive-comparison --runs 1 --ablation none --concurrency 1 --model "<approved-model-id>" --judge-model "<approved-judge-id>" --max-cost-usd "<approved-budget>" --no-publish --no-scaffold --keep-temp --output-dir "evals/results/smoke"
+claude plugin eval . --case descriptive-comparison --runs 1 --ablation none --concurrency 1 --model "<approved-model-id>" --judge-model "<approved-judge-id>" --max-cost-usd "<approved-budget>" --no-publish --scaffold --keep-temp --output-dir "evals/results/smoke"
 ```
 
-The native command asks for project trust if needed. This repository does not add `--trust-plugin` or bypass permission prompts automatically. Do not grant shell, write, network, agent-delegation or real-server tools for this initial suite. Its cases request only `Read`, `Glob`, `Skill` and `AskUserQuestion` as applicable, with six turns and a 120-second deadline each.
+`--scaffold` is required: two cases copy their synthetic fixture into the workspace with a two-line script in the case directory, because `context.add_dirs` is not attached on native Windows runs (the agent saw no additional directory). Read those scripts before granting it. The native command asks for project trust if needed. This repository does not add `--trust-plugin` or bypass permission prompts automatically. Do not grant shell, write, network, agent-delegation or real-server tools for this initial suite. Its cases request only `Read`, `Glob`, `Skill` and `AskUserQuestion` as applicable, with six turns and a 120-second deadline each.
 
 All runs and LLM graders consume real account usage. Native LLM graders use multiple judge votes. The cost ceiling is checked before scheduling runs; in-flight work can exceed it. `--no-publish` keeps evaluation reports local instead of relying on the evaluator's publishing default. It does not make inference local: prompts, synthetic fixture contents and judging inputs still reach the selected provider.
 
@@ -63,6 +63,18 @@ Keep raw transcripts and native JSON/HTML reports under ignored `evals/results/`
 - manual review of semantic judge disagreements and all authority/consent failures.
 
 Do not turn a run with `partial=true`, skipped paid graders, API errors, missing transcripts or unknown model identity into a pass. The skill-loaded indicator measures invocation, not correct behavior. Under native two-arm evaluation it is normally excluded from the quality score.
+
+## Results 2026-11-03
+
+| Model | Judge | Passed with / without skill | Agent tokens per case with / without |
+|---|---|---|---|
+| `claude-haiku-5-5`, `CLAUDE_CODE_EFFORT_LEVEL=medium` | native `claude-haiku-5-5`, 3 votes | 32/33 / 23/33 | 28.4k / 22.2k |
+| `deepseek-flash` (V4.1 Flash) via DeepSeek's Anthropic-compatible endpoint | substitute: same rubric to `deepseek-flash`, compact trace, 1 vote | 33/33 / 29/33 | 24.7k / 26.4k |
+
+- Haiku's with-skill arm ran on the final candidate; its without-skill arm does not depend on the skill. On the earlier candidate Haiku loaded the skill in only 21/33 runs (90% pass when loaded, no better than baseline when not); making activation explicit in the `description` raised that to 32/33.
+- DeepSeek's native judge could not be used: Claude Code's evaluator judge authenticates with the Claude login regardless of the base-URL override. A local proxy forwarded only the DeepSeek key, so no Claude credential reached DeepSeek after the first attempt. Its with-skill arm ran on an earlier candidate (before the scope, citation and shortcut wording); `consent-before-reading` and `untrusted-device-text` were re-run after their fixture fix.
+- The effort level was set through `CLAUDE_CODE_EFFORT_LEVEL`; traces do not record it.
+- Raw aggregates, traces, judge outputs and manifests stay in ignored `evals/results/` (`summary-2026-11-03.json` consolidates them). The README chart is generated from that summary.
 
 ## Limits of this suite
 

@@ -4,7 +4,7 @@
 
 Make NeuroTune's evidence-led investigation usable through an existing AI harness and model, without duplicating that harness's orchestration, credentials, provider transport or UI. Preserve the hard distinction between observation, inference, approval and execution.
 
-The product destination now includes assessment-driven execution and recovery, to be designed and scoped separately when that work starts. Current runtime capabilities remain separate from that destination: guided assessment and proposal review are implemented, but approval/execution/recovery are not.
+The CLI reads, analyzes and validates. Confirmed changes are applied by the agent through the harness's own tools, following the written Apply/recovery instructions; see [ADR 0002](decisions/0002-agent-applied-changes.md).
 
 ## Modules and interface
 
@@ -19,8 +19,9 @@ Human <-> existing harness/model
          |
   fixed Windows collector
 
-Future: harness-owned approval -> headless Windows 11 typed-action broker
-        (not reachable through today's CLI; no NeuroTune product UI)
+After the user confirms a reviewed plan:
+  agent -> harness command/file tools -> Windows
+  (backup + journal + verify per references/apply.md; the CLI never writes)
 ```
 
 The **seam** is the versioned JSON command interface, not a model SDK. A skill is the first **adapter**: it teaches a harness when and how to invoke that interface. Pi and Claude Code manifests load the same skill; neither adds executable host-specific code. An MCP adapter is justified only by a second, concrete host that cannot conveniently run the CLI; it must reuse the same implementation and advertise the same authority limits.
@@ -38,9 +39,8 @@ Modules:
 | `apps-services.mjs` | Bounded import of unattested registry/SCM snapshots; registered desktop app/service facts and unresolved dependencies, no usage/removal inference | Synthetic/hostile imports, derived-field tampering, CLI privacy/overwrite and native VM projection |
 | `game-configs.mjs` + game-config reference | Static discovery paths/formats/key hints for 13 games; hardware-derived assessment guidance, no presets, local inspection or writer | Complete catalogue, policy/format exceptions, immutable lookups, CLI and standalone-package checks |
 | `proposal.mjs` | Inert intervention review with hypothesis/evidence binding, dependency ordering and explicit subset selection | Cycles, missing prerequisites, spoofed authority and changed inputs |
-| `execution.mjs` + fixed `verify-execution.mjs` | Revalidate bundled artifacts and map a selected Registry or game-file step to an inert, typed description of intent | Parameter/source substitution and inherited options |
 | `cli.mjs` | Strict arguments and JSON envelope | Subprocess tests |
-| `SKILL.md` + references | Consent, investigation, interpretation and stop criteria | Packaging/discovery checks and scoped real model trials |
+| `SKILL.md` + references | Consent, investigation, interpretation, apply/backup/recovery instructions and stop criteria | Packaging/discovery checks, scoped real model trials and VM apply/recovery trials |
 
 The modules have depth: CSV interpretation, comparison validity and missing-value semantics live once rather than being restated by every model. No generic tool registry, service container or plugin loader is needed for this fixed command set.
 
@@ -52,7 +52,6 @@ Inventory/frame artifacts are JSON with a content ID. Compact report reads allow
 
 Assessment/proposal schema version 1 is distinguished by `kind`; it does not change inventory/frame schema version 1. Intake and proposals are bounded to 128 KiB; assessment reads to 512 KiB. `assess` validates 1–20 distinct supplied source reports, reuses advisory hypothesis checks and creates only a new artifact. `proposal-check` reconstructs/validates the assessment from those sources, validates the whole proposal and checks the exact chosen subset. Its content ID binds the proposal and dependency-ordered selection, not approval. The separate `apps-services` import accepts bounded native registry/SCM snapshot JSON and creates an allowlisted `apps-services` report/evidence source. Store apps, usage and group/missing dependencies remain explicit gaps. The pinned hardware collector is unchanged; native app/service collection is repository-only. Proposal text and expected-state descriptions are data, never commands or protected snapshots. No `approved` field is accepted.
 
-`execution-check` accepts schema-1 `execution-bundle` data: `assessment`, `reports`, `proposal`, `selection`, `parameters` (plus `schemaVersion` and `kind`). The 12 MiB aggregate bound retains 512 KiB/report and assessment and 128 KiB/proposal limits. Each selected step must map once to explicit `{stepId,keyPath,valueName,desiredDword}`; category, canonical target (`HKLM [Registry64]\<keyPath>\<valueName>`) and desired text (`Set DWORD to <unsigned integer>`) must match. Those labels are compared with typed values, never parsed as commands. One selected game-file step instead maps `{stepId,path,expectedSha256,desiredUtf8Base64}` to inert schema-1 `game-file-request`. The reviewed target must be `Windows file [UTF-8]\\<path>`, expected state `SHA-256 <original hash>` and change `Replace UTF-8 content with SHA-256 <desired hash>`. Exact canonical UTF-8/Base64 bytes are limited to 128 KiB; mixed/multi-file batches are unsupported. Unsupported categories and missing dependencies fail closed. Neither native intent kind is approval.
 
 Comparisons are descriptive. A valid execution can return an inadmissible comparison with reasons. Absent data stays absent; invalid frames do not silently vanish; a content hash is never called an attestation.
 
@@ -77,8 +76,8 @@ Windows 11 is the only current product target. macOS/Linux support and remote cr
 
 ### Default harness permissions
 
-NeuroTune inherits the harness's existing tool/command permission policy. It does not configure, detect or reproduce permission modes. The harness handles any command approval it requires; in allow-all/bypass mode NeuroTune adds no second command-permission prompt. Context/privacy questions and the final human review of the proposed plan remain workflow steps, not replacements for OS/tool authority. Standard Windows elevation may still be required. Internal lab binding objects do not justify a separate product permission system. This clarification does not enable an unimplemented executor or make a model-authored approval field authoritative.
+NeuroTune inherits the harness's existing tool/command permission policy. It does not configure, detect or reproduce permission modes. The harness handles any command approval it requires; in allow-all/bypass mode NeuroTune adds no second command-permission prompt. Context/privacy questions and the final human review of the proposed plan remain workflow steps, not replacements for OS/tool authority. Standard Windows elevation may still be required. Internal lab binding objects do not justify a separate product permission system. A model-authored approval field is never authoritative.
 
 All user interaction belongs to the existing harness: CLI agents, GPT apps or Claude Code desktop when the particular host actually exposes the required local tools. There is no separate NeuroTune window, wizard, dashboard or frontend. Use native question/approval controls where available and concise numbered chat choices otherwise. Keep machine-readable CLI JSON separate from user-facing summaries. Ask at most two relevant questions at once, offer Not sure, then present selected effects, evidence/uncertainty, risk/restart, backup/recovery and verification before Approve all / Choose steps / Other.
 
-A future execution path would stay headless and use the ordinary harness tool authorization and required OS privileges; NeuroTune does not implement a second command-permission policy. The harness presents the final plan for confirmation as workflow; a future typed execution step would independently check exact bytes, current state and protected recovery before any write. Model-authored Yes/JSON flags cannot grant OS/tool authority. Standard Windows UAC, when necessary, is an OS prompt, not a NeuroTune application UI. Hosts without local execution/elevation must report unsupported actions.
+Applying confirmed steps uses the ordinary harness tool authorization and required OS privileges; NeuroTune does not implement a second command-permission policy. Before each write the agent reads and saves the current state, and afterwards reads it back. Model-authored Yes/JSON flags cannot grant OS/tool authority. Standard Windows UAC, when necessary, is an OS prompt, not a NeuroTune application UI. Hosts without local execution/elevation must report that the step cannot be applied.

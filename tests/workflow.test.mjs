@@ -149,7 +149,7 @@ test('proposal review binds exact inputs and subset without granting approval', 
   const review = reviewProposal(proposal, assessment, [report], ['all']);
   assert.equal(review.executable, false);
   assert.equal(review.approvalGranted, false);
-  assert.equal(review.executorAvailable, false);
+  assert.equal('executorAvailable' in review, false);
   assert.deepEqual(review.selectedStepIds, ['synthetic-step']);
   assert.equal(review.steps[0].uncertainty, assessment.hypotheses[0].uncertainty);
   assert.equal(review.proposalId, seal(proposal).id);
