@@ -1,6 +1,6 @@
 # Source provenance
 
-Original project: https://github.com/PrimeBuild-pc/NeuroTune
+Original project: the NeuroTune desktop app by PrimeBuild (retired). Its source history is not published; github.com/PrimeBuild-pc/NeuroTune now hosts this skill.
 
 Source revision: `15db2ed7c056fcbb70fca316a2a090c2d7f7f21b`
 

@@ -1,0 +1,26 @@
+name: Bug report
+description: A CLI error, a wrong analysis, an install problem or a broken instruction.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps or command to reproduce
+      description: For CLI problems, the exact command and the JSON error it printed. Use synthetic data if you can.
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      placeholder: "NeuroTune 0.2.0-beta.1, Node 22.x, Windows 11 build ..., harness ..."
+    validations:
+      required: true

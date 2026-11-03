@@ -1,6 +1,6 @@
 # Security and privacy boundaries
 
-NeuroTune is an alpha skill. Its CLI only reads, analyzes and validates. System changes are made by the agent through the harness's own tools, only after a reviewed plan and the user's confirmation, with the original state saved first (see [references/apply.md](skills/neurotune/references/apply.md)). These are written instructions, not an enforced sandbox.
+NeuroTune is a beta skill. Its CLI only reads, analyzes and validates. System changes are made by the agent through the harness's own tools, only after a reviewed plan and the user's confirmation, with the original state saved first (see [references/apply.md](skills/neurotune/references/apply.md)). These are written instructions, not an enforced sandbox.
 
 ## Actual authority
 
@@ -52,4 +52,4 @@ This project does not share the earlier desktop app's legacy journals or provide
 
 ## Reporting issues
 
-This project is local and not yet published. Report suspected vulnerabilities privately to the maintainer; share a minimized synthetic reproducer, not personal hardware reports, credentials or full traces. Do not treat a future build badge as hardware or privilege-boundary acceptance.
+Report suspected vulnerabilities privately through GitHub: **Security → Report a vulnerability** on [PrimeBuild-pc/NeuroTune](https://github.com/PrimeBuild-pc/NeuroTune/security/advisories/new). Do not open a public issue for them; share a minimized synthetic reproducer, not personal hardware reports, credentials or full traces. Do not treat a future build badge as hardware or privilege-boundary acceptance.

@@ -46,6 +46,10 @@ Do as much as practical to support reversibility without pretending every operat
 
 The logs further below are historical; their versions, case counts and test totals are not current qualification results.
 
+## Release 0.2.0-beta.1
+
+First public beta: version bumped in package, plugin, skill and CLI; README beta warning, copy-paste prompt and corrected provenance (the old desktop app's history is not published at this repository); SECURITY points to GitHub private vulnerability reporting; CHANGELOG and issue templates (session report, bug report) added. Released from branch `release/0.2.0-beta.1` through a pull request, tagged `v0.2.0-beta.1` and published as a GitHub pre-release. Not published to npm.
+
 ## Session 2026-11-03: status per checklist item
 
 Uncommitted working tree on top of `03ba9f4`. Raw results, traces, judge outputs and candidate SHA-256 manifests are in ignored `evals/results/` (`summary-2026-11-03.json` consolidates them).
