@@ -46,6 +46,16 @@ Do as much as practical to support reversibility without pretending every operat
 
 The logs further below are historical; their versions, case counts and test totals are not current qualification results.
 
+## Session 2026-11-04: Apply trial of the 0.3.0 categories in the VM
+
+Claude (Opus 5.5) acted as the agent through PowerShell Direct, following `apply.md` step by step (no paid model call). Script, journals and state are in ignored `evals/results/vm-apply-2026-11-04/`. VM reset to `Clean-NeuroTune-Alpha2` afterwards and checked clean.
+
+- **Full session, 8 steps:** disable a device (GS Wavetable Synth; the Gen2 VM has no PCI or audio devices), MSI + affinity + priority values on the netvsc instance (keys originally absent), network adapter `*LsoV2IPv4`, BCD `useplatformclock` leftover (set up beforehand), Memory Integrity off, unused-driver removal, Store app removal (BingWeather), grouped services (SysMain, MapsBroker, WSearch) and tasks. 7 verified; the driver step was refused by Windows because the package is in use, and left as `apply.md` says. Restore points were really created (checked with `Get-ComputerRestorePoint`).
+- **After a normal restart:** every change still in effect, HVCI really off, network working. After reverse-order restore and a restart: all 8 targets match **Before**, HVCI running again, app re-registered from its staged package at the same version.
+- **Failure paths:** *interrupted apply* (process killed after the network change, before the journal result): journal said `pending`, the actual state showed it applied, restore was exact. *Changed state before restore* (device re-enabled by "another tool"): detected, step left untouched. *Denied elevation* (standard local user): every command failed visibly and nothing changed. *Failed backup* (missing folder): `pnputil` exit 3, `reg`/`bcdedit` exit 1. `schtasks … | Set-Content` only writes a non-terminating error, so the "check the file exists" rule is what catches it.
+- **Fixed in `apply.md`:** delete the parent keys you created (an empty `Interrupt Management` key was left behind); `pnputil` export does not fail silently; check elevation first (`Disable-PnpDevice` says only "Generic failure"); report says to do a normal restart (a forced `Restart-VM` reset lost the service start-type changes made two minutes earlier) and to check the network with TCP, not ping.
+- **Still open:** the same trial run by a model reading the skill (this run tests the procedure, not model behavior); real PCI MSI and audio endpoints on hardware; deleting a driver that is really unused; `report.md` content.
+
 ## Release 0.3.0-beta.1: full system analysis
 
 The default workflow is now: consent once → full read-only analysis → connected findings and audit → interactive questions → Conservative/Balanced/Maximum presets built from this machine's findings, approved as is or edited by number → apply with backups → `report.md` → restore or fix after the restart.
