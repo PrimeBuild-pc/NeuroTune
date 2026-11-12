@@ -174,6 +174,12 @@ npm run pack:local      # build an offline-installable npm archive
 
 `npm test` uses synthetic data only; live collection is opt-in. See [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) for the exact per-OS/Node test matrix, and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) / [`docs/decisions/0001-skill-first.md`](docs/decisions/0001-skill-first.md) / [`docs/ROADMAP.md`](docs/ROADMAP.md) before expanding scope.
 
+## Support the project
+
+NeuroTune is free and open source. If it helps you, you can support its development:
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/Y6U02AIRB8) [![PayPal](https://img.shields.io/badge/Support-PayPal-0070BA?logo=paypal&logoColor=white)](https://paypal.me/PrimeBuildOfficial)
+
 ## License and provenance
 
 MIT licensed — see [`LICENSE`](LICENSE). No proprietary AMD component or vendor tool is bundled. [`NOTICE.md`](NOTICE.md) records exactly what numerical logic was reused from the retired MIT-licensed NeuroTune desktop project and under what terms.
