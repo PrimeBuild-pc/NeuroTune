@@ -35,13 +35,14 @@ Completed: real Pi explicit/package discovery, Claude Code strict plugin validat
 
 Gate: documented model/harness matrix and repeated evaluation results. Static skill lint is not model-behavior certification.
 
-## M2 — Apply and recovery qualification (instructions written)
+## M2 — Apply and recovery qualification (procedure trialled in the VM)
 
-Done: [references/apply.md](../skills/neurotune/references/apply.md) — disclosure before confirmation, confirmed scope only, session directory and journal, per-category backup material (Registry, services, settings, scheduled tasks, startup items, config files, apps, drivers), one command per action, read-back verification, honest report, no automatic reboot, recovery and resume.
+Done: [references/apply.md](../skills/neurotune/references/apply.md) — disclosure before confirmation, confirmed scope only, session directory and journal, per-category backup material (Registry, services, settings, scheduled tasks, startup items, config files, apps, drivers, devices, MSI/affinity, network adapter settings, BCD leftovers, VBS/HVCI), one command per action, read-back verification, `report.md`, no automatic reboot, recovery and resume. VM trial (2026-11-04): backup → apply → restart → restore for every category, plus interrupted apply, changed state before restore, denied elevation and failed backup ([HANDOFF.md](HANDOFF.md)).
 
 Open:
 
-- Trials in the disposable Windows VM only (`NeuroTune-W11`, reset to its clean checkpoint afterwards): backup → apply → verify → restore for each category, plus failure paths (denied elevation, failed backup, changed state before restore, interrupted session).
+- The same trial driven by a model reading the skill, not by a scripted agent.
+- PCI MSI and audio endpoints on real hardware; deleting a really unused driver.
 - Add a small helper script only where a trial shows the instructions are not enough.
 
 Gate: per-category VM results with journals and before/after state kept outside Git. M1 investigation results do not qualify Apply.

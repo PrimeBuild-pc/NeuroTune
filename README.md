@@ -88,7 +88,7 @@ Measured on 2026-11-03 on version 0.2.0-beta.1 (before the full-analysis workflo
 
 ## Not implemented
 
-General ETW/WPA analysis beyond DPC/ISR timing, tool acquisition/installation, vendor driver installation, firmware/BIOS changes, MCP transport, security remediation, automatic reboots or diagnosis outside a harness. Imported comparisons are descriptive, not proof an optimization worked. Backups are what the agent saved: Registry values, service start types, settings and config files restore exactly; removed apps and drivers may not come back with their data. Apply/recovery has been exercised in a VM and on one real PC, not yet across failure paths such as denied elevation or an interrupted session — see [`docs/ROADMAP.md`](docs/ROADMAP.md).
+General ETW/WPA analysis beyond DPC/ISR timing, tool acquisition/installation, vendor driver installation, firmware/BIOS changes, MCP transport, security remediation, automatic reboots or diagnosis outside a harness. Imported comparisons are descriptive, not proof an optimization worked. Backups are what the agent saved: Registry values, service start types, settings and config files restore exactly; removed apps and drivers may not come back with their data. Apply and restore of every change category, and the failure paths (interrupted apply, state changed before restore, denied elevation, failed backup), were trialled in a disposable Windows 11 VM; on real hardware only one confirmed step has been applied and undone so far — see [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Install
 
