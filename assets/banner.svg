@@ -18,7 +18,4 @@
   <text x="305" y="143" text-anchor="middle" dominant-baseline="middle"
         font-family="Consolas, 'Courier New', monospace" font-size="15" letter-spacing="3"
         fill="#9fb3c8">&gt; EVIDENCE-LED WINDOWS PERFORMANCE INVESTIGATION_</text>
-  <rect x="537" y="134" width="9" height="16" fill="#7af9ff">
-    <animate attributeName="opacity" values="1;1;0;0;1" keyTimes="0;0.45;0.5;0.95;1" dur="1.4s" repeatCount="indefinite"/>
-  </rect>
 </svg>

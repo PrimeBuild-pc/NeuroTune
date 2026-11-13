@@ -6,6 +6,8 @@ NeuroTune is a beta. The most useful contribution right now is a report of how a
 
 - **A session, good or bad:** open a [session report](https://github.com/PrimeBuild-pc/NeuroTune/issues/new?template=session-report.yml). Say which harness and model you used, what you asked, what the skill found and what it changed.
 - **Something broke:** open a [bug report](https://github.com/PrimeBuild-pc/NeuroTune/issues/new?template=bug-report.yml). If a change went wrong, say whether undo worked and keep the session folder until the issue is closed.
+- **A question or an idea:** use [Discussions](https://github.com/PrimeBuild-pc/NeuroTune/discussions).
+- **Want to code?** Start with a [good first issue](https://github.com/PrimeBuild-pc/NeuroTune/labels/good%20first%20issue) or a [testing request](https://github.com/PrimeBuild-pc/NeuroTune/labels/testing).
 - **A security problem:** report it [privately](https://github.com/PrimeBuild-pc/NeuroTune/security/advisories/new), not as a public issue.
 
 Remove anything private before posting: user names, serial numbers, account IDs, paths with your name. Do not paste full hardware reports.
