@@ -7,6 +7,10 @@
 </p>
 
 <p align="center">
+  <img src="assets/demo.gif" alt="Animated demo of an illustrative NeuroTune session in a terminal: install the plugin, ask to make Fortnite run smoother, consent to a read-only analysis of 14 areas, see connected findings, pick the Balanced preset, apply each step with backup and verification, then example before/after gauges for DPC latency, background processes and frame-time consistency. Values are illustrative." width="800">
+</p>
+
+<p align="center">
   <img alt="status" src="https://img.shields.io/badge/status-beta-orange">
   <img alt="mode" src="https://img.shields.io/badge/changes-confirmed%20%2B%20backed%20up-yellow">
   <img alt="node" src="https://img.shields.io/badge/node-%3E%3D22-brightgreen">
