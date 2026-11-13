@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.3.0-beta.2 — 2026-11-13
+
+Fixes from the VM Apply trial of the 0.3.0 categories and from a release-readiness review ([docs/review/fable-2026-11-13.md](docs/review/fable-2026-11-13.md)).
+
+### Fixed
+
+- Defender, Edge update, Office and other Microsoft services are no longer listed as third-party cleanup candidates; they are in a new `services.microsoftActive` list.
+- Account SIDs and `COMPUTER\user` task authors are removed from the scan summary sent to the model.
+- Driver backups go to one folder per package, so two versions of the same driver can no longer overwrite each other's backup; restore re-adds only that package.
+- A backup must exist and be non-empty; an empty file from a failed `>` export no longer counts.
+- Restore leaves alone any target that something else changed since the apply, and shows the user the three states.
+- `bcdedit` commands quote `"{current}"`, which PowerShell otherwise passes as a script block.
+- A latency trace no longer fails when the summary has no events-lost line; a session left running by a killed trace is explained, with the command that stops it.
+- Per-user steps are not applied when the harness is elevated as a different administrator account.
+- Config files are edited with the file tool, keeping encoding, BOM and line endings.
+- The scan summary no longer reports a missing security update or background-app finding when that section was not collected (`security_update_date_unknown`).
+- Apply instructions from the VM trial: delete parent keys you created, check elevation first, ask for a normal restart, check the network with TCP.
+
+### Changed
+
+- The agent never downloads or installs anything; it gives the official page instead.
+- Visual C++, .NET, DirectX, WebView2, Store, Xbox identity and Gaming Services, and anti-cheat services/drivers are never cleanup candidates.
+- MSI/affinity on the boot disk controller or the only display adapter is high risk: only when the trace implicates it, with a restore point offered.
+- Created objects (power plans, tasks, keys) are recorded and deleted on restore; restore builds its commands from the category rules, not from text in the journal.
+- Disconnected devices are reported, not removed.
+- `SECURITY.md` states what happens when a user insists on turning off a Windows security protection.
+- `CONTRIBUTING.md` added.
+
 ## 0.3.0-beta.1 — 2026-11-03
 
 ### Added

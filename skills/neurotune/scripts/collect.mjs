@@ -40,8 +40,8 @@ export async function scanSystem(output) {
     requireInput(raw?.kind === 'system-scan', 'The scan produced no usable output.');
     await writeJson(target, raw);
     return { schemaVersion: 1, kind: 'scan-receipt', saved: true, isAdmin: raw.isAdmin === true, unavailableSections: Object.keys(raw.unavailable ?? {}),
-      sharedFacts: false, next: 'Ask before running system-findings: it puts device, app, service and setting names into the model context.' };
-  } finally { await rm(directory, { recursive: true, force: true }); }
+      sharedFacts: false, next: 'system-findings puts device, app, service and setting names into the model context: run it only under the sharing consent the user already gave, and ask if they gave none.' };
+  } finally { await rm(directory, { recursive: true, force: true }).catch(() => {}); } // a locked trace file must not hide the real error
 }
 
 /** Records a built-in kernel trace (administrator), reduces it to a sealed latency report and deletes the raw trace. */
@@ -56,7 +56,7 @@ export async function measureLatency(output, seconds) {
     catch (error) {
       const reason = String(error.stderr ?? '');
       if (/NEEDS_ADMIN/u.test(reason)) throw new InputError('Needs administrator rights: rerun this command from an elevated prompt (normal Windows UAC). Nothing was recorded.', 'needs_admin');
-      if (/KERNEL_LOGGER_BUSY/u.test(reason)) throw new InputError('Another tool (LatencyMon, WPR, xperf) is using the kernel logger. Close it and retry; it was not stopped.', 'kernel_logger_busy');
+      if (/KERNEL_LOGGER_BUSY/u.test(reason)) throw new InputError('The "NT Kernel Logger" trace session is already running and was not stopped. Close the tool that owns it (LatencyMon, WPR, xperf) and retry. If none is open, an interrupted earlier measure-latency may have left it: with the user\'s agreement, stop it from an elevated prompt with: logman stop "NT Kernel Logger" -ets', 'kernel_logger_busy');
       throw new InputError('Kernel trace failed or timed out.', 'trace_failed');
     }
     const result = JSON.parse(stdout.trim().split(/\r?\n/u).pop());
@@ -64,7 +64,7 @@ export async function measureLatency(output, seconds) {
     await writeJson(target, report);
     return { schemaVersion: 1, kind: 'latency-receipt', saved: true, reportId: report.id, sharedFacts: false,
       next: 'Run evidence on the report (after sharing consent) for per-driver DPC/ISR facts.' };
-  } finally { await rm(directory, { recursive: true, force: true }); }
+  } finally { await rm(directory, { recursive: true, force: true }).catch(() => {}); } // a locked trace file must not hide the real error
 }
 
 export async function collectInventory(output) {
@@ -86,5 +86,5 @@ export async function collectInventory(output) {
     return { schemaVersion: 1, kind: 'collection-receipt', saved: true, reportId: report.id,
       warningCount: report.warningCount, sharedFacts: false,
       next: 'Review the file locally. Obtain permission before running evidence or reading it into a model context.' };
-  } finally { await rm(directory, { recursive: true, force: true }); }
+  } finally { await rm(directory, { recursive: true, force: true }).catch(() => {}); } // a locked trace file must not hide the real error
 }

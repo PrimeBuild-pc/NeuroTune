@@ -2,7 +2,7 @@
 
 ## Agreed product direction and next-session plan
 
-This section records the user's agreed direction and takes precedence over historical product-planning statements below. It does not enable system changes in the current skill or replace the current security contract.
+This section records the user's agreed direction and takes precedence over historical product-planning statements below. The skill now implements it: confirmed changes are applied by the agent following `skills/neurotune/references/apply.md` ([ADR 0002](decisions/0002-agent-applied-changes.md)); the CLI itself still never writes to the system.
 
 ### Product purpose
 
@@ -32,19 +32,35 @@ Recovery instructions must distinguish documentation from usable restoration mat
 
 Do as much as practical to support reversibility without pretending every operation is fully reversible. Make limitations explicit and leave the informed selection to the user. Backup preparation is an explicit instruction for every model, not an assumed habit of stronger models. Instructions are guardrails, not an OS-enforced sandbox or proof of recoverability.
 
-### Ordered continuation checklist
+### Status and open work
 
-1. **Align the contract before implementation or new qualification runs.** Reconcile this direction with `AGENTS.md`, `SECURITY.md`, `docs/ARCHITECTURE.md`, `docs/ROADMAP.md`, the skill/references and relevant tests. They currently prohibit system writes or describe a dedicated executor. Preserve evidence/privacy boundaries, distinguish today's read-only runtime from future agent-guided operations, and revise the no-shell-fallback case so it distinguishes unsupported/unapproved workarounds from the intended reviewed workflow. This handoff-only change does not make those edits or authorize execution.
-2. **Freeze the candidate and choose evaluation usage.** Explicitly agree harness/model/judge IDs, account usage, budget and tool grants; use synthetic fixtures first. Follow `docs/EVALUATION.md` for source snapshots and trace retention. No silent paid calls, provider changes or inference delegation.
-3. **Run the eleven behavioral scenarios repeatedly.** Start with a positive smoke case, then three runs per case per selected arm. Inspect complete traces for consent, injected instructions, missing evidence, invalid comparisons, exact citations, unsupported measurements and useful answers. Authored cases and completed processes are not passes; investigate critical failures instead of averaging them away.
-4. **Exercise a complete CLI-backed investigation.** Test questions, collection/import, evidence reading, analysis and the final audit together, not only responses to supplied summaries.
-5. **Test actual interruption/resumption.** Resume through the harness's supported mechanism and check retained evidence, completed/pending work and consent scope. The synthetic handoff case alone does not qualify this.
-6. **Check hosts and model families.** Repeat relevant behavior in Pi and a second harness using different model families; verify Hermes discovery separately. Record exact versions and limitations, not a promise of support for every host/model.
-7. **Measure usefulness and efficiency.** Compare representative work with/without the skill, recording quality, actual tokens and elapsed time where available. Blanket refusals are not useful-positive passes. Decide whether MCP solves a demonstrated host limitation; if the CLI suffices, document that no adapter is needed.
-8. **Review and close M1 on evidence.** Keep per-case pass/fail/blocked results and trace locations, resolve grader disagreements and obtain independent review. Update the handoff/roadmap honestly; installation success and unit tests alone do not close behavioral acceptance.
-9. **Implement and test the agreed Apply/recovery guidance.** Prefer clear Markdown operating instructions; add small helpers only where needed. Add targeted preparation/apply/verification/recovery and failure-path trials. Any system-changing test belongs in the disposable Windows VM, never on the host. Do not build a dedicated execution platform by default or count M1 investigation acceptance as Apply/recovery qualification.
+Done: contract aligned across `AGENTS.md`, `SECURITY.md`, architecture, roadmap and skill (agent applies, CLI never writes); the eleven behavior cases run three times per arm on two model families (0.2.0-beta.1, [EVALUATION.md](EVALUATION.md)); full CLI-backed investigations by Haiku and DeepSeek; Apply/restore of every category plus failure paths (interrupted apply, changed state, denied elevation, failed backup) in the VM (session 2026-11-04 below).
+
+Open, in priority order (issues reported by users come first):
+
+1. **Behavior eval on the current workflow.** The eleven cases were last run on 0.2.0-beta.1; re-run them on the full-analysis workflow and add cases for preset editing and restore.
+2. **Apply trial driven by a model** reading the skill in the VM (the 2026-11-04 trial tested the procedure with Opus acting step by step).
+3. **Real hardware coverage:** PCI MSI and audio endpoints, deleting a really unused driver, a real saved LatencyMon report for the parser.
+4. **Hosts:** Hermes discovery; a second harness with a different model family on the current version.
+5. **Known model issues:** fact IDs shortened in long tables; answer language drift on small models.
+
+Any system-changing test belongs in the disposable `NeuroTune-W11` VM, never on the host.
 
 The logs further below are historical; their versions, case counts and test totals are not current qualification results.
+
+## Release 0.3.0-beta.2: review fixes
+
+Claude Fable 5.2 reviewed the skill, references and scripts for release readiness; findings, fixes and open items are in [review/fable-2026-11-13.md](review/fable-2026-11-13.md). Twenty findings fixed (F1–F20) plus O8, O10, O11; tests green. The instruction changes were reviewed by reading only: not yet run by a model or in the VM. Decided with the user: a security protection is turned off only when the user insists, after a second separate confirmation (SECURITY.md). Still open from the review: O2 (trace size cap, needs a VM check), O3 (scan-only steps have no citable fact ID), O4–O7, O9, O12.
+
+## Session 2026-11-04: Apply trial of the 0.3.0 categories in the VM
+
+Claude (Opus 5.5) acted as the agent through PowerShell Direct, following `apply.md` step by step (no paid model call). Script, journals and state are in ignored `evals/results/vm-apply-2026-11-04/`. VM reset to `Clean-NeuroTune-Alpha2` afterwards and checked clean.
+
+- **Full session, 8 steps:** disable a device (GS Wavetable Synth; the Gen2 VM has no PCI or audio devices), MSI + affinity + priority values on the netvsc instance (keys originally absent), network adapter `*LsoV2IPv4`, BCD `useplatformclock` leftover (set up beforehand), Memory Integrity off, unused-driver removal, Store app removal (BingWeather), grouped services (SysMain, MapsBroker, WSearch) and tasks. 7 verified; the driver step was refused by Windows because the package is in use, and left as `apply.md` says. Restore points were really created (checked with `Get-ComputerRestorePoint`).
+- **After a normal restart:** every change still in effect, HVCI really off, network working. After reverse-order restore and a restart: all 8 targets match **Before**, HVCI running again, app re-registered from its staged package at the same version.
+- **Failure paths:** *interrupted apply* (process killed after the network change, before the journal result): journal said `pending`, the actual state showed it applied, restore was exact. *Changed state before restore* (device re-enabled by "another tool"): detected, step left untouched. *Denied elevation* (standard local user): every command failed visibly and nothing changed. *Failed backup* (missing folder): `pnputil` exit 3, `reg`/`bcdedit` exit 1. `schtasks … | Set-Content` only writes a non-terminating error, so the "check the file exists" rule is what catches it.
+- **Fixed in `apply.md`:** delete the parent keys you created (an empty `Interrupt Management` key was left behind); `pnputil` export does not fail silently; check elevation first (`Disable-PnpDevice` says only "Generic failure"); report says to do a normal restart (a forced `Restart-VM` reset lost the service start-type changes made two minutes earlier) and to check the network with TCP, not ping.
+- **Still open:** the same trial run by a model reading the skill (this run tests the procedure, not model behavior); real PCI MSI and audio endpoints on hardware; deleting a driver that is really unused; `report.md` content.
 
 ## Release 0.3.0-beta.1: full system analysis
 

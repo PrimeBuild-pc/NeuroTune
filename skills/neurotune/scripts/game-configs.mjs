@@ -33,7 +33,7 @@ const games = [
     keyHints: ['GstRender.ResolutionWidth', 'GstRender.ResolutionHeight', 'GstRender.ResolutionScale',
       'GstRender.FixedResolutionScale', 'GstRender.TextureQuality', 'GstRender.ShadowQuality', 'GstRender.VSyncEnabled'],
     caveats: ['PROFSAVE_profile is typically line-oriented text, not INI. PROFSAVE is a separate potentially binary file: leave it untouched.',
-      'Extensionless PROFSAVE_profile is outside the existing native extension allowlist. Do not rename it or use shell writes to bypass that limit.',
+      'PROFSAVE_profile has no extension. Leave it untouched unless it is plain text and the user confirms the edit; never rename it.',
       'Do not transplant older Battlefield user.cfg CPU/thread commands or assume scale units across versions.'],
     sources: ['https://www.pcgamingwiki.com/wiki/Battlefield_6']
   },
