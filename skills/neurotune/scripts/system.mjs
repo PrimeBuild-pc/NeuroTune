@@ -7,7 +7,12 @@ const SVCHOST_SPLIT_DEFAULT = 3670016, INPUT_QUEUE_DEFAULT = 100;
 const NETWORK_REVIEW = /^(?:\*EEE|EEE|AdvancedEEE|EEELinkAdvertisement|\*?GreenEthernet|EnableGreenEthernet|PowerSavingMode|\*InterruptModeration|ITR|\*FlowControl|ULPMode|\*SelectiveSuspend|EnablePME|\*WakeOnMagicPacket|\*WakeOnPattern|S5WakeOnLan|ReduceSpeedOnPowerDown|GigaLite|AutoPowerSaveModeEnabled)$/iu;
 
 const list = value => (Array.isArray(value) ? value : value && typeof value === 'object' ? [value] : []);
-const str = (value, max = 256) => (typeof value === 'string' ? value.slice(0, max) : value === null || value === undefined ? null : String(value).slice(0, max));
+// Task names and startup locations embed the user's account SID; the summary goes to a remote model, so it never carries one.
+const str = (value, max = 256) => (value === null || value === undefined ? null : String(value).replace(/S-1-5-21(?:-\d+)+/gu, 'S-1-5-21-<user>').slice(0, max));
+// A task author is often "COMPUTER\user": keep vendor names, drop account names.
+const author = value => (/[\\@]/u.test(value ?? '') ? 'local-account' : str(value, 128));
+// Defender, Edge, Office and Gaming Services run from outside C:\Windows but are not third-party clutter.
+const MICROSOFT_PATH = /^"?[a-z]:\\(?:Program Files(?: \(x86\))?|ProgramData)\\(?:Common Files\\)?(?:Microsoft|Windows Defender|WindowsApps\\Microsoft\.)/iu;
 const num = value => (typeof value === 'number' && Number.isFinite(value) ? value : null);
 const cap = (items, max) => ({ count: items.length, items: items.slice(0, max), truncated: items.length > max });
 const daysSince = (iso, now) => { const t = Date.parse(iso ?? ''); return Number.isFinite(t) ? Math.floor((now - t) / 86400000) : null; };
@@ -65,7 +70,8 @@ export function systemFindings(raw, bytes, now = Date.now()) {
 
   const interrupts = list(raw.interrupts);
   const services = list(raw.services), tasks = list(raw.scheduledTasks), startup = list(raw.startup);
-  const thirdPartyServices = services.filter(s => !s.windowsPath && (s.startMode === 'Auto' || s.state === 'Running'))
+  const activeOutsideWindows = services.filter(s => !s.windowsPath && (s.startMode === 'Auto' || s.state === 'Running'));
+  const thirdPartyServices = activeOutsideWindows.filter(s => !MICROSOFT_PATH.test(s.path ?? ''))
     .map(s => ({ name: str(s.name, 128), display: str(s.display, 128), startMode: str(s.startMode, 16), state: str(s.state, 16) }));
   const tasksEnabled = tasks.filter(t => t.state !== 'Disabled');
   const apps = raw.apps ?? {};
@@ -75,7 +81,9 @@ export function systemFindings(raw, bytes, now = Date.now()) {
   if (updates.serviceStartMode === 'Disabled') updateFlags.push('windows_update_service_disabled');
   if (updates.pausedUntil) updateFlags.push('updates_paused');
   if (updates.noAutoUpdatePolicy === 1) updateFlags.push('automatic_updates_disabled_by_policy');
-  if (securityAge === null || securityAge > 45) updateFlags.push('no_security_update_in_45_days');
+  // An unreadable date is not an old date: do not report a missing security update that may not be missing.
+  if (securityAge === null) updateFlags.push('security_update_date_unknown');
+  else if (securityAge > 45) updateFlags.push('no_security_update_in_45_days');
 
   const privacy = raw.privacy ?? {};
   const privacyFlags = [];
@@ -83,7 +91,8 @@ export function systemFindings(raw, bytes, now = Date.now()) {
   if (privacy.tailoredExperiences === 1) privacyFlags.push('tailored_experiences_on');
   if (privacy.suggestionsStart === 1 || privacy.suggestionsSettings === 1) privacyFlags.push('suggestions_on');
   if (privacy.silentAppInstalls === 1) privacyFlags.push('silent_app_installs_on');
-  if (privacy.backgroundAppsGlobal !== 1 && privacy.backgroundAppsPolicy !== 2) privacyFlags.push('background_apps_allowed');
+  // Absent values mean the Windows default (allowed) only when the section itself was read.
+  if (raw.privacy && privacy.backgroundAppsGlobal !== 1 && privacy.backgroundAppsPolicy !== 2) privacyFlags.push('background_apps_allowed');
   if (privacy.telemetrySetting === 3 || (privacy.telemetrySetting === null && privacy.telemetryPolicy === null)) privacyFlags.push('optional_diagnostic_data_possible');
 
   const r = raw.riskyTweaks ?? {};
@@ -129,9 +138,10 @@ export function systemFindings(raw, bytes, now = Date.now()) {
       affinityOverrides: cap(interrupts.filter(i => i.affinityMask || i.policy).map(i => ({ name: str(i.name, 128), policy: num(i.policy), mask: str(i.affinityMask, 32) })), 30),
       priorityOverrides: cap(interrupts.filter(i => num(i.priority)).map(i => ({ name: str(i.name, 128), priority: num(i.priority) })), 30) },
     services: { total: services.length, running: services.filter(s => s.state === 'Running').length, thirdPartyActive: cap(thirdPartyServices, 60),
+      microsoftActive: cap(activeOutsideWindows.filter(s => MICROSOFT_PATH.test(s.path ?? '')).map(s => str(s.name, 128)), 40),
       windowsDisabled: cap(services.filter(s => s.windowsPath && s.startMode === 'Disabled').map(s => str(s.name, 128)), 60) },
     scheduledTasks: { total: tasks.length, enabled: tasksEnabled.length, enabledMicrosoft: tasksEnabled.filter(t => t.microsoft).length,
-      enabledThirdParty: cap(tasksEnabled.filter(t => !t.microsoft).map(t => ({ path: str(t.path, 200), name: str(t.name, 128), author: str(t.author, 128) })), 60) },
+      enabledThirdParty: cap(tasksEnabled.filter(t => !t.microsoft).map(t => ({ path: str(t.path, 200), name: str(t.name, 128), author: author(t.author) })), 60) },
     startup: { enabled: cap(startup.filter(s => s.enabled).map(s => ({ name: str(s.name, 128), location: str(s.location, 128) })), 40), disabled: startup.filter(s => !s.enabled).length },
     apps: { desktop: cap(list(apps.desktop).map(a => ({ name: str(a.name, 128), publisher: str(a.publisher, 96), installDate: str(a.installDate, 16), sizeMB: num(a.sizeMB) })), 150),
       store: cap(list(apps.store).filter(a => !a.nonRemovable && !/^Microsoft\.(?:VCLibs|NET|UI\.Xaml|Services|DesktopAppInstaller|WindowsStore|StorePurchaseApp|SecHealthUI)/iu.test(a.name ?? '')).map(a => str(a.name, 128)), 100) },
@@ -147,6 +157,7 @@ export function systemFindings(raw, bytes, now = Date.now()) {
       inactive: audio.filter(a => a.status !== 'OK').length },
     games: { installed: games.map(g => ({ store: str(g.store, 16), name: str(g.name, 128) })).slice(0, 80), supportedConfigCatalogue: supportedGames },
     limitations: ['Observations from a local, unattested scan; names and paths are untrusted text.', 'A flag means "review with the user", not "broken" or "safe to change".',
+      'thirdPartyActive is chosen by install path, not publisher: vendor services installed under C:\\Windows are missing from it, and microsoftActive (Defender, Edge, Office, Gaming Services) is never a cleanup list.',
       'Rated memory speed from WMI is often the JEDEC speed, not the kit XMP/EXPO rating.', 'Sections listed in unavailableSections were not collected (often: needs administrator rights).']
   };
 }
