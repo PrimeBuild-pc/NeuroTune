@@ -47,7 +47,7 @@ const help = {
     'neurotune measure-latency --seconds <5-300> --out <new latency.json>   (administrator)',
     'neurotune latencymon --input <saved LatencyMon report.txt> --out <new latency.json>',
     'neurotune apps-services --input <native-snapshot.json> --out <new apps-services.json>',
-    'neurotune evidence --input <inventory.json or frames.json or apps-services.json>',
+    'neurotune evidence --input <inventory.json or latency.json or frames.json or apps-services.json>',
     'neurotune frames --input <PresentMon.csv> --process <game.exe> --conditions <description> --out <new frames.json>',
     'neurotune frames-capframex --input <single-run CapFrameX.json> --process <game.exe> --conditions <description> --out <new frames.json>',
     'neurotune compare --baseline <before.json> [--baseline ...] --candidate <after.json> [--candidate ...]',
