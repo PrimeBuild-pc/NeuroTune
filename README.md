@@ -21,7 +21,7 @@ NeuroTune is an [Agent Skill](https://www.anthropic.com/news/agent-skills) for W
 **Nothing changes until you confirm.** NeuroTune investigates, cites evidence for every claim and shows a plan with risks and how far each step can be undone. You approve all, pick steps or say no. For each confirmed step the agent first saves the original state in a local session folder, then applies it with your harness's own tools, checks the result and tells you how to undo it. The bundled CLI itself never writes to the system.
 
 > [!WARNING]
-> **Beta, use at your own risk.** With your confirmation the agent changes Windows settings, services, startup items, game configs, apps and drivers. AI models make mistakes. Backups make most changes reversible, but a removed app may lose its data and a driver change can leave a PC without display or network. Try it first on a machine you can restore, read each step before approving it, and keep the session folder it tells you about until you are happy. This is free software with no warranty (MIT).
+> **Beta, use at your own risk.** With your confirmation the agent changes Windows settings, services, startup items, game configs, apps, drivers, devices, interrupt (MSI/affinity) and network adapter settings. AI models make mistakes. Backups make most changes reversible, but a removed app may lose its data and a driver or interrupt change can leave a PC without display or network, or unable to start. Try it first on a machine you can restore, read each step before approving it, and keep the session folder it tells you about until you are happy. This is free software with no warranty (MIT).
 
 ## Contents
 
@@ -68,7 +68,7 @@ Measured on 2026-11-03 on version 0.2.0-beta.1 (before the full-analysis workflo
 
 - **Where it matters:** without the skill, Haiku offered `reg add` commands as a workaround when a file claimed `approved=true` (3 of 3 runs), and both models failed to say plainly that a requested latency measurement was unsupported. With the skill loaded, those cases passed.
 - **Token cost:** on these short cases the skill costs about the same. A full investigation of a real PC (inventory, capture analysis, plan) with Haiku cost about **3× more** with the skill ($0.054 vs $0.018 for two turns), because it runs the CLI, reads its references and validates the plan. In return the plan cited exact evidence, and the confirmed change was backed up, verified and then undone byte for byte. Without the skill the plan was similar, but its backup was an unverified `.bak` copy.
-- **Apply and undo** were exercised end to end in a disposable Windows 11 VM (DeepSeek, five steps) and on a real PC (Haiku, one step); both returned the machine to its original state.
+- **Apply and undo** were exercised end to end in a disposable Windows 11 VM (DeepSeek, five steps) and on a real PC (Haiku, one step); both returned the machine to its original state. These runs used the 0.2.0 categories; see [Not implemented](#not-implemented) for 0.3.0.
 - **Limits:** synthetic cases with restricted tools, 33 runs per arm, two models and one full investigation. This is not a performance benchmark: no game got faster in these tests. Details and raw-result locations are in [`docs/EVALUATION.md`](docs/EVALUATION.md).
 
 ## What it does
@@ -83,12 +83,12 @@ Measured on 2026-11-03 on version 0.2.0-beta.1 (before the full-analysis workflo
 - Driver latency like LatencyMon: per-driver and per-CPU DPC/ISR timing from a built-in Windows kernel trace (`measure-latency`, no extra software), or an imported LatencyMon report (`latencymon`).
 - A full read-only system scan (`scan-system`) condensed into a compact findings summary (`system-findings`): devices, driver store, MSI/affinity, USB input chains, services, tasks, startup, apps, updates, privacy, gaming settings, risky leftovers, network, audio, installed games.
 - Evidence-linked advisory plans and intervention-proposal review, including dependency checks on selected steps. Invented fact IDs are rejected.
-- Confirmed changes with a per-step backup and journal (Registry, services, Windows settings, scheduled tasks, startup items, game configs, apps, drivers), read-back verification and guided undo.
+- Confirmed changes with a per-step backup and journal (Registry, services, Windows settings, scheduled tasks, startup items, game configs, apps, drivers, devices and audio endpoints, MSI/affinity, network adapter settings, boot-configuration leftovers), read-back verification and guided undo.
 - A self-contained Agent Skills directory, Pi package and Claude Code plugin manifest, plus a JSON CLI any tool-capable harness can call directly.
 
 ## Not implemented
 
-General ETW/WPA analysis beyond DPC/ISR timing, tool acquisition/installation, vendor driver installation, firmware/BIOS changes, MCP transport, security remediation, automatic reboots or diagnosis outside a harness. Imported comparisons are descriptive, not proof an optimization worked. Backups are what the agent saved: Registry values, service start types, settings and config files restore exactly; removed apps and drivers may not come back with their data. Apply and restore of every change category, and the failure paths (interrupted apply, state changed before restore, denied elevation, failed backup), were trialled in a disposable Windows 11 VM; on real hardware only one confirmed step has been applied and undone so far — see [`docs/ROADMAP.md`](docs/ROADMAP.md).
+General ETW/WPA analysis beyond DPC/ISR timing, tool acquisition/installation, vendor driver installation, firmware/BIOS changes, MCP transport, security remediation, automatic reboots or diagnosis outside a harness. Imported comparisons are descriptive, not proof an optimization worked. Backups are what the agent saved: Registry values, service start types, settings and config files restore exactly; removed apps and drivers may not come back with their data. Apply/recovery for the first categories (Registry, services, settings, startup, game configs) was run by two models, in a VM and on one real PC. The 0.3.0 categories (devices, MSI/affinity, network adapter settings, boot configuration, Memory Integrity, driver packages, Store apps) and the failure paths (denied elevation, failed backup, interrupted apply, state changed before restore) were run in a disposable VM by hand following `apply.md`, not yet by a model reading the skill — see [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Install
 
@@ -142,7 +142,7 @@ Output is a single JSON envelope (`{ "ok": true, "data": ... }` / `{ "ok": false
 
 ## Safety and privacy
 
-The local CLI has no arbitrary command endpoint and no system writer — it does not authenticate reports, sandbox the harness, or establish consent cryptographically. Changes you confirm are made by the agent through your harness, so its permission mode is what actually limits it: investigate from a non-admin session, elevate only for confirmed changes, and try it on a machine you can restore before trusting it with one you can't.
+The local CLI has no arbitrary command endpoint and no system writer — it does not authenticate reports, sandbox the harness, or establish consent cryptographically. Changes you confirm are made by the agent through your harness, so its permission mode is what actually limits it: investigate from a non-admin session and elevate only what needs it (the kernel latency trace, the scan sections that need administrator rights, confirmed changes), and try it on a machine you can restore before trusting it with one you can't.
 
 `collect` returns a receipt without hardware facts; later evidence/analysis output does enter the harness context, under that harness/provider's own retention policy. Data minimization is not anonymization — treat device strings and imported files as untrusted data. See [`SECURITY.md`](SECURITY.md).
 

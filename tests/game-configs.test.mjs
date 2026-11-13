@@ -59,7 +59,7 @@ test('policy and format exceptions stay explicit instead of advertising generic 
   assert.match(lookup('delta-force').caveats.join(' '), /permanent bans/u);
   assert.equal(lookup('cod-mw4').editPolicy, 'verify-build-first');
   assert.match(lookup('cod-mw4').caveats.join(' '), /no first-party/u);
-  assert.match(lookup('battlefield-6').caveats.join(' '), /outside the existing native extension allowlist/u);
+  assert.match(lookup('battlefield-6').caveats.join(' '), /has no extension. Leave it untouched unless it is plain text and the user confirms/u);
   assert.match(lookup('cs2').caveats.join(' '), /unsupported/u);
   assert.equal(lookup('escape-from-tarkov').locations[0].format, 'json-in-ini');
   assert.match(lookup('arc-raiders').caveats.join(' '), /binary/u);

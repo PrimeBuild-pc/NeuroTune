@@ -48,6 +48,10 @@ Any system-changing test belongs in the disposable `NeuroTune-W11` VM, never on 
 
 The logs further below are historical; their versions, case counts and test totals are not current qualification results.
 
+## Release 0.3.0-beta.2: review fixes
+
+Claude Fable 5.2 reviewed the skill, references and scripts for release readiness; findings, fixes and open items are in [review/fable-2026-11-13.md](review/fable-2026-11-13.md). Twenty findings fixed (F1–F20) plus O8, O10, O11; tests green. The instruction changes were reviewed by reading only: not yet run by a model or in the VM. Decided with the user: a security protection is turned off only when the user insists, after a second separate confirmation (SECURITY.md). Still open from the review: O2 (trace size cap, needs a VM check), O3 (scan-only steps have no citable fact ID), O4–O7, O9, O12.
+
 ## Session 2026-11-04: Apply trial of the 0.3.0 categories in the VM
 
 Claude (Opus 5.5) acted as the agent through PowerShell Direct, following `apply.md` step by step (no paid model call). Script, journals and state are in ignored `evals/results/vm-apply-2026-11-04/`. VM reset to `Clean-NeuroTune-Alpha2` afterwards and checked clean.

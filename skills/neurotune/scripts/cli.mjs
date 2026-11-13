@@ -33,7 +33,7 @@ const commands = {
   'plan-check': { input: {}, evidence: { multiple: true } }
 };
 const help = {
-  name: 'neurotune', version: '0.3.0-beta.1', schemaVersion: 1,
+  name: 'neurotune', version: '0.3.0-beta.2', schemaVersion: 1,
   usage: [
     'neurotune doctor',
     'neurotune goals',

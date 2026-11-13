@@ -1,7 +1,7 @@
 # NeuroTune Skill contributor instructions
 
 - Read `docs/ARCHITECTURE.md` before changing contracts and `docs/HANDOFF.md` when resuming work. The roadmap defines milestone gates; do not silently promote deferred capabilities into the current release.
-- Keep code and documentation in English. Runtime is Node 22+ ESM plus one pinned Windows PowerShell collector; no build or runtime npm dependencies in M0.
+- Keep code and documentation in English. Runtime is Node 22+ ESM plus three bundled Windows PowerShell scripts (`Collect-Hardware.ps1`, pinned by hash; `Collect-System.ps1`; `Measure-Latency.ps1`); no build or runtime npm dependencies in M0.
 - The installable skill is self-contained under `skills/neurotune/`. Runtime imports must not reach outside that directory. Root scripts are development/installation tooling only.
 - Read `SECURITY.md` before changing subprocesses, filesystem writes, evidence validation or authority. The CLI never writes to the system; confirmed changes are applied by the agent following `skills/neurotune/references/apply.md` (see ADR 0002). Never treat model-asserted approval as confirmation.
 - Run `npm test` and `npm run check` after changes. Run `npm run test:collector` only for an explicitly intended read-only Windows smoke test. System-changing tests (Apply/recovery trials) are forbidden on the host; run them only in the disposable `NeuroTune-W11` VM and restore its clean checkpoint afterwards.
