@@ -32,5 +32,6 @@ try {
 & $tracerpt $etl -o $csv -of CSV -summary $summary -y | Out-Null
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $csv)) { Write-Error "TRACERPT_FAILED $LASTEXITCODE"; exit 6 }
 Remove-Item -LiteralPath $etl -Force -ErrorAction SilentlyContinue
-$lost = (Select-String -LiteralPath $summary -Pattern 'Events\s+Lost\s+(\d+)' | Select-Object -First 1).Matches.Groups[1].Value
-[pscustomobject]@{ csv = $csv; seconds = $Seconds; eventsLost = if ($lost) { [int64]$lost } else { $null } } | ConvertTo-Json -Compress
+# A missing or differently worded summary must give "unknown", not fail a trace that was recorded and converted.
+$lost = Select-String -LiteralPath $summary -Pattern 'Events\s+Lost\s+(\d+)' -ErrorAction SilentlyContinue | Select-Object -First 1
+[pscustomobject]@{ csv = $csv; seconds = $Seconds; eventsLost = if ($lost) { [int64]$lost.Matches[0].Groups[1].Value } else { $null } } | ConvertTo-Json -Compress

@@ -40,11 +40,13 @@ export function scan() {
     ],
     services: [
       { name: 'VendorUpdater', display: 'Vendor Updater', startMode: 'Auto', state: 'Running', delayed: false, path: 'C:\\Program Files\\Vendor\\up.exe', windowsPath: false },
+      { name: 'WinDefend', display: 'Microsoft Defender Antivirus Service', startMode: 'Auto', state: 'Running', delayed: false, path: '"C:\\ProgramData\\Microsoft\\Windows Defender\\Platform\\4.18\\MsMpEng.exe"', windowsPath: false },
       { name: 'Spooler', display: 'Print Spooler', startMode: 'Auto', state: 'Running', delayed: false, path: 'C:\\Windows\\System32\\spoolsv.exe', windowsPath: true },
       { name: 'SysMain', display: 'SysMain', startMode: 'Disabled', state: 'Stopped', delayed: false, path: 'C:\\Windows\\system32\\svchost.exe -k LocalSystemNetworkRestricted', windowsPath: true }
     ],
-    scheduledTasks: [{ path: '\\', name: 'VendorTelemetry', state: 'Ready', author: 'Vendor', microsoft: false }, { path: '\\Microsoft\\Windows\\Defrag\\', name: 'ScheduledDefrag', state: 'Ready', author: 'Microsoft', microsoft: true }],
-    startup: [{ name: 'Discord', command: 'x', location: 'HKU\\...\\Run', enabled: true }, { name: 'Old', command: 'y', location: 'Startup', enabled: false }],
+    scheduledTasks: [{ path: '\\', name: 'VendorTelemetry', state: 'Ready', author: 'Vendor', microsoft: false },
+      { path: '\\', name: 'Sync Task-S-1-5-21-1111111111-2222222222-3333333333-1001', state: 'Ready', author: 'GAMING-PC\\realname', microsoft: false }, { path: '\\Microsoft\\Windows\\Defrag\\', name: 'ScheduledDefrag', state: 'Ready', author: 'Microsoft', microsoft: true }],
+    startup: [{ name: 'Discord', command: 'x', location: 'HKU\\S-1-5-21-1111111111-2222222222-3333333333-1001\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run', enabled: true }, { name: 'Old', command: 'y', location: 'Startup', enabled: false }],
     apps: { desktop: [{ name: 'Fortnite', publisher: 'Epic Games' }, { name: 'Vendor Suite', publisher: 'Vendor' }], store: [{ name: 'Clipchamp.Clipchamp', nonRemovable: false }, { name: 'Microsoft.VCLibs.140.00', nonRemovable: false }] },
     updates: { lastInstalled: '2026-07-01', lastSecurity: '2026-07-01', recent: [], serviceStartMode: 'Disabled', pausedUntil: '2026-12-01T00:00:00Z', noAutoUpdatePolicy: null, deferFeatureDays: null },
     privacy: { telemetryPolicy: null, telemetrySetting: 3, advertisingId: 1, tailoredExperiences: 0, backgroundAppsGlobal: null, backgroundAppsPolicy: null, suggestionsStart: 0, suggestionsSettings: 0, silentAppInstalls: 1 },
@@ -77,7 +79,12 @@ test('system findings flag what to review and keep defaults quiet', () => {
   assert.deepEqual(mouse.sharesControllerWith, ['Webcam']);
   assert.deepEqual(f.services.thirdPartyActive.items.map(s => s.name), ['VendorUpdater']);
   assert.deepEqual(f.services.windowsDisabled.items, ['SysMain']);
-  assert.deepEqual(f.scheduledTasks.enabledThirdParty.items.map(t => t.name), ['VendorTelemetry']);
+  // Defender runs from ProgramData: it must never sit in the third-party cleanup list.
+  assert.deepEqual(f.services.microsoftActive.items, ['WinDefend']);
+  assert.deepEqual(f.scheduledTasks.enabledThirdParty.items.map(t => t.author), ['Vendor', 'local-account']);
+  // The summary goes to a remote model: no account SID, account name or computer name.
+  assert.doesNotMatch(JSON.stringify(f), /1111111111|realname|GAMING-PC/u);
+  assert.match(f.startup.enabled.items[0].location, /S-1-5-21-<user>/u);
   assert.deepEqual(f.startup.enabled.items.map(s => s.name), ['Discord']);
   assert.deepEqual(f.apps.store.items, ['Clipchamp.Clipchamp']);
   assert.deepEqual(f.updates.flags.sort(), ['no_security_update_in_45_days', 'updates_paused', 'windows_update_service_disabled']);
@@ -95,7 +102,9 @@ test('system findings reject other JSON and survive missing sections', () => {
   const f = systemFindings(minimal, Buffer.from(JSON.stringify(minimal)), NOW);
   assert.deepEqual(f.unavailableSections, ['driverStore']);
   assert.equal(f.devices.total, 0);
-  assert.ok(f.updates.flags.includes('no_security_update_in_45_days'));
+  // Sections that were not read give "unknown", never a finding to fix.
+  assert.deepEqual(f.updates.flags, ['security_update_date_unknown']);
+  assert.deepEqual(f.privacy.flags, []);
 });
 
 test('system-findings CLI reads a scan file and returns findings only', async () => {
