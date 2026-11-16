@@ -117,7 +117,14 @@ export function systemFindings(raw, bytes, now = Date.now()) {
   const catalogue = gameConfigReferences('all').games;
   const names = [...games.map(g => g.name), ...list(apps.desktop).map(a => a.name)].map(n => String(n ?? '').toLowerCase());
   const short = title => title.toLowerCase().replace(/:.*$/u, '').trim();
-  const supportedGames = catalogue.filter(g => names.some(n => n.includes(short(g.title)) || n.includes(g.title.toLowerCase()))).map(g => g.id);
+  const matches = new Set();
+  for (const name of names) {
+    const fullMatches = catalogue.filter(game => name.includes(game.title.toLowerCase()));
+    for (const game of fullMatches.length ? fullMatches : catalogue.filter(game => name.includes(short(game.title)))) {
+      matches.add(game.id);
+    }
+  }
+  const supportedGames = catalogue.filter(game => matches.has(game.id)).map(game => game.id);
 
   return {
     schemaVersion: 1, kind: 'system-findings', scanSha256: sha256(bytes), scannedAt: str(raw.generatedAtUtc, 40), isAdmin: raw.isAdmin === true,

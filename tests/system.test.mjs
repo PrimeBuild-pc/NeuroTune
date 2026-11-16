@@ -96,6 +96,17 @@ test('system findings flag what to review and keep defaults quiet', () => {
   assert.ok(JSON.stringify(f).length < JSON.stringify(raw).length * 2);
 });
 
+test('system findings prefer a full game title over the shared short name', () => {
+  const titles = [
+    ['Call of Duty: Modern Warfare 4', 'cod-mw4'],
+    ['Call of Duty: Black Ops 7', 'cod-bo7'],
+  ];
+  for (const [name, id] of titles) {
+    const raw = { schemaVersion: 1, kind: 'system-scan', games: [{ name }] };
+    assert.deepEqual(systemFindings(raw, Buffer.from(JSON.stringify(raw)), NOW).games.supportedConfigCatalogue, [id]);
+  }
+});
+
 test('system findings reject other JSON and survive missing sections', () => {
   assert.throws(() => systemFindings({ kind: 'inventory' }, Buffer.from('{}')), /system scan/);
   const minimal = { schemaVersion: 1, kind: 'system-scan', isAdmin: false, unavailable: { driverStore: 'needs administrator rights' } };
