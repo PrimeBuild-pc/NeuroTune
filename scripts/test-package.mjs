@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, rm, readFile } from 'node:fs/promises';
+import { copyFile, mkdtemp, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
+const output = process.argv[2];
 const npm = process.env.npm_execpath;
 assert.ok(npm, 'Run through npm run test:package so the installed npm CLI is used.');
 const directory = await mkdtemp(path.join(tmpdir(), 'neurotune-package-'));
@@ -44,5 +45,8 @@ try {
   }
   assert.equal(await readFile(path.join(result.installed, 'agents/openai.yaml'), 'utf8'),
     await readFile(path.join(root, 'skills/neurotune/agents/openai.yaml'), 'utf8'));
+  if (output) {
+    await copyFile(path.join(directory, metadata.filename), path.join(output, metadata.filename));
+  }
   console.log(`PASS: packed ${metadata.files.length} files, installed archive offline, executed CLI and copied standalone skill from an unrelated directory.`);
 } finally { await rm(directory, { recursive: true, force: true }); }
