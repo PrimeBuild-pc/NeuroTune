@@ -28,3 +28,19 @@ jobs:
       - run: npm test
       - run: npm run check
       - run: npm run test:package
+
+  merge-evidence:
+    if: github.event_name == 'pull_request'
+    needs: [test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Record the tested PR merge commit
+        run: printf '%s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/tested-merge.txt"
+      - name: Upload the tested PR merge commit
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: verified-merge-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/tested-merge.txt
+          if-no-files-found: error
+          retention-days: 7
