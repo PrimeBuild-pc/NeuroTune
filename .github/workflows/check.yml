@@ -43,4 +43,4 @@ jobs:
           name: verified-merge-${{ github.sha }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/tested-merge.txt
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 30
