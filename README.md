@@ -178,6 +178,8 @@ npm run pack:local      # build an offline-installable npm archive
 
 `npm test` uses synthetic data only; live collection is opt-in. See [`docs/COMPATIBILITY.md`](docs/COMPATIBILITY.md) for the exact per-OS/Node test matrix, and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) / [`docs/decisions/0001-skill-first.md`](docs/decisions/0001-skill-first.md) / [`docs/ROADMAP.md`](docs/ROADMAP.md) before expanding scope.
 
+Maintainers can run **Package beta candidate** from GitHub Actions on main. It verifies an offline install of the generated archive and uploads the archive and its SHA-256 checksum as workflow artifacts.
+
 ## Support the project
 
 NeuroTune is free and open source. If it helps you, you can support its development:
